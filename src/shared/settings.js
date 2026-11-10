@@ -2,7 +2,7 @@
 
 export const DEFAULT_SETTINGS = {
   columns: 1, // 1 | 2
-  fontSize: 15.5, // pt
+  fontSize: 12, // pt
   lineHeight: 1.75,
   paraBefore: 0, // px
   paraAfter: 9, // px
@@ -17,7 +17,7 @@ function normalize(raw) {
   const base = { ...DEFAULT_SETTINGS };
   if (!raw || typeof raw !== "object") return base;
   if (raw.columns === 2) base.columns = 2;
-  if (Number.isFinite(raw.fontSize)) base.fontSize = Math.min(22, Math.max(10, raw.fontSize));
+  if (Number.isFinite(raw.fontSize)) base.fontSize = Math.min(20, Math.max(9, raw.fontSize));
   if (Number.isFinite(raw.lineHeight)) base.lineHeight = Math.min(2.4, Math.max(1.2, raw.lineHeight));
   if (Number.isFinite(raw.paraBefore)) base.paraBefore = Math.min(40, Math.max(0, raw.paraBefore));
   if (Number.isFinite(raw.paraAfter)) base.paraAfter = Math.min(48, Math.max(0, raw.paraAfter));

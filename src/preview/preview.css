@@ -256,9 +256,21 @@ input[type="range"] {
 /* ---------- 打印 ---------- */
 
 @media print {
+  /* 打印时必须彻底解除预览外壳的视口约束，否则只会输出一页 */
   html,
   body {
+    height: auto;
     background: #fff;
+  }
+
+  .ep-app {
+    display: block;
+    height: auto;
+  }
+
+  .ep-stage {
+    display: block;
+    overflow: visible;
   }
 
   .ep-panel,
@@ -267,17 +279,23 @@ input[type="range"] {
   }
 
   .ep-viewport {
+    display: block;
     padding: 0;
     overflow: visible;
-  }
-
-  .ep-sheet {
-    transform: none !important;
-    box-shadow: none !important;
   }
 
   .ep-sheetWrap {
     width: auto !important;
     height: auto !important;
+    margin: 0;
+  }
+
+  .ep-sheet {
+    transform: none !important;
+    box-shadow: none !important;
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
   }
 }

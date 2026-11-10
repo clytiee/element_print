@@ -204,8 +204,9 @@ ${css}
 :root{${vars};--ep-scale:1}
 body{margin:0;background:#fff}
 .ep-sheet{margin:0 auto}
+@page{size:A4;margin:${s.margin}mm}
 @media screen{body{padding:24px}}
-@media print{body{padding:0}@page{size:A4;margin:${s.margin}mm}}
+@media print{body{padding:0}}
 </style>
 </head>
 <body>

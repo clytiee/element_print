@@ -75,7 +75,6 @@
     };
     for (const key of Object.keys(style)) ui.box.style[key] = style[key];
 
-    const tagW = 0;
     const above = rect.top > 26;
     ui.tag.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - 240)) + "px";
     ui.tag.style.top = (above ? rect.top - 24 : rect.bottom + 6) + "px";

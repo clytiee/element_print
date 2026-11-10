@@ -168,22 +168,27 @@
     return title;
   }
 
+  // 这些标签即使没有文字也要保留：图片、分隔线与表格骨架
+  const KEEP_EMPTY = new Set([
+    "IMG", "BR", "HR", "VIDEO", "AUDIO", "CANVAS", "INPUT",
+    "TABLE", "THEAD", "TBODY", "TFOOT", "TR", "TD", "TH", "COL", "COLGROUP",
+  ]);
+
   function isEmptyNode(node) {
-    if (!node.textContent.replace(/\u00a0/g, " ").trim()) {
-      if (node.querySelector("img,table,hr,figure,pre,ul,ol")) return false;
-      return true;
-    }
-    return false;
+    if (!node || node.nodeType !== 1) return false;
+    if (KEEP_EMPTY.has(node.tagName)) return false;
+    if (node.textContent.replace(/\u00a0/g, " ").trim()) return false;
+    // 只剩图片/表格/列表结构时保留，避免把内容骨架当空块删掉
+    if (node.querySelector("img,table,hr,figure,pre,ul,ol,blockquote")) return false;
+    return true;
   }
 
   function pruneEmpty(root) {
-    // 前部被清空的包裹元素一并去掉，避免版面里留出空段
+    // 标题被拎走后留下的空包裹元素一并去掉，避免版面里留出空段
     const all = Array.from(root.querySelectorAll("*")).reverse();
     all.forEach((node) => {
       if (!root.contains(node)) return;
-      if (isEmptyNode(node) && node.childElementCount >= 0) {
-        node.remove();
-      }
+      if (isEmptyNode(node)) node.remove();
     });
     Array.from(root.childNodes).forEach((node) => {
       if (node.nodeType === Node.TEXT_NODE && !node.data.trim()) node.remove();

@@ -2,7 +2,7 @@
    预览页与导出的单文件 HTML 共用这一份，保证「所见即所打」。 */
 
 :root {
-  --ep-font-size: 15.5pt;
+  --ep-font-size: 12pt;
   --ep-line-height: 1.75;
   --ep-para-before: 0px;
   --ep-para-after: 9px;
