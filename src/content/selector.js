@@ -16,6 +16,8 @@
 
   let hovered = null;
   let finished = false;
+  let pinned = false; // 按 ↑ 选过上级后，指针还在该元素范围内就不跟着鼠标走
+  let lastPt = { x: 0, y: 0 };
 
   const ui = {
     box: null,
@@ -30,22 +32,13 @@
     return node;
   }
 
-  function describe(node) {
-    const tag = node.tagName.toLowerCase();
-    const cls =
-      typeof node.className === "string" && node.className.trim()
-        ? "." + node.className.trim().split(/\s+/).slice(0, 2).join(".")
-        : "";
-    return tag + cls;
-  }
-
   function build() {
     ui.box = el("ep-pick-box ep-pick-ui");
     ui.tag = el("ep-pick-tag ep-pick-ui");
     ui.bar = el("ep-pick-bar ep-pick-ui");
 
     const hint = el("ep-pick-hint", "span");
-    hint.textContent = "点击要打印的元素 · Esc 退出";
+    hint.textContent = "点击要打印的元素 · ↑ 选上级 / ↓ 回到指针 · Esc 退出";
     const exit = el("ep-pick-exit", "button");
     exit.type = "button";
     exit.textContent = "退出";
@@ -78,7 +71,9 @@
     const above = rect.top > 26;
     ui.tag.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - 240)) + "px";
     ui.tag.style.top = (above ? rect.top - 24 : rect.bottom + 6) + "px";
-    ui.tag.textContent = describe(hovered) + "  " + Math.round(rect.width) + "×" + Math.round(rect.height);
+
+    // 左上角固定显示产品名
+    ui.tag.textContent = "Element Print";
   }
 
   function hover(node) {
@@ -90,12 +85,44 @@
     paint();
   }
 
+  // ↓：取消锁定，回到指针下的元素（可逐级退回向下）
+  function descend() {
+    if (!pinned) return;
+    pinned = false;
+    const node = document.elementFromPoint(lastPt.x, lastPt.y);
+    if (node && node.tagName && !(node.closest && node.closest(".ep-pick-ui"))) hover(node);
+  }
+
   function onMove(e) {
     if (finished) return;
+    lastPt.x = e.clientX;
+    lastPt.y = e.clientY;
     const node = document.elementFromPoint(e.clientX, e.clientY);
     if (!node || !node.tagName) return;
     if (node.closest && node.closest(".ep-pick-ui")) return;
+    if (pinned && hovered) {
+      const rect = hovered.getBoundingClientRect();
+      const inside =
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
+      if (inside) {
+        paint();
+        return;
+      }
+      pinned = false;
+    }
     hover(node);
+  }
+
+  // ↑：选中当前元素的父级（最多到 body）
+  function climb() {
+    if (!hovered) return;
+    const parent = hovered.parentElement;
+    if (!parent || parent === document.documentElement) return;
+    pinned = true;
+    hover(parent);
   }
 
   function swallow(e) {
@@ -114,7 +141,7 @@
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
-    const node = document.elementFromPoint(e.clientX, e.clientY) || hovered;
+    const node = pinned && hovered ? hovered : document.elementFromPoint(e.clientX, e.clientY) || hovered;
     if (!node) return;
     capture(node);
   }
@@ -123,6 +150,20 @@
     if (e.key === "Escape") {
       e.preventDefault();
       dispose();
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      climb();
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      descend();
     }
   }
 
