@@ -81,6 +81,40 @@ body {
   color: #fff;
 }
 
+/* 没有待译段落时「翻译」不可点 */
+.ep-mini:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ep-mini:disabled:hover {
+  background: #fff;
+  border-color: #dfe3e9;
+}
+
+.ep-mini--soft:disabled:hover {
+  background: var(--ep-accent-soft);
+  border-color: #c9dbf7;
+}
+
+/* 次要但带主色的小按钮（如工具栏的「翻译」）：浅蓝底 + 蓝字，不抢眼 */
+.ep-mini--soft {
+  border-color: #c9dbf7;
+  background: var(--ep-accent-soft);
+  color: #2b62c4;
+}
+
+.ep-mini--soft:hover {
+  border-color: #a9c4ef;
+  background: rgba(47, 111, 235, 0.16);
+}
+
+.ep-mini--soft.is-on {
+  background: var(--ep-accent);
+  border-color: var(--ep-accent);
+  color: #fff;
+}
+
 /* 编辑态的格式栏：紧贴顶部提示条下方 */
 .ep-format {
   flex: 0 0 auto;
@@ -125,6 +159,32 @@ body {
   color: #fff;
 }
 
+
+/* 双语对照：Key 输入 + 翻译按钮一行 */.ep-bi-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin: 6px 0 4px;
+}
+
+.ep-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  appearance: none;
+  border: 1px solid #dfe3e9;
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: #fff;
+  color: #3b4450;
+  font: inherit;
+  font-size: 12px;
+}
+
+.ep-input:focus {
+  outline: none;
+  border-color: var(--ep-accent);
+  box-shadow: 0 0 0 2px var(--ep-accent-soft);
+}
 
 /* 编辑态：纸面描一圈，正文可直接改写 */
 .ep-sheet.is-editing {
@@ -286,6 +346,12 @@ body {
   grid-template-columns: repeat(3, 1fr);
 }
 
+/* 当前用不上的分段控件（如双语对照下的栏数）置灰 */
+.ep-seg.is-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
 .ep-seg--three button {
   font-size: 12px;
   padding: 7px 2px;
@@ -351,6 +417,14 @@ input[type="range"] {
   color: #8b939d;
   font-size: 11px;
   font-style: normal;
+}
+
+/* 翻译失败时的提示换成警示色，别混在灰色注释里 */
+.ep-check__note.is-error {
+  display: block;
+  margin: 6px 0 0;
+  color: #c0392b;
+  line-height: 1.5;
 }
 
 .ep-label-row {

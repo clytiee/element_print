@@ -362,6 +362,105 @@
   margin: calc(var(--ep-para-before) + 0.7em) 0 0.85em;
 }
 
+/* 双语对照时原文层让位给对照层：显式隐藏，不依赖浏览器默认的 [hidden] */
+.ep-body[hidden] {
+  display: none !important;
+}
+
+/* 双语对照：每个段落成一行，左原文右译文，两列顶线对齐 */
+.ep-bilingual {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--ep-font-size);
+}
+
+.ep-bilingual[hidden] {
+  display: none !important;
+}
+
+.ep-bi__row {
+  display: grid;
+  /* 左原文 / 右译文，宽度比例由 --ep-split 控制（中文比西文短，默认原文略宽） */
+  grid-template-columns: var(--ep-split, 58%) minmax(0, 1fr);
+  column-gap: 2em;
+  align-items: start;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* 表格、图这类整块内容不翻译，单列铺满整行 */
+.ep-bi__row.is-wide {
+  grid-template-columns: 1fr;
+}
+.ep-bi__col {
+  min-width: 0;
+}
+
+/* 原文格沿用正文排版，但格子之间不再重复叠加段间距 */
+.ep-bi__src > * {
+  margin: 0;
+}
+
+.ep-bi__row + .ep-bi__row {
+  margin-top: var(--ep-para-after);
+}
+
+/* 译文：同字号下中文比西文显大，压一档；不缩进，免得把译文挤歪 */
+.ep-bi__tgt {
+  font-size: 0.94em;
+  text-indent: 0;
+}
+
+/* 译文是标题时按同级标题的字号与字重走，别缩成正文小字 */
+.ep-bi__row .ep-bi__tgt.is-head {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+/* 译文段落右上角外侧的状态标签：缓存（绿）／已译（蓝）／更改（红）
+   绝对定位、不占位，既不改行高也不压住译文 */
+.ep-bi__tgt {
+  position: relative;
+}
+
+.ep-bi__badge {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  margin-left: 3px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(214, 240, 221, 0.9);
+  color: #3f7a55;
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 本次刚翻译出来的段落 */
+.ep-bi__badge--done {
+  background: rgba(214, 228, 247, 0.92);
+  color: #2b62c4;
+}
+
+/* 原文改过、等点「翻译」的段落 */
+.ep-bi__badge--todo {
+  background: rgba(251, 224, 223, 0.94);
+  color: #b8352f;
+}
+
+@media print {
+  .ep-bi__badge {
+    display: none;
+  }
+}
+
 /* ---------- 打印 ---------- */
 
 @page {

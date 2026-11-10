@@ -61,6 +61,11 @@ export const DEFAULT_SETTINGS = {
   showTime: false,
   showHeader: true, // 页眉（Element Print / 摘自 域名）
   showFooter: true, // 页脚（品牌 + 页码）
+  bilingual: false, // 双语对照：左原文 / 右译文（逐段对齐）
+  biSplit: 58, // 原文列宽（%），中西文宽度差明显，默认原文略宽
+  deeplKey: "", // DeepL Auth Key（仅存本地）
+  deeplFree: true, // true 走免费端点 api-free.deepl.com
+  targetLang: "ZH", // DeepL 目标语言代码
 };
 
 // 切版式时套用的整套参数；之后仍可单独微调
@@ -180,6 +185,13 @@ function normalize(raw) {
   if (typeof raw.showTime === "boolean") base.showTime = raw.showTime;
   if (typeof raw.showHeader === "boolean") base.showHeader = raw.showHeader;
   if (typeof raw.showFooter === "boolean") base.showFooter = raw.showFooter;
+  if (typeof raw.bilingual === "boolean") base.bilingual = raw.bilingual;
+  base.biSplit = clamp(raw.biSplit, 35, 70, base.biSplit);
+  if (typeof raw.deeplKey === "string") base.deeplKey = raw.deeplKey.trim().slice(0, 200);
+  if (typeof raw.deeplFree === "boolean") base.deeplFree = raw.deeplFree;
+  if (typeof raw.targetLang === "string" && /^[A-Za-z-]{2,8}$/.test(raw.targetLang)) {
+    base.targetLang = raw.targetLang.toUpperCase();
+  }
   if (FONT_PRESETS[raw.bodyFont]) base.bodyFont = raw.bodyFont;
   if (raw.titleFont === "inherit" || FONT_PRESETS[raw.titleFont]) {
     base.titleFont = raw.titleFont;

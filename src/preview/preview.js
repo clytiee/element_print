@@ -20,7 +20,13 @@ const state = {
   payload: null,
   lang: "zh",
   ready: false,
+  biShown: false, // 本次窗口里由工具栏「翻译」临时开出的对照视图，不写进设置
 };
+
+// 「自动翻译」开关常驻生效；工具栏「翻译」只是这一次显示对照，不改开关
+function biActive() {
+  return Boolean(state.settings.bilingual) || state.biShown;
+}
 
 /* ---------- 工具 ---------- */
 
@@ -222,6 +228,14 @@ function applySettings() {
   $("sheet").dataset.theme = s.theme || "paper";
   $("sheet").classList.toggle("is-span-head", Boolean(s.spanHead));
 
+  // 双语对照时正文由 #bilingual 呈现，原 #body 只是数据源
+  const biOn = biActive() && !$("bilingual").hidden;
+  $("sheet").classList.toggle("is-bi", biOn);
+  $("body").hidden = biOn;
+  // 对照行本身就是左右两列，页面再分栏会变成四列，故双语时锁单栏
+  if (biOn) root.style.setProperty("--ep-columns", "1");
+  root.style.setProperty("--ep-split", (s.biSplit || 58) + "%");
+
   root.style.setProperty("--ep-body-font", bodyFontStack(s.bodyFont, state.lang));
   root.style.setProperty("--ep-title-font", titleFontStack(s, state.lang));
 
@@ -267,6 +281,10 @@ function syncControls() {
   $("showHeader").checked = s.showHeader !== false;
   $("showFooter").checked = s.showFooter !== false;
 
+  $("bilingualOn").checked = Boolean(s.bilingual);  $("deeplKey").value = s.deeplKey || "";
+  $("biSplit").value = String(s.biSplit);
+  $("vBiSplit").textContent = s.biSplit + " / " + (100 - s.biSplit);
+
   $("vFontSize").textContent = s.fontSize + "pt";
   $("vTitleSize").textContent = s.titleSize + "pt";
   $("vLineHeight").textContent = fixedLine ? s.lineHeightFixed + "pt" : s.lineHeight.toFixed(2) + "×";
@@ -295,6 +313,10 @@ function syncControls() {
   Array.from($("segColumns").querySelectorAll("button")).forEach((btn) => {
     btn.classList.toggle("is-active", Number(btn.dataset.value) === s.columns);
   });
+  // 双语对照时栏数用不上（固定单栏），按钮置灰并给一句说明
+  const biNow = biActive() && !$("bilingual").hidden;
+  $("segColumns").classList.toggle("is-disabled", biNow);
+  $("columnsNote").textContent = biNow ? "双语对照下固定单栏" : "";
 
   Array.from($("segTheme").querySelectorAll("button")).forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.value === (s.theme || "paper"));
@@ -331,13 +353,70 @@ function fit() {
 
 let editing = false;
 
+// 编辑作用的容器：平时是 #body；双语对照时是左栏原文列（改动回写到 #body）
+function editRoot() {
+  return biActive() ? $("bilingual") : $("body");
+}
+
+// 双语对照时左栏可编辑的块（每行的原文克隆，改动同步回 #body 的对应节点）
+function biEditTargets() {
+  const out = [];
+  $("bilingual").querySelectorAll(".ep-bi__src").forEach((col) => {
+    if (col.firstElementChild) out.push(col.firstElementChild);
+  });
+  return out;
+}
+
+// 编辑时浏览器可能把一句拆成多个块（Enter / 粘贴），这里把它们压回单块 + <br>，
+// 否则回写到 #body 后，一个段落会被 collectBiRows 认成好几段
+const BI_BLOCKISH = new Set([
+  "DIV", "P", "SECTION", "ARTICLE", "LI", "UL", "OL", "TABLE", "TR", "TD", "TH",
+  "BLOCKQUOTE", "PRE", "H1", "H2", "H3", "H4", "H5", "H6", "FIGURE", "ADDRESS",
+]);
+
+function flattenBiBlocks(root) {
+  const blocks = Array.from(root.children).filter((c) => BI_BLOCKISH.has(c.tagName));
+  if (!blocks.length) return;
+  const out = [];
+  Array.from(root.childNodes).forEach((node) => {
+    if (node.nodeType === 1 && BI_BLOCKISH.has(node.tagName)) {
+      flattenBiBlocks(node); // 先递归压平内层
+      if (out.length) out.push(document.createElement("br"));
+      Array.from(node.childNodes).forEach((child) => out.push(child));
+    } else {
+      out.push(node);
+    }
+  });
+  root.replaceChildren(...out);
+}
+
+// 左栏一改就回写原文，保证 #body 始终是唯一数据源
+function syncBiEdit(e) {
+  const col = e.target && e.target.closest ? e.target.closest(".ep-bi__src") : null;
+  if (!col || !col.firstElementChild) return;
+  const row = col.firstElementChild.__epRow;
+  if (!row || !row.node || !row.node.isConnected) return;
+  flattenBiBlocks(col.firstElementChild);
+  row.node.innerHTML = col.firstElementChild.innerHTML;
+}
+
 function setEditing(on) {
   if (on && trimming) setTrimming(false);
   editing = on;
-  [ $("title"), $("body"), $("pageHead"), $("pageFoot") ].forEach((node) => {
+  const bi = biActive();
+  [ $("title"), $("pageHead"), $("pageFoot") ].forEach((node) => {
     node.contentEditable = on ? "true" : "false";
     node.spellcheck = false;
   });
+  // 正文：双语时编辑左栏原文列，否则编辑 #body 本体
+  $("body").contentEditable = on && !bi ? "true" : "false";
+  $("body").spellcheck = false;
+  $("bilingual").removeEventListener("input", syncBiEdit);
+  biEditTargets().forEach((node) => {
+    node.contentEditable = on && bi ? "true" : "false";
+    node.spellcheck = false;
+  });
+  if (on && bi) $("bilingual").addEventListener("input", syncBiEdit);
   $("sheet").classList.toggle("is-editing", on);
   $("formatBar").hidden = !on;
   $("editBtn").textContent = on ? "完成" : "编辑";
@@ -346,6 +425,8 @@ function setEditing(on) {
     document.activeElement.blur();
   }
   if (!on && state.settings) $("pageRule").textContent = buildPageRule(state.settings);
+  // 退出编辑时重排一次对照层：刚改过的段落立刻变成红色「更改」
+  if (!on && bi) refreshBilingual();
   fit();
 }
 
@@ -358,8 +439,9 @@ function blockAtCaret() {
   let node = sel.anchorNode;
   if (node && node.nodeType === 3) node = node.parentElement;
   if (!node || !node.closest) return null;
+  const root = editRoot();
   const block = node.closest(PARAGRAPH_SELECTOR);
-  if (!block || block === $("body") || !$("body").contains(block)) return null;
+  if (!block || block === root || !root.contains(block)) return null;
   return block;
 }
 
@@ -382,6 +464,12 @@ function toggleIndent() {
   } else {
     block.style.textIndent = "2em";
     block.classList.remove("ep-no-indent");
+  }
+  // 双语对照时改的是左栏克隆，直接改样式不触发 input，手动回写一次
+  if (biActive()) {
+    const col = block.closest ? block.closest(".ep-bi__src") : null;
+    const row = col && col.firstElementChild ? col.firstElementChild.__epRow : null;
+    if (row && row.node && row.node.isConnected) row.node.innerHTML = block.innerHTML;
   }
   syncFormatState();
 }
@@ -434,10 +522,16 @@ let trimming = false;
 let trimHover = null;
 
 // 从指针下的节点往上找最近的内容块（不算正文容器本身）
+// 双语对照时一块内容对应一整行对照，悬停/删除都作用在那一行
 function trimTarget(node) {
-  const body = $("body");
+  const bi = biActive();
+  const root = bi ? $("bilingual") : $("body");
   let cur = node && node.nodeType === 1 ? node : null;
-  while (cur && cur !== body) {
+  if (bi) {
+    const row = cur && cur.closest ? cur.closest(".ep-bi__row") : null;
+    return row && row.parentElement === root ? row : null;
+  }
+  while (cur && cur !== root) {
     if (TRIM_BLOCKS.has(cur.tagName)) return cur;
     cur = cur.parentElement;
   }
@@ -465,6 +559,12 @@ function onTrimClick(e) {
   e.preventDefault();
   e.stopPropagation();
   clearTrimHover();
+  if (biActive()) {
+    // 删对照行时连 #body 里对应的原文块一起删，导出才不会留残段
+    const col = target.querySelector(".ep-bi__src");
+    const row = col && col.firstElementChild ? col.firstElementChild.__epRow : null;
+    if (row && row.node && row.node.isConnected) row.node.remove();
+  }
   target.remove();
   fit();
 }
@@ -472,17 +572,17 @@ function onTrimClick(e) {
 function setTrimming(on) {
   if (on && editing) setEditing(false);
   trimming = on;
-  const body = $("body");
-  body.classList.toggle("is-trimming", on);
+  const root = biActive() ? $("bilingual") : $("body");
+  $("body").classList.toggle("is-trimming", on);
   $("trimBtn").classList.toggle("is-on", on);
   $("trimBtn").textContent = on ? "退出删减" : "删减";
   $("hintText").textContent = on ? "点击要删除的块 · Esc 退出删减" : HINT_TEXT;
   if (on) {
-    body.addEventListener("mousemove", onTrimMove);
-    body.addEventListener("click", onTrimClick, true);
+    root.addEventListener("mousemove", onTrimMove);
+    root.addEventListener("click", onTrimClick, true);
   } else {
-    body.removeEventListener("mousemove", onTrimMove);
-    body.removeEventListener("click", onTrimClick, true);
+    root.removeEventListener("mousemove", onTrimMove);
+    root.removeEventListener("click", onTrimClick, true);
     clearTrimHover();
   }
 }
@@ -499,6 +599,279 @@ function setImagesHidden(on) {
   fit();
 }
 
+/* ---------- 双语对照（左原文 / 右译文，逐段成对） ---------- */
+
+// 整块不翻译：表格、图、代码这类没有逐句对照的意义，单列铺满一行
+const BI_WIDE = new Set(["TABLE", "FIGURE", "IMG", "IFRAME", "VIDEO", "PRE", "HR", "BLOCKQUOTE"]);
+
+const biCache = new Map(); // 段落键 → 译文：内存镜像，启动时从 storage 灌入
+const biUsage = new Map(); // 段落键 → 最近使用时间，用于裁旧
+const biFresh = new Set(); // 本轮真正发出去翻译过的段落键；不在里面的就是缓存命中
+
+function biStatus(text, isError) {
+  const el = $("translateStatus");
+  if (!el) return;
+  el.textContent = text || "";
+  el.classList.toggle("is-error", Boolean(isError));
+}
+
+// 正文顶层块即「段」；每段取纯文本送翻，一样一段
+function collectBiRows() {
+  const rows = [];
+  const walk = (node) => {
+    Array.from(node.children).forEach((child) => {
+      // 表格、图、代码块：整块不切成句，单列铺满一行
+      if (BI_WIDE.has(child.tagName)) {
+        rows.push({ node: child, text: "", wide: true });
+        return;
+      }
+      // 只装文字的块就是一段（含 div 冒充的段落）
+      if (!hasBlockChild(child)) {
+        const text = (child.textContent || "").replace(/\s+/g, " ").trim();
+        if (!text) return; // 空块不进对照，免得留一行空白
+        rows.push({ node: child, text, wide: false });
+        return;
+      }
+      walk(child);
+    });
+  };
+  walk($("body"));
+  return rows;
+}
+
+/* 段落级译文缓存：按段落文本发请求、按段落存，落盘到 chrome.storage.local。
+   只存译文，键是段落文本的双哈希，所以库里不出现任何原文。 */
+const BI_CACHE_KEY = "ep:bi:cache";
+const BI_CACHE_MAX = 1500; // 超过就按最近使用时间裁掉旧的
+
+// 段落文本 → 缓存的键（长度 + 两个不同种子的 32 位哈希，撞车概率可忽略）
+function biTextKey(text) {
+  const t = String(text);
+  let h1 = 5381;
+  let h2 = 52711;
+  for (let i = 0; i < t.length; i += 1) {
+    const c = t.charCodeAt(i);
+    h1 = ((h1 * 33) ^ c) >>> 0;
+    h2 = ((h2 * 31) + c) >>> 0;
+  }
+  return t.length + ":" + h1.toString(36) + "." + h2.toString(36);
+}
+
+let biCacheTimer = 0;
+
+async function loadBiCache() {
+  try {
+    const got = await chrome.storage.local.get(BI_CACHE_KEY);
+    const rows = got[BI_CACHE_KEY] || {};
+    Object.entries(rows).forEach(([k, v]) => {
+      if (Array.isArray(v) && typeof v[0] === "string") biCache.set(k, v[0]);
+    });
+  } catch {
+    /* 读不到就用内存缓存，不影响功能 */
+  }
+}
+
+function persistBiCache() {
+  clearTimeout(biCacheTimer);
+  biCacheTimer = setTimeout(() => {
+    if (biCache.size > BI_CACHE_MAX) {
+      const keep = new Set(
+        Array.from(biUsage.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, BI_CACHE_MAX)
+          .map(([k]) => k)
+      );
+      Array.from(biCache.keys()).forEach((k) => {
+        if (!keep.has(k)) {
+          biCache.delete(k);
+          biUsage.delete(k);
+        }
+      });
+    }
+    const payload = {};
+    biCache.forEach((v, k) => {
+      payload[k] = [v, biUsage.get(k) || 0];
+    });
+    chrome.storage.local.set({ [BI_CACHE_KEY]: payload }).catch(() => {});
+  }, 500);
+}
+
+async function lookUpTranslations(texts) {
+  const s = state.settings;
+  const pending = [];
+  const pendingTexts = [];
+
+  texts.forEach((t) => {
+    if (!t) return;
+    const key = biTextKey(t);
+    if (biCache.has(key)) {
+      biUsage.set(key, Date.now()); // 记一次使用，裁旧时优先保留常用的
+      return;
+    }
+    if (pendingTexts.indexOf(t) === -1) {
+      pending.push(key);
+      pendingTexts.push(t);
+    }
+  });
+  if (!pendingTexts.length) return { error: null };
+
+  let resp;
+  try {
+    resp = await chrome.runtime.sendMessage({
+      type: "ep:translate",
+      texts: pendingTexts,
+      key: s.deeplKey,
+      targetLang: s.targetLang || "ZH",
+    });
+  } catch (err) {
+    return { error: "和后台通信失败：" + String((err && err.message) || err) };
+  }
+  // 返回 undefined：后台还是旧版本（没重载扩展），消息没人接
+  if (resp === undefined) {
+    return { error: "后台没有响应，请在 chrome://extensions 里点「重新加载」后再试" };
+  }
+  if (!resp.ok) return { error: resp.error || "翻译失败" };
+
+  pending.forEach((key, i) => {
+    const value = (resp.translations && resp.translations[i]) || "";
+    if (!value) return;
+    biCache.set(key, value);
+    biUsage.set(key, Date.now());
+    biFresh.add(key);
+  });
+  persistBiCache();
+  return { error: null };
+}
+
+// 译文段落右上角的标签：缓存命中（绿）／译文已更新（蓝）／原文改过待译（红）
+let biPending = 0; // 待译段落数，决定「翻译」按钮是否可点
+
+function biBadge(tgt, kind) {
+  const badge = document.createElement("span");
+  badge.className = "ep-bi__badge ep-bi__badge--" + kind;
+  badge.textContent = kind === "todo" ? "更改" : kind === "done" ? "已译" : "缓存";
+  tgt.appendChild(badge);
+}
+
+function buildBilingual(rows) {
+  const box = $("bilingual");
+  box.innerHTML = "";
+  biPending = 0;
+  rows.forEach((row) => {
+    const line = document.createElement("div");
+    line.className = "ep-bi__row" + (row.wide ? " is-wide" : "");
+
+    const src = document.createElement("div");
+    src.className = "ep-bi__col ep-bi__src";
+    const clone = row.node.cloneNode(true);
+    clone.__epRow = row; // 编辑/删减时靠它把改动写回 #body 的原块
+    src.appendChild(clone);
+    line.appendChild(src);
+
+    if (!row.wide) {
+      const key = row.text ? biTextKey(row.text) : "";
+      const text = key ? biCache.get(key) : "";
+      // 原文是标题时译文也用同级标题元素，跟着版式的标题样式走，而不是缩成正文小字
+      const heading = /^H[1-6]$/.test(row.node.tagName);
+      const tgt = document.createElement(heading ? row.node.tagName.toLowerCase() : "div");
+      tgt.className = "ep-bi__col ep-bi__tgt" + (heading ? " is-head" : "");
+      if (text) {
+        tgt.textContent = text;
+        biBadge(tgt, biFresh.has(key) ? "done" : "cache");
+      } else {
+        // 没有译文：原文是刚改过（或从未翻过）的段落，等点「翻译」
+        tgt.classList.add("ep-bi__tgt--none");
+        biPending += 1;
+        biBadge(tgt, "todo");
+      }
+      line.appendChild(tgt);
+    }
+    box.appendChild(line);
+  });
+  box.hidden = false;
+  syncBiButton();
+  // 重排后新克隆丢了 contenteditable，编辑态下要重新挂上
+  if (editing) setEditing(true);
+}
+
+// 有未译段落才让「翻译」可点；对照未显示时工具栏按钮仍作为入口
+function syncBiButton() {
+  const pending = biPending > 0;
+  $("translateBtn").disabled = !pending;
+  $("biBtn").disabled = biActive() && !pending;
+}
+
+// 译文是否已经就绪：记住上次成功翻译时的原文指纹，内容没变就不再打 API
+let biDone = false;
+let biSig = "";
+
+// 原文指纹：段落文本拼起来的长度 + 简易 32 位哈希，够分辨「同一篇」和「换了一篇」
+function biSignatureOf(rows) {
+  const joined = rows.map((row) => row.text).join("\u0001");
+  let h = 5381;
+  for (let i = 0; i < joined.length; i += 1) h = ((h * 33) ^ joined.charCodeAt(i)) >>> 0;
+  return joined.length + ":" + h.toString(36);
+}
+
+async function refreshBilingual(opts = {}) {
+  const s = state.settings;
+  if (!biActive()) {
+    const box = $("bilingual");
+    box.hidden = true;
+    box.innerHTML = "";
+    biStatus("");
+    syncBiButton();
+    applySettings();
+    return;
+  }
+
+  const rows = collectBiRows();
+  const sig = biSignatureOf(rows);
+  biFresh.clear();
+
+  const texts = rows.filter((row) => !row.wide).map((row) => row.text);
+  const hit = texts.filter((t) => biCache.has(biTextKey(t))).length;
+  // 本篇一段译文都没有（首次进来）：自动翻一次，不必先点按钮
+  const initial = !biDone && hit === 0;
+  const wantSend = Boolean(opts.send) || initial;
+
+  if (!wantSend) {
+    // 只渲染缓存命中的段落，改过的段落留「更改」红标，等点「翻译」
+    biStatus("");
+    buildBilingual(rows);
+    applySettings();
+    return;
+  }
+
+  let error = null;
+  if (!s.deeplKey) {
+    error = "未填 DeepL Auth Key";
+  } else {
+    biStatus("翻译中…");
+    const res = await lookUpTranslations(texts);
+    error = res.error;
+    if (!error) {
+      biDone = true;
+      biSig = sig;
+    }
+  }
+
+  if (error) {
+    // 失败就留在原文视图，不要给出一片空白右列让人以为是版式没生效
+    const box = $("bilingual");
+    box.hidden = true;
+    box.innerHTML = "";
+    biStatus("翻译未成功：" + error, true);
+    console.warn("[Element Print] 翻译未成功：", error);
+    applySettings();
+    return;
+  }
+
+  biStatus("");
+  buildBilingual(rows);
+  applySettings();
+}
+
 /* ---------- 交互 ---------- */
 
 function update(patch) {
@@ -512,7 +885,14 @@ function update(patch) {
 function switchTheme(theme) {
   const preset = THEME_PRESETS[theme];
   if (!preset) return;
-  state.settings = { ...preset };
+  // Key 这类跨版式保留的字段不跟着重置
+  const keep = {
+    deeplKey: state.settings.deeplKey,
+    deeplFree: state.settings.deeplFree,
+    targetLang: state.settings.targetLang,
+    bilingual: state.settings.bilingual,
+  };
+  state.settings = { ...preset, ...keep };
   syncControls();
   applySettings();
   saveSettings(state.settings);
@@ -569,6 +949,43 @@ function bindControls() {
   $("showHeader").addEventListener("change", (e) => update({ showHeader: e.target.checked }));
   $("showFooter").addEventListener("change", (e) => update({ showFooter: e.target.checked }));
 
+  // 双语对照：开时先退出编辑/删减（改的是原文 #body，对照层只是只读副本）
+  $("bilingualOn").addEventListener("change", (e) => {
+    if (e.target.checked) {
+      setEditing(false);
+      setTrimming(false);
+    } else {
+      state.biShown = false; // 关掉开关时，顺手把「翻译」临时开出的视图也收掉
+    }
+    update({ bilingual: e.target.checked });
+    refreshBilingual();
+  });
+  $("deeplKey").addEventListener("input", (e) => update({ deeplKey: e.target.value }));
+  $("translateBtn").addEventListener("click", () => {
+    // 只翻「更改」标着的段落，其余用缓存
+    refreshBilingual({ send: true });
+  });
+  $("biSplit").addEventListener("input", (e) => update({ biSplit: Number(e.target.value) }));
+
+  // 工具栏「翻译」：单次行为，只让这一个窗口显示对照，不去动「自动翻译」开关
+  $("biBtn").addEventListener("click", () => {
+    if (!state.settings.deeplKey) {
+      $("hintText").textContent = "先在右栏填 DeepL Auth Key";
+      setTimeout(() => {
+        $("hintText").textContent = HINT_TEXT;
+      }, 2600);
+      return;
+    }
+    if (!biActive()) {
+      setEditing(false);
+      setTrimming(false);
+      state.biShown = true;
+      refreshBilingual(); // 首次自动翻；之后按缓存渲染，改过的段落标红
+      return;
+    }
+    refreshBilingual({ send: true }); // 已在对照视图里：只补「更改」的段落
+  });
+
   $("resetBtn").addEventListener("click", () => {
     switchTheme(state.settings.theme || "paper");
   });
@@ -586,7 +1003,9 @@ function bindControls() {
     exportHtml().catch((err) => showError("导出失败：" + ((err && err.message) || err)));
   });
 
-  $("editBtn").addEventListener("click", () => setEditing(!editing));
+  $("editBtn").addEventListener("click", () => {
+    setEditing(!editing);
+  });
 
   // 按下时就阻止默认，避免按钮抢走输入焦点导致选区丢失
   $("formatBar").addEventListener("mousedown", (e) => {
@@ -597,7 +1016,27 @@ function bindControls() {
     if (btn) applyFormat(btn.dataset.cmd);
   });
   document.addEventListener("selectionchange", syncFormatState);
-  $("trimBtn").addEventListener("click", () => setTrimming(!trimming));
+
+  // 双语左栏编辑：Enter 只插一个 <br>（否则浏览器会新起一个块，一段被拆成好几段），粘贴只留纯文本
+  $("bilingual").addEventListener("keydown", (e) => {
+    if (!editing || !biActive()) return;
+    if (e.key !== "Enter" || e.isComposing) return;
+    e.preventDefault();
+    try {
+      document.execCommand("insertLineBreak");
+    } catch {
+      document.execCommand("insertHTML", false, "<br>");
+    }
+  });
+  $("bilingual").addEventListener("paste", (e) => {
+    if (!editing || !biActive()) return;
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData("text/plain") || "";
+    document.execCommand("insertText", false, text.replace(/\r\n?/g, "\n"));
+  });
+  $("trimBtn").addEventListener("click", () => {
+    setTrimming(!trimming);
+  });
   $("imgBtn").addEventListener("click", () => setImagesHidden(!hideImages));
 
   document.addEventListener("keydown", (e) => {
@@ -651,7 +1090,8 @@ async function buildExportHtml() {
     `--ep-line-height:${s.lineHeightMode === "fixed" ? s.lineHeightFixed + "pt" : s.lineHeight}`,
     `--ep-para-before:${s.paraBefore}px`,
     `--ep-para-after:${s.paraAfter}px`,
-    `--ep-columns:${s.columns === 2 ? 2 : 1}`,
+    `--ep-columns:${biActive() ? 1 : s.columns === 2 ? 2 : 1}`,
+    `--ep-split:${(s.biSplit || 58)}%`,
     `--ep-indent:${s.indent}em`,
     `--ep-body-font:${bodyFontStack(s.bodyFont, state.lang)}`,
     `--ep-title-font:${titleFontStack(s, state.lang)}`,
@@ -663,6 +1103,8 @@ async function buildExportHtml() {
 
   const sheetCopy = $("sheet").cloneNode(true);
   sheetCopy.classList.remove("is-editing");
+  // 「缓存」小标签只是编辑时的提示，不进导出的文档
+  sheetCopy.querySelectorAll(".ep-bi__badge").forEach((node) => node.remove());
   sheetCopy.querySelectorAll(".ep-trim-hover, .is-trimming").forEach((node) => {
     node.classList.remove("ep-trim-hover");
     node.classList.remove("is-trimming");
@@ -727,6 +1169,7 @@ function fillFontSelects() {
 
 async function init() {
   state.settings = await loadSettings();
+  await loadBiCache(); // 上次留下的段落译文先灌进内存，命中就不必再打 API
   fillFontSelects();
   syncControls();
   bindControls();
@@ -755,6 +1198,7 @@ async function init() {
 
   render(payload);
   applySettings();
+  if (state.settings.bilingual) refreshBilingual();
   state.ready = true;
 }
 
