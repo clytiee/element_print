@@ -27,12 +27,67 @@ body {
 
 .ep-hint {
   flex: 0 0 auto;
-  padding: 9px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px 6px 18px;
   color: #7a828d;
   font-size: 12px;
   letter-spacing: 0.02em;
   background: #f5f6f8;
   border-bottom: 1px solid #e2e5ea;
+}
+
+.ep-hint__text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ep-hint__actions {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.ep-mini {
+  appearance: none;
+  border: 1px solid #dfe3e9;
+  border-radius: 6px;
+  padding: 3px 12px;
+  background: #fff;
+  color: #3b4450;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.ep-mini:hover {
+  background: #eef1f5;
+  border-color: #cfd5de;
+}
+
+.ep-mini.is-on {
+  background: #16233a;
+  border-color: #16233a;
+  color: #fff;
+}
+
+/* 编辑态：纸面描一圈，正文可直接改写 */
+.ep-sheet.is-editing {
+  outline: 2px solid #2f6feb;
+  outline-offset: 5px;
+}
+
+.ep-sheet [contenteditable="true"] {
+  outline: none;
+  caret-color: #2f6feb;
+}
+
+.ep-sheet [contenteditable="true"]:focus {
+  background: rgba(47, 111, 235, 0.05);
 }
 
 .ep-viewport {
@@ -84,17 +139,6 @@ body {
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.03em;
-}
-
-.ep-panel__sub {
-  margin-top: 4px;
-  color: #8a929c;
-  font-size: 11.5px;
-  line-height: 1.5;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
 }
 
 .ep-panel__body {

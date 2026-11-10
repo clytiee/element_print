@@ -61,11 +61,6 @@ function render(payload) {
   url.textContent = payload.sourceUrl;
   url.href = payload.sourceUrl;
   $("metaTime").textContent = fmtTime(payload.createdAt);
-
-  const source = payload.pageTitle || "";
-  $("sourceInfo").textContent = source
-    ? `${payload.pageTitle}  ·  <${payload.tag}>`
-    : `<${payload.tag}>`;
 }
 
 /* ---------- 版式 ---------- */
@@ -134,6 +129,25 @@ function fit() {
   });
 }
 
+/* ---------- 编辑 ---------- */
+
+let editing = false;
+
+function setEditing(on) {
+  editing = on;
+  [ $("title"), $("body") ].forEach((node) => {
+    node.contentEditable = on ? "true" : "false";
+    node.spellcheck = false;
+  });
+  $("sheet").classList.toggle("is-editing", on);
+  $("editBtn").textContent = on ? "完成" : "编辑";
+  $("editBtn").classList.toggle("is-on", on);
+  if (!on && document.activeElement && document.activeElement.blur) {
+    document.activeElement.blur();
+  }
+  fit();
+}
+
 /* ---------- 交互 ---------- */
 
 function update(patch) {
@@ -171,6 +185,8 @@ function bindControls() {
     exportHtml().catch((err) => showError("导出失败：" + ((err && err.message) || err)));
   });
 
+  $("editBtn").addEventListener("click", () => setEditing(!editing));
+
   window.addEventListener("resize", fit);
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(fit).catch(() => {});
@@ -191,7 +207,13 @@ async function buildExportHtml() {
     `--ep-margin:${s.margin}mm`,
   ].join(";");
 
-  const sheetHtml = $("sheet").innerHTML;
+  const sheetCopy = $("sheet").cloneNode(true);
+  sheetCopy.classList.remove("is-editing");
+  sheetCopy.querySelectorAll("[contenteditable]").forEach((node) => {
+    node.removeAttribute("contenteditable");
+    node.removeAttribute("spellcheck");
+  });
+  const sheetHtml = sheetCopy.innerHTML;
   const title = state.payload ? state.payload.title : "Element Print";
 
   return `<!DOCTYPE html>

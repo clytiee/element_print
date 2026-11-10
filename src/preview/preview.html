@@ -10,7 +10,12 @@
 <body>
   <div class="ep-app">
     <main class="ep-stage">
-      <div class="ep-hint">拖动右侧设置即时生效 · 打印为 A4 纵向</div>
+      <div class="ep-hint">
+        <span class="ep-hint__text">右侧设置即时生效 · 打印为 A4 纵向</span>
+        <div class="ep-hint__actions">
+          <button type="button" id="editBtn" class="ep-mini">编辑</button>
+        </div>
+      </div>
       <div class="ep-viewport" id="viewport">
         <div class="ep-sheetWrap" id="sheetWrap">
           <div class="ep-sheet" id="sheet">
@@ -32,7 +37,6 @@
     <aside class="ep-panel">
       <header class="ep-panel__head">
         <div class="ep-panel__title">版式设置</div>
-        <div class="ep-panel__sub" id="sourceInfo"></div>
       </header>
 
       <div class="ep-panel__body">
