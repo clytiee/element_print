@@ -94,16 +94,64 @@ function showError(text) {
   $("exportBtn").disabled = true;
 }
 
+function siteNameOf(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return host || "网页";
+  } catch (e) {
+    return "网页";
+  }
+}
+
 function render(payload) {
   document.title = payload.title + " · Element Print";
   $("title").textContent = payload.title;
   $("body").innerHTML = payload.html;
   markParagraphs($("body"));
 
+  const link = $("siteLink");
+  link.textContent = siteNameOf(payload.sourceUrl);
+  link.href = payload.sourceUrl;
+
   const url = $("metaUrl");
   url.textContent = payload.sourceUrl;
   url.href = payload.sourceUrl;
   $("metaTime").textContent = fmtTime(payload.createdAt);
+}
+
+/* ---------- @page（含页边距盒里的页眉页脚与页码） ---------- */
+
+function cssString(text) {
+  return '"' + String(text).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+}
+
+function labelText(node) {
+  return ((node && node.textContent) || "").replace(/\s+/g, " ").trim();
+}
+
+const GUTTER_FONT = '"EP Plex Sans", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif';
+
+function buildPageRule(s) {
+  const head = $("pageHead");
+  const brand = labelText(head && head.querySelector(".ep-gutter__title")) || "Element Print";
+  const src = labelText($("pageSource"));
+
+
+  // 左右两块各占 50%，边框拼成一条整线（页边距盒不能跨盒连画）
+  const top =
+    `font-family:${GUTTER_FONT};font-size:8pt;width:50%;vertical-align:bottom;` +
+    `padding:0 0 1.2mm;margin:0 0 6mm;border-bottom:0.5pt solid #c9ccd1;`;
+  const bottom =
+    `font-family:${GUTTER_FONT};font-size:8pt;width:50%;vertical-align:top;` +
+    `padding:1.2mm 0 0;margin:4mm 0 0;border-top:0.5pt solid #c9ccd1;`;
+
+  return (
+    `@page{size:A4;margin:${s.marginTop}mm ${s.marginRight}mm ${s.marginBottom}mm ${s.marginLeft}mm;` +
+    `@top-left{content:${cssString(brand)};${top}text-align:left;font-weight:500;letter-spacing:.06em;color:#4a4f57;}` +
+    `@top-right{content:${cssString(src)};${top}text-align:right;color:#6b6b6b;}` +
+    `@bottom-left{content:${cssString(brand)};${bottom}text-align:left;color:#6b6b6b;}` +
+    `@bottom-right{content:counter(page) " / " counter(pages);${bottom}text-align:right;color:#6b6b6b;font-variant-numeric:tabular-nums;}}`
+  );
 }
 
 /* ---------- 版式 ---------- */
@@ -130,8 +178,7 @@ function applySettings() {
   $("sheet").dataset.theme = s.theme || "paper";
   $("sheet").classList.toggle("is-span-head", Boolean(s.spanHead));
 
-  $("pageRule").textContent =
-    `@page{size:A4;margin:${s.marginTop}mm ${s.marginRight}mm ${s.marginBottom}mm ${s.marginLeft}mm}`;
+  $("pageRule").textContent = buildPageRule(s);
 
   $("metaUrl").hidden = !s.showUrl;
   $("metaTime").hidden = !s.showTime;
@@ -233,7 +280,7 @@ let editing = false;
 function setEditing(on) {
   if (on && trimming) setTrimming(false);
   editing = on;
-  [ $("title"), $("body") ].forEach((node) => {
+  [ $("title"), $("body"), $("pageHead"), $("pageFoot") ].forEach((node) => {
     node.contentEditable = on ? "true" : "false";
     node.spellcheck = false;
   });
@@ -243,6 +290,7 @@ function setEditing(on) {
   if (!on && document.activeElement && document.activeElement.blur) {
     document.activeElement.blur();
   }
+  if (!on && state.settings) $("pageRule").textContent = buildPageRule(state.settings);
   fit();
 }
 
@@ -399,6 +447,11 @@ function bindControls() {
     clearTrimHover();
     window.print();
   });
+
+  // 打印前重建 @page，确保页眉里改过的文字进到页边距盒
+  window.addEventListener("beforeprint", () => {
+    if (state.settings) $("pageRule").textContent = buildPageRule(state.settings);
+  });
   $("exportBtn").addEventListener("click", () => {
     exportHtml().catch((err) => showError("导出失败：" + ((err && err.message) || err)));
   });
@@ -422,6 +475,23 @@ function bindControls() {
 
 /* ---------- 导出单文件 HTML ---------- */
 
+// 导出成单文件时字体要内联成 data URL，否则相对路径在本地文件里失效
+async function inlineFontFaces() {
+  try {
+    const url = chrome.runtime.getURL("src/assets/fonts/ibm-plex-sans-latin.woff2");
+    const bytes = new Uint8Array(await fetch(url).then((res) => res.arrayBuffer()));
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 1) bin += String.fromCharCode(bytes[i]);
+    const src = `url(data:font/woff2;base64,${btoa(bin)}) format("woff2")`;
+    return (
+      `@font-face{font-family:"EP Plex Sans";font-style:normal;font-weight:400;font-display:swap;src:${src}}\n` +
+      `@font-face{font-family:"EP Plex Sans";font-style:normal;font-weight:500;font-display:swap;src:${src}}`
+    );
+  } catch (e) {
+    return "";
+  }
+}
+
 async function buildExportHtml() {
   const s = state.settings;
   const cssPaths = ["src/shared/article.css", "src/shared/themes/academic.css"];
@@ -430,6 +500,7 @@ async function buildExportHtml() {
       cssPaths.map((path) => fetch(chrome.runtime.getURL(path)).then((res) => res.text()))
     )
   ).join("\n");
+  const fontFaces = await inlineFontFaces();
   const vars = [
     `--ep-font-size:${s.fontSize}pt`,
     `--ep-title-size:${s.titleSize}pt`,
@@ -464,10 +535,11 @@ async function buildExportHtml() {
 <title>${esc(title)}</title>
 <style>
 ${css}
+${fontFaces}
 :root{${vars};--ep-scale:1}
 body{margin:0;background:#fff}
 .ep-sheet{margin:0 auto}
-@page{size:A4;margin:${s.marginTop}mm ${s.marginRight}mm ${s.marginBottom}mm ${s.marginLeft}mm}
+${buildPageRule(s)}
 @media screen{body{padding:24px}}
 @media print{body{padding:0}}
 </style>

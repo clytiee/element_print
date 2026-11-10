@@ -1,6 +1,24 @@
 /* Element Print — 版面与排版。
    预览页与导出的单文件 HTML 共用这一份，保证「所见即所打」。 */
 
+/* 页眉页脚品牌字：IBM Plex Sans（拉丁子集，SIL OFL 1.1，见 src/assets/fonts/OFL.txt）。
+   中文仍走系统黑体，按字符回退。 */
+@font-face {
+  font-family: "EP Plex Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../assets/fonts/ibm-plex-sans-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "EP Plex Sans";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("../assets/fonts/ibm-plex-sans-latin.woff2") format("woff2");
+}
+
 :root {
   --ep-font-size: 12pt;
   --ep-title-size: 22.8pt;
@@ -13,6 +31,8 @@
   --ep-mr: 15mm;
   --ep-mb: 15mm;
   --ep-ml: 15mm;
+  --ep-hb: 5mm; /* 页眉带高度（在页边距内） */
+  --ep-fb: 5mm; /* 页脚带高度（在页边距内） */
   --ep-scale: 1;
   --ep-ink: #16181c;
   --ep-sub: #6b6b6b;
@@ -36,6 +56,69 @@
   text-rendering: optimizeLegibility;
 }
 
+/* ---------- 页眉 / 页脚（落在页边距内，不占版心） ---------- */
+
+.ep-gutter {
+  position: absolute;
+  left: var(--ep-ml);
+  right: var(--ep-mr);
+  display: flex;
+  align-items: baseline;
+  gap: 6mm;
+  font-family: "EP Plex Sans", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 8pt;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  color: var(--ep-sub);
+}
+
+.ep-gutter--head {
+  /* 页眉离版心 6mm，比标题到横线的 3mm 更远，视觉上先分层再聚标题 */
+  top: max(2mm, calc(var(--ep-mt) - var(--ep-hb) - 6mm));
+  height: var(--ep-hb);
+  align-items: flex-end;
+  justify-content: space-between;
+  padding-bottom: 1.2mm;
+  border-bottom: 0.5pt solid #c9ccd1;
+}
+
+/* 期刊做法：页眉只用留白与版心相隔，不再画一条线；
+   与标题下的分隔线形成两条平行线，视觉上会互相抢 */
+
+.ep-gutter--foot {
+  bottom: max(3mm, calc(var(--ep-mb) - var(--ep-fb) - 4mm));
+  height: var(--ep-fb);
+  align-items: flex-start;
+  padding-top: 1.2mm;
+  justify-content: space-between;
+  border-top: 0.5pt solid #c9ccd1;
+}
+
+.ep-gutter__title {
+  flex: none;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: #4a4f57;
+}
+
+.ep-gutter__src,
+.ep-gutter__page {
+  min-width: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 页眉里的来源链接：不画下划线，悬停时才提示 */
+.ep-gutter a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.ep-gutter a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* ---------- 头部：标题 + 横线 + 元信息 ---------- */
 
 .ep-head {
@@ -52,7 +135,7 @@
 }
 
 .ep-rule {
-  display: block;
+  display: none; /* 分隔线改到页眉下，标题下不再画线 */
   height: 0;
   margin: 3mm 0 0;
   border: 0;
@@ -64,7 +147,7 @@
   flex-wrap: wrap;
   gap: 0 0.9em;
   justify-content: space-between;
-  margin-top: 2mm;
+  margin-top: 3mm;
   font-family: -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   font-size: 8.5pt;
   line-height: 1.5;
@@ -295,6 +378,14 @@
   .ep-meta {
     color: #555;
   }
+
+  /* 打印时的页眉页脚由 @page 页边距盒绘制（Chrome/Edge 131+），
+     屏幕上的预演块不再重复输出 */
+  .ep-gutter {
+    display: none !important;
+  }
+
+  /* 页眉页脚的分隔线画在 @page 页边距盒上（见 preview.js 的 buildPageRule） */
 
   .ep-body a {
     text-decoration: none;
