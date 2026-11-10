@@ -1,0 +1,64 @@
+/* 学术期刊版式：只覆盖与原版不同的部分，其余排版沿用 article.css 基座。
+   约等于学报常见做法：五号宋体双栏、首行缩进 2 字、段间不留空、栏间细分线、
+   标题居中且用黑体、标题下压细线。 */
+
+.ep-sheet[data-theme="academic"] .ep-title {
+  font-family: "SimHei", "Heiti SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.ep-sheet[data-theme="academic"] .ep-rule {
+  margin-top: 4mm;
+  border-top: 1px solid #b9bdc4;
+}
+
+.ep-sheet[data-theme="academic"] .ep-meta {
+  justify-content: center;
+  gap: 0 1.2em;
+  margin-top: 1.5mm;
+  font-size: 8pt;
+  color: #7a7a7a;
+}
+
+.ep-sheet[data-theme="academic"] .ep-body {
+  column-gap: 7mm;
+  column-rule: 0.5pt solid #d9dce1;
+  text-align: justify;
+}
+
+/* 首行缩进由「首行缩进」开关统一控制（学术预设为 2 字），这里只管列表/图注不缩进 */
+.ep-sheet[data-theme="academic"] .ep-body li,
+.ep-sheet[data-theme="academic"] .ep-body dd,
+.ep-sheet[data-theme="academic"] .ep-body dt,
+.ep-sheet[data-theme="academic"] .ep-body figcaption {
+  text-indent: 0;
+}
+
+/* 三级以内小标题多为黑体、与正文同宽、不缩进 */
+.ep-sheet[data-theme="academic"] .ep-body h1,
+.ep-sheet[data-theme="academic"] .ep-body h2,
+.ep-sheet[data-theme="academic"] .ep-body h3,
+.ep-sheet[data-theme="academic"] .ep-body h4,
+.ep-sheet[data-theme="academic"] .ep-body h5,
+.ep-sheet[data-theme="academic"] .ep-body h6 {
+  font-family: "SimHei", "Heiti SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: 1.06em;
+  margin: 0.7em 0 0.15em;
+  text-indent: 0;
+}
+
+/* 表格与图在学术版里贴栏宽，行更细 */
+.ep-sheet[data-theme="academic"] .ep-body th,
+.ep-sheet[data-theme="academic"] .ep-body td {
+  border-bottom: 0.5pt solid #c9ccd2;
+  padding: 0.2em 0.4em;
+  font-size: 0.92em;
+}
+
+.ep-sheet[data-theme="academic"] .ep-body figcaption {
+  font-size: 0.84em;
+  text-align: center;
+}

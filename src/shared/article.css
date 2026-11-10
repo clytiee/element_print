@@ -3,11 +3,16 @@
 
 :root {
   --ep-font-size: 12pt;
+  --ep-title-size: 22.8pt;
   --ep-line-height: 1.75;
   --ep-para-before: 0px;
   --ep-para-after: 9px;
   --ep-columns: 1;
-  --ep-margin: 15mm;
+  --ep-indent: 0em;
+  --ep-mt: 15mm;
+  --ep-mr: 15mm;
+  --ep-mb: 15mm;
+  --ep-ml: 15mm;
   --ep-scale: 1;
   --ep-ink: #16181c;
   --ep-sub: #6b6b6b;
@@ -23,7 +28,7 @@
   position: relative;
   width: 210mm;
   min-height: 297mm;
-  padding: var(--ep-margin);
+  padding: var(--ep-mt) var(--ep-mr) var(--ep-mb) var(--ep-ml);
   background: #fff;
   color: var(--ep-ink);
   font-family: "Songti SC", "SimSun", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, "Times New Roman", serif;
@@ -39,7 +44,7 @@
 
 .ep-title {
   margin: 0;
-  font-size: calc(var(--ep-font-size) * 1.9);
+  font-size: var(--ep-title-size);
   font-weight: 700;
   line-height: 1.22;
   letter-spacing: 0.02em;
@@ -89,11 +94,17 @@
   overflow-wrap: break-word;
 }
 
-.ep-body p {
+.ep-body p,
+.ep-body .ep-para {
   margin: var(--ep-para-before) 0 var(--ep-para-after);
-  text-indent: 0;
+  text-indent: var(--ep-indent);
   orphans: 2;
   widows: 2;
+}
+
+/* 原文段首已经手打了两字空格的不再叠加 CSS 缩进 */
+.ep-body .ep-no-indent {
+  text-indent: 0;
 }
 
 .ep-body h1,
@@ -233,6 +244,12 @@
   margin: 1em 0;
   border: 0;
   border-top: 1px solid #cfd3d8;
+}
+
+/* 一级标题跨栏：双栏时让 h1/h2 横跨两栏（学术刊常见） */
+.ep-sheet.is-span-head .ep-body h1,
+.ep-sheet.is-span-head .ep-body h2 {
+  column-span: all;
 }
 
 /* ---------- 打印 ---------- */
