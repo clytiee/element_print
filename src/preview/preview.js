@@ -313,6 +313,18 @@ function setTrimming(on) {
   }
 }
 
+/* ---------- 有无图 ---------- */
+
+let hideImages = false;
+
+function setImagesHidden(on) {
+  hideImages = on;
+  $("sheet").classList.toggle("is-noimg", on);
+  $("imgBtn").classList.toggle("is-on", on);
+  $("imgBtn").textContent = on ? "无图" : "有图";
+  fit();
+}
+
 /* ---------- 交互 ---------- */
 
 function update(patch) {
@@ -393,6 +405,7 @@ function bindControls() {
 
   $("editBtn").addEventListener("click", () => setEditing(!editing));
   $("trimBtn").addEventListener("click", () => setTrimming(!trimming));
+  $("imgBtn").addEventListener("click", () => setImagesHidden(!hideImages));
 
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && trimming) {

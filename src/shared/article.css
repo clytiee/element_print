@@ -102,6 +102,14 @@
   widows: 2;
 }
 
+/* 无图模式：隐藏正文里的图片与视频，只留文字 */
+.ep-sheet.is-noimg .ep-body img,
+.ep-sheet.is-noimg .ep-body video,
+.ep-sheet.is-noimg .ep-body canvas,
+.ep-sheet.is-noimg .ep-body iframe {
+  display: none !important;
+}
+
 /* 原文段首已经手打了两字空格的不再叠加 CSS 缩进 */
 .ep-body .ep-no-indent {
   text-indent: 0;
