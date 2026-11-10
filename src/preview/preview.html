@@ -18,7 +18,11 @@
           <button type="button" id="editBtn" class="ep-mini">编辑</button>
           <button type="button" id="trimBtn" class="ep-mini">删减</button>
           <button type="button" id="imgBtn" class="ep-mini">有图</button>
-          <button type="button" id="biBtn" class="ep-mini ep-mini--soft">翻译</button>
+          <div class="ep-bi-switch">
+            <button type="button" id="origBtn" class="ep-mini ep-mini--soft ep-mini--seg">原文</button>
+            <span class="ep-bi-switch__sep"></span>
+            <button type="button" id="biBtn" class="ep-mini ep-mini--soft ep-mini--seg">翻译</button>
+          </div>
         </div>
       </div>
       <!-- 编辑时的格式栏：作用于当前选区 -->
@@ -34,6 +38,8 @@
         <span class="ep-format__sep"></span>
         <button type="button" class="ep-fmt" data-cmd="indent">首行缩进</button>
       </div>
+      <!-- 翻译进度提示：浮在工具栏右下方 -->
+      <div class="ep-toast" id="translateToast" hidden><span class="ep-toast__dot"></span><span id="translateToastText"></span></div>
       <div class="ep-viewport" id="viewport">
         <div class="ep-sheetWrap" id="sheetWrap">
             <div class="ep-sheet" id="sheet" data-theme="paper">
@@ -52,7 +58,7 @@
             <div class="ep-body" id="body"></div>
             <div class="ep-bilingual ep-body" id="bilingual" hidden></div>
             <div class="ep-gutter ep-gutter--foot" id="pageFoot">
-              <span class="ep-gutter__title">Element Print</span>
+              <span class="ep-gutter__quote" id="pageQuote"></span>
               <span class="ep-gutter__page" id="pageNo"></span>
             </div>
           </div>
@@ -164,8 +170,10 @@
           <label class="ep-check"><input type="checkbox" id="showUrl" /><span>显示网址</span></label>
           <label class="ep-check"><input type="checkbox" id="showTime" /><span>显示时间戳</span></label>
           <label class="ep-check"><input type="checkbox" id="spanHead" /><span>一级标题跨栏（双栏时）</span></label>
+          <label class="ep-check"><input type="checkbox" id="allowBreak" /><span>段落可跨页<em class="ep-check__note">默认整段移到下一页</em></span></label>
           <label class="ep-check"><input type="checkbox" id="showHeader" /><span>显示页眉</span></label>
           <label class="ep-check"><input type="checkbox" id="showFooter" /><span>显示页脚<em class="ep-check__note">页码在页脚右，打印时生成</em></span></label>
+          <label class="ep-check"><input type="checkbox" id="showQuote" /><span>页脚名言<em class="ep-check__note">随机一句，取自本地名句库</em></span></label>
         </section>
 
         <section class="ep-field">
@@ -178,6 +186,12 @@
           <div class="ep-field__row ep-row-gap"><span>原文列宽</span><em id="vBiSplit"></em></div>
           <input id="biSplit" type="range" min="35" max="70" step="1" />
           <em class="ep-check__note" id="translateStatus">Key 以 :fx 结尾自动走免费端点</em>
+          <div class="ep-field__row ep-row-gap">
+            <span>缓存上限</span>
+            <input class="ep-input ep-input--num" id="biCacheMax" type="number" min="100" max="20000" step="100" />
+            <span>段</span>
+          </div>
+          <em class="ep-check__note" id="biCacheSize">正在读取缓存…</em>
         </section>
       </div>
 

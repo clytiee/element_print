@@ -8,6 +8,7 @@ import {
   loadSettings,
   saveSettings,
 } from "../shared/settings.js";
+import { QUOTES, QUOTES_EN } from "../shared/quotes.js";
 
 const params = new URLSearchParams(location.search);
 const payloadId = params.get("id") || "";
@@ -147,6 +148,34 @@ function render(payload) {
 
 /* ---------- @page（含页边距盒里的页眉页脚与页码） ---------- */
 
+// 页脚格言：每次打开预览随机取一句，同一窗口内保持不变；西文正文配英文格言
+let quoteLine = "";
+let quoteLang = "";
+
+function pickQuote() {
+  const pool = state.lang === "en" ? QUOTES_EN : QUOTES;
+  if (!pool.length) return "";
+  const q = pool[Math.floor(Math.random() * pool.length)];
+  return q.t + (state.lang === "en" ? " — " : " —— ") + q.a;
+}
+
+function renderQuote() {
+  const el = $("pageQuote");
+  if (!el) return;
+  if (state.settings.showQuote === false) {
+    el.textContent = "";
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  if (!quoteLine || quoteLang !== state.lang) {
+    quoteLine = pickQuote();
+    quoteLang = state.lang;
+  }
+  el.textContent = quoteLine;
+}
+
+
 function cssString(text) {
   return '"' + String(text).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
 }
@@ -161,14 +190,17 @@ function buildPageRule(s) {
   const head = $("pageHead");
   const brand = labelText(head && head.querySelector(".ep-gutter__title")) || "Element Print";
   const src = labelText($("pageSource"));
+  // 页脚左下角：随机格言（关闭时留空，页码仍在右下）
+  const quote = s.showQuote === false ? "" : quoteLine;
 
 
   // 左右两块各占 50%，边框拼成一条整线（页边距盒不能跨盒连画）
   const top =
     `font-family:${GUTTER_FONT};font-size:8pt;width:50%;vertical-align:bottom;` +
     `padding:0 0 1.2mm;margin:0 0 6mm;border-bottom:0.5pt solid #c9ccd1;`;
-  const bottom =
-    `font-family:${GUTTER_FONT};font-size:8pt;width:50%;vertical-align:top;` +
+  // 名言较长，页脚左盒放宽到 74%，页码只占剩下的一点
+  const bottom = (w) =>
+    `font-family:${GUTTER_FONT};font-size:8pt;width:${w};vertical-align:top;` +
     `padding:1.2mm 0 0;margin:4mm 0 0;border-top:0.5pt solid #c9ccd1;`;
 
   const headBoxes = s.showHeader === false
@@ -178,8 +210,8 @@ function buildPageRule(s) {
   // 页码在页脚右侧，关掉页脚时页码一起不出现
   const footBoxes = s.showFooter === false
     ? ""
-    : `@bottom-left{content:${cssString(brand)};${bottom}text-align:left;color:#6b6b6b;}` +
-      `@bottom-right{content:counter(page) " / " counter(pages);${bottom}text-align:right;color:#6b6b6b;font-variant-numeric:tabular-nums;}`;
+    : `@bottom-left{content:${cssString(quote)};${bottom(quote ? "74%" : "50%")}text-align:left;color:#6b6b6b;}` +
+      `@bottom-right{content:counter(page) " / " counter(pages);${bottom(quote ? "24%" : "50%")}text-align:right;color:#6b6b6b;font-variant-numeric:tabular-nums;}`;
 
   return (
     `@page{size:A4;margin:${s.marginTop}mm ${s.marginRight}mm ${s.marginBottom}mm ${s.marginLeft}mm;` +
@@ -227,6 +259,9 @@ function applySettings() {
 
   $("sheet").dataset.theme = s.theme || "paper";
   $("sheet").classList.toggle("is-span-head", Boolean(s.spanHead));
+  // 段落可跨页：正文本体与对照层都要放开 break-inside
+  $("body").classList.toggle("is-breakable", Boolean(s.allowBreak));
+  $("bilingual").classList.toggle("is-breakable", Boolean(s.allowBreak));
 
   // 双语对照时正文由 #bilingual 呈现，原 #body 只是数据源
   const biOn = biActive() && !$("bilingual").hidden;
@@ -241,6 +276,7 @@ function applySettings() {
 
   $("pageHead").hidden = s.showHeader === false;
   $("pageFoot").hidden = s.showFooter === false;
+  renderQuote();
 
   $("pageRule").textContent = buildPageRule(s);
 
@@ -278,12 +314,16 @@ function syncControls() {
   $("showUrl").checked = s.showUrl;
   $("showTime").checked = s.showTime;
   $("spanHead").checked = Boolean(s.spanHead);
+  $("allowBreak").checked = Boolean(s.allowBreak);
   $("showHeader").checked = s.showHeader !== false;
   $("showFooter").checked = s.showFooter !== false;
+  $("showQuote").checked = s.showQuote !== false;
 
-  $("bilingualOn").checked = Boolean(s.bilingual);  $("deeplKey").value = s.deeplKey || "";
+  $("bilingualOn").checked = Boolean(s.bilingual);
+  $("deeplKey").value = s.deeplKey || "";
   $("biSplit").value = String(s.biSplit);
   $("vBiSplit").textContent = s.biSplit + " / " + (100 - s.biSplit);
+  $("biCacheMax").value = String(s.biCacheMax);
 
   $("vFontSize").textContent = s.fontSize + "pt";
   $("vTitleSize").textContent = s.titleSize + "pt";
@@ -615,6 +655,29 @@ function biStatus(text, isError) {
   el.classList.toggle("is-error", Boolean(isError));
 }
 
+// 工具栏右下方的浮层提示：翻译中 / 已翻译 N 段
+let toastTimer = 0;
+
+function showToast(text, done) {
+  const el = $("translateToast");
+  if (!el) return;
+  clearTimeout(toastTimer);
+  $("translateToastText").textContent = text;
+  el.classList.toggle("is-done", Boolean(done));
+  el.hidden = false;
+}
+
+function hideToast(delay) {
+  clearTimeout(toastTimer);
+  if (!delay) {
+    $("translateToast").hidden = true;
+    return;
+  }
+  toastTimer = setTimeout(() => {
+    $("translateToast").hidden = true;
+  }, delay);
+}
+
 // 正文顶层块即「段」；每段取纯文本送翻，一样一段
 function collectBiRows() {
   const rows = [];
@@ -639,10 +702,10 @@ function collectBiRows() {
   return rows;
 }
 
-/* 段落级译文缓存：按段落文本发请求、按段落存，落盘到 chrome.storage.local。
-   只存译文，键是段落文本的双哈希，所以库里不出现任何原文。 */
+// 段落级译文缓存：按段落文本发请求、按段落存，落盘到 chrome.storage.local。
+// 只存译文，键是段落文本的双哈希，所以库里不出现任何原文。
 const BI_CACHE_KEY = "ep:bi:cache";
-const BI_CACHE_MAX = 1500; // 超过就按最近使用时间裁掉旧的
+const BI_CACHE_DEFAULT_MAX = 5000; // 上限由设置里的「缓存上限」控制
 
 // 段落文本 → 缓存的键（长度 + 两个不同种子的 32 位哈希，撞车概率可忽略）
 function biTextKey(text) {
@@ -659,6 +722,29 @@ function biTextKey(text) {
 
 let biCacheTimer = 0;
 
+function biCacheLimit() {
+  const n = Number(state.settings && state.settings.biCacheMax);
+  return Number.isFinite(n) && n > 0 ? n : BI_CACHE_DEFAULT_MAX;
+}
+
+function biCachePayload() {
+  const payload = {};
+  biCache.forEach((v, k) => {
+    payload[k] = [v, biUsage.get(k) || 0];
+  });
+  return payload;
+}
+
+// 面板里显示「多少段 / 多少 MB」：按实际 JSON 的 UTF-8 字节数算
+function refreshBiCacheSize() {
+  const el = $("biCacheSize");
+  if (!el) return;
+  const json = JSON.stringify(biCachePayload());
+  const bytes = new TextEncoder().encode(json).length;
+  const mb = bytes / (1024 * 1024);
+  el.textContent = "当前 " + biCache.size + " 段 · " + (mb < 0.1 ? "<0.1" : mb.toFixed(2)) + " MB";
+}
+
 async function loadBiCache() {
   try {
     const got = await chrome.storage.local.get(BI_CACHE_KEY);
@@ -669,16 +755,18 @@ async function loadBiCache() {
   } catch {
     /* 读不到就用内存缓存，不影响功能 */
   }
+  refreshBiCacheSize();
 }
 
 function persistBiCache() {
   clearTimeout(biCacheTimer);
   biCacheTimer = setTimeout(() => {
-    if (biCache.size > BI_CACHE_MAX) {
+    const limit = biCacheLimit();
+    if (biCache.size > limit) {
       const keep = new Set(
         Array.from(biUsage.entries())
           .sort((a, b) => b[1] - a[1])
-          .slice(0, BI_CACHE_MAX)
+          .slice(0, limit)
           .map(([k]) => k)
       );
       Array.from(biCache.keys()).forEach((k) => {
@@ -688,11 +776,8 @@ function persistBiCache() {
         }
       });
     }
-    const payload = {};
-    biCache.forEach((v, k) => {
-      payload[k] = [v, biUsage.get(k) || 0];
-    });
-    chrome.storage.local.set({ [BI_CACHE_KEY]: payload }).catch(() => {});
+    chrome.storage.local.set({ [BI_CACHE_KEY]: biCachePayload() }).catch(() => {});
+    refreshBiCacheSize();
   }, 500);
 }
 
@@ -796,9 +881,13 @@ function buildBilingual(rows) {
 
 // 有未译段落才让「翻译」可点；对照未显示时工具栏按钮仍作为入口
 function syncBiButton() {
+  const active = biActive();
   const pending = biPending > 0;
   $("translateBtn").disabled = !pending;
-  $("biBtn").disabled = biActive() && !pending;
+  $("biBtn").disabled = active && !pending;
+  // 当前处在哪个视图，就把对应那块点亮（原文不再靠置灰表示当前态，置灰会淡得看不见）
+  $("origBtn").classList.toggle("is-on", !active);
+  $("biBtn").classList.toggle("is-on", active);
 }
 
 // 译文是否已经就绪：记住上次成功翻译时的原文指纹，内容没变就不再打 API
@@ -820,6 +909,7 @@ async function refreshBilingual(opts = {}) {
     box.hidden = true;
     box.innerHTML = "";
     biStatus("");
+    hideToast();
     syncBiButton();
     applySettings();
     return;
@@ -847,17 +937,22 @@ async function refreshBilingual(opts = {}) {
   if (!s.deeplKey) {
     error = "未填 DeepL Auth Key";
   } else {
+    const miss = texts.length - hit;
     biStatus("翻译中…");
+    showToast(miss > 0 ? "正在翻译 " + miss + " 段…" : "正在翻译…");
     const res = await lookUpTranslations(texts);
     error = res.error;
     if (!error) {
       biDone = true;
       biSig = sig;
+      showToast(miss > 0 ? "已翻译 " + miss + " 段" : "译文已是最新", true);
+      hideToast(1800);
     }
   }
 
   if (error) {
     // 失败就留在原文视图，不要给出一片空白右列让人以为是版式没生效
+    hideToast();
     const box = $("bilingual");
     box.hidden = true;
     box.innerHTML = "";
@@ -946,8 +1041,10 @@ function bindControls() {
   $("showUrl").addEventListener("change", (e) => update({ showUrl: e.target.checked }));
   $("showTime").addEventListener("change", (e) => update({ showTime: e.target.checked }));
   $("spanHead").addEventListener("change", (e) => update({ spanHead: e.target.checked }));
+  $("allowBreak").addEventListener("change", (e) => update({ allowBreak: e.target.checked }));
   $("showHeader").addEventListener("change", (e) => update({ showHeader: e.target.checked }));
   $("showFooter").addEventListener("change", (e) => update({ showFooter: e.target.checked }));
+  $("showQuote").addEventListener("change", (e) => update({ showQuote: e.target.checked }));
 
   // 双语对照：开时先退出编辑/删减（改的是原文 #body，对照层只是只读副本）
   $("bilingualOn").addEventListener("change", (e) => {
@@ -966,6 +1063,10 @@ function bindControls() {
     refreshBilingual({ send: true });
   });
   $("biSplit").addEventListener("input", (e) => update({ biSplit: Number(e.target.value) }));
+  $("biCacheMax").addEventListener("change", (e) => {
+    update({ biCacheMax: Number(e.target.value) });
+    persistBiCache(); // 改小上限就立刻裁一次，并把新大小显示出来
+  });
 
   // 工具栏「翻译」：单次行为，只让这一个窗口显示对照，不去动「自动翻译」开关
   $("biBtn").addEventListener("click", () => {
@@ -984,6 +1085,16 @@ function bindControls() {
       return;
     }
     refreshBilingual({ send: true }); // 已在对照视图里：只补「更改」的段落
+  });
+
+  // 「原文」：收起对照视图，回到单栏原文；开着自动翻译就顺手关掉，否则下次刷新又会弹回来
+  $("origBtn").addEventListener("click", () => {
+    if (!biActive()) return;
+    setEditing(false);
+    setTrimming(false);
+    state.biShown = false;
+    if (state.settings.bilingual) update({ bilingual: false });
+    refreshBilingual();
   });
 
   $("resetBtn").addEventListener("click", () => {
@@ -1198,6 +1309,7 @@ async function init() {
 
   render(payload);
   applySettings();
+  syncBiButton();
   if (state.settings.bilingual) refreshBilingual();
   state.ready = true;
 }

@@ -53,6 +53,7 @@ export const DEFAULT_SETTINGS = {
   bodyFont: "auto", // FONT_PRESETS 的 key
   titleFont: "inherit", // inherit（跟随正文）| FONT_PRESETS 的 key
   spanHead: false, // 双栏时一级标题是否跨栏
+  allowBreak: false, // 段落可否跨页（默认整段移到下一页）
   marginTop: 15, // mm
   marginRight: 15,
   marginBottom: 15,
@@ -61,8 +62,10 @@ export const DEFAULT_SETTINGS = {
   showTime: false,
   showHeader: true, // 页眉（Element Print / 摘自 域名）
   showFooter: true, // 页脚（品牌 + 页码）
+  showQuote: true, // 页脚左下角随机显示一句名言
   bilingual: false, // 双语对照：左原文 / 右译文（逐段对齐）
   biSplit: 58, // 原文列宽（%），中西文宽度差明显，默认原文略宽
+  biCacheMax: 5000, // 最多保留多少段译文缓存，超出按最近使用裁旧
   deeplKey: "", // DeepL Auth Key（仅存本地）
   deeplFree: true, // true 走免费端点 api-free.deepl.com
   targetLang: "ZH", // DeepL 目标语言代码
@@ -181,12 +184,15 @@ function normalize(raw) {
   base.marginLeft = clamp(raw.marginLeft, 6, 40, legacy);
 
   if (typeof raw.spanHead === "boolean") base.spanHead = raw.spanHead;
+  if (typeof raw.allowBreak === "boolean") base.allowBreak = raw.allowBreak;
   if (typeof raw.showUrl === "boolean") base.showUrl = raw.showUrl;
   if (typeof raw.showTime === "boolean") base.showTime = raw.showTime;
   if (typeof raw.showHeader === "boolean") base.showHeader = raw.showHeader;
   if (typeof raw.showFooter === "boolean") base.showFooter = raw.showFooter;
+  if (typeof raw.showQuote === "boolean") base.showQuote = raw.showQuote;
   if (typeof raw.bilingual === "boolean") base.bilingual = raw.bilingual;
   base.biSplit = clamp(raw.biSplit, 35, 70, base.biSplit);
+  base.biCacheMax = clamp(raw.biCacheMax, 100, 20000, base.biCacheMax);
   if (typeof raw.deeplKey === "string") base.deeplKey = raw.deeplKey.trim().slice(0, 200);
   if (typeof raw.deeplFree === "boolean") base.deeplFree = raw.deeplFree;
   if (typeof raw.targetLang === "string" && /^[A-Za-z-]{2,8}$/.test(raw.targetLang)) {

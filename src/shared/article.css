@@ -110,6 +110,16 @@
   color: #4a4f57;
 }
 
+/* 页脚左下角的格言：一行放得下就显示，超长才省略，不压页码 */
+.ep-gutter__quote {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #6b6b6b;
+}
+
 .ep-gutter__src,
 .ep-gutter__page {
   min-width: 0;
@@ -391,6 +401,30 @@
 /* 表格、图这类整块内容不翻译，单列铺满整行 */
 .ep-bi__row.is-wide {
   grid-template-columns: 1fr;
+}
+
+/* 「段落可跨页」：默认整段避开分页，打开后允许段落从中间断开（孤行/寡行各留 2 行） */
+.ep-body.is-breakable p,
+.ep-body.is-breakable .ep-para,
+.ep-body.is-breakable li,
+.ep-body.is-breakable blockquote,
+.ep-body.is-breakable h1,
+.ep-body.is-breakable h2,
+.ep-body.is-breakable h3,
+.ep-body.is-breakable h4,
+.ep-body.is-breakable h5,
+.ep-body.is-breakable h6 {
+  break-inside: auto;
+  page-break-inside: auto;
+  orphans: 2;
+  widows: 2;
+}
+
+.ep-bilingual.is-breakable .ep-bi__row {
+  break-inside: auto;
+  page-break-inside: auto;
+  orphans: 2;
+  widows: 2;
 }
 .ep-bi__col {
   min-width: 0;

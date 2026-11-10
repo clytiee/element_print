@@ -21,9 +21,62 @@ body {
   min-height: 0;
 }
 
+/* ---------- 翻译进度提示（浮在工具栏右下方） ---------- */
+
+.ep-toast {
+  position: absolute;
+  top: 44px;
+  right: 16px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #dfe6f1;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.1);
+  color: #2b62c4;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.ep-toast[hidden] {
+  display: none;
+}
+
+.ep-toast__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ep-accent);
+  animation: ep-toast-pulse 1s ease-in-out infinite;
+}
+
+.ep-toast.is-done .ep-toast__dot {
+  animation: none;
+  background: #3f7a55;
+}
+
+.ep-toast.is-done {
+  color: #3f7a55;
+  border-color: #d6efdd;
+}
+
+@keyframes ep-toast-pulse {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 /* ---------- 画布 ---------- */
 
 .ep-stage {
+  position: relative;
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
@@ -115,6 +168,56 @@ body {
   color: #fff;
 }
 
+/* 「原文 | 翻译」合成一个框：外框统一，内部两块按钮无边框，中间一条竖线 */
+.ep-bi-switch {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid #c9dbf7;
+  border-radius: 6px;
+  background: var(--ep-accent-soft);
+  overflow: hidden;
+}
+
+.ep-bi-switch__sep {
+  width: 1px;
+  margin: 4px 0;
+  background: #c9dbf7;
+}
+
+.ep-mini--seg {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.ep-mini--seg:hover {
+  background: rgba(47, 111, 235, 0.16);
+  border-color: transparent;
+}
+
+.ep-mini--seg.is-on {
+  background: var(--ep-accent);
+  color: #fff;
+}
+
+/* 当前视图那块即使不可点也要看得清，别被 disabled 的半透明压淡 */
+.ep-mini--seg.is-on:disabled {
+  background: var(--ep-accent);
+  color: #fff;
+  opacity: 1;
+}
+
+.ep-mini--seg:disabled {
+  background: transparent;
+  color: #7f9dd4;
+  opacity: 1;
+  cursor: default;
+}
+
+.ep-mini--seg:disabled:hover {
+  background: transparent;
+}
+
 /* 编辑态的格式栏：紧贴顶部提示条下方 */
 .ep-format {
   flex: 0 0 auto;
@@ -178,6 +281,13 @@ body {
   color: #3b4450;
   font: inherit;
   font-size: 12px;
+}
+
+/* 缓存上限这类窄数字输入 */
+.ep-input--num {
+  flex: 0 0 76px;
+  width: 76px;
+  text-align: right;
 }
 
 .ep-input:focus {
@@ -560,7 +670,8 @@ input[type="range"] {
   }
 
   .ep-panel,
-  .ep-hint {
+  .ep-hint,
+  .ep-toast {
     display: none !important;
   }
 
