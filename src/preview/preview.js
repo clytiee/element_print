@@ -25,7 +25,9 @@ const state = {
 };
 
 // 「自动翻译」开关常驻生效；工具栏「翻译」只是这一次显示对照，不改开关
+// 中文正文一律不进入对照视图（开关留着，换成西文稿时会重新生效）
 function biActive() {
+  if (!biAllowed()) return false;
   return Boolean(state.settings.bilingual) || state.biShown;
 }
 
@@ -159,6 +161,7 @@ function render(payload) {
   markParagraphs($("body"));
   state.lang = detectLang($("body"));
   setSheetLang(state.lang);
+  refreshWordCount();
 
   const link = $("siteLink");
   link.textContent = siteNameOf(payload.sourceUrl);
@@ -586,6 +589,36 @@ const TRIM_BLOCKS = new Set([
 
 const HINT_TEXT = $("hintText").textContent;
 
+/* ---------- 原文字数统计（工具栏正中） ---------- */
+
+let countTimer = 0;
+
+function refreshWordCount() {
+  const el = $("wordCount");
+  if (!el) return;
+  // 只数正文：#body 在双语时仍是原文本身，标题不计入
+  const body = ($("body") && $("body").textContent) || "";
+  const cjk = (body.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
+  const words = (body.match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g) || []).length;
+  const total = cjk + words;
+  // 字符数按非空白字符计，空格与换行不算
+  const chars = body.replace(/\s/g, "").length;
+  if (!total && !chars) {
+    el.textContent = "";
+    return;
+  }
+  // 中文只报字数（汉字本身就是字符，再报字符数意义不大）；西文报词数 + 字符数
+  el.textContent =
+    state.lang === "en"
+      ? total.toLocaleString() + " words · " + chars.toLocaleString() + " chars"
+      : "共 " + total.toLocaleString() + " 字";
+}
+
+function scheduleWordCount() {
+  clearTimeout(countTimer);
+  countTimer = setTimeout(refreshWordCount, 300);
+}
+
 let trimming = false;
 let trimHover = null;
 
@@ -634,6 +667,7 @@ function onTrimClick(e) {
     if (row && row.node && row.node.isConnected) row.node.remove();
   }
   target.remove();
+  refreshWordCount();
   fit();
 }
 
@@ -913,8 +947,9 @@ function buildBilingual(rows) {
 function syncBiButton() {
   const active = biActive();
   const pending = biPending > 0;
-  $("translateBtn").disabled = !pending;
-  $("biBtn").disabled = active && !pending;
+  const allowed = biAllowed();
+  $("translateBtn").disabled = !allowed || !pending;
+  $("biBtn").disabled = !allowed || (active && !pending);
   // 当前处在哪个视图，就把对应那块点亮（原文不再靠置灰表示当前态，置灰会淡得看不见）
   $("origBtn").classList.toggle("is-on", !active);
   $("biBtn").classList.toggle("is-on", active);
@@ -932,8 +967,24 @@ function biSignatureOf(rows) {
   return joined.length + ":" + h.toString(36);
 }
 
+// 中文正文没有翻译意义：把入口按钮禁掉，避免误点白烧额度
+function biAllowed() {
+  return state.lang !== "zh";
+}
+
 async function refreshBilingual(opts = {}) {
   const s = state.settings;
+  if (!biAllowed()) {
+    const box = $("bilingual");
+    box.hidden = true;
+    box.innerHTML = "";
+    state.biShown = false;
+    biStatus("中文正文不需要翻译");
+    hideToast();
+    syncBiButton();
+    applySettings();
+    return;
+  }
   if (!biActive()) {
     const box = $("bilingual");
     box.hidden = true;
@@ -1101,6 +1152,7 @@ function bindControls() {
     if (biActive()) refreshBilingual();
   });
   $("translateBtn").addEventListener("click", () => {
+    if (!biAllowed()) return; // 中文正文：按钮虽已置灰，再兜一层
     // 只翻「更改」标着的段落，其余用缓存
     refreshBilingual({ send: true });
   });
@@ -1112,6 +1164,7 @@ function bindControls() {
 
   // 工具栏「翻译」：单次行为，只让这一个窗口显示对照，不去动「自动翻译」开关
   $("biBtn").addEventListener("click", () => {
+    if (!biAllowed()) return;
     if (!engineReady(state.settings)) {
       $("hintText").textContent = engineMissingText(state.settings);
       setTimeout(() => {
@@ -1159,6 +1212,9 @@ function bindControls() {
   $("editBtn").addEventListener("click", () => {
     setEditing(!editing);
   });
+
+  // 编辑/删减都会改变字数，sheet 上的 input 冒泡统一接住（双语左栏也在 sheet 里）
+  $("sheet").addEventListener("input", scheduleWordCount);
 
   // 按下时就阻止默认，避免按钮抢走输入焦点导致选区丢失
   $("formatBar").addEventListener("mousedown", (e) => {

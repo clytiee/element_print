@@ -85,6 +85,7 @@ body {
 }
 
 .ep-hint {
+  position: relative;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -694,5 +695,24 @@ input[type="range"] {
     min-height: 0;
     margin: 0;
     padding: 0;
+  }
+}
+
+/* 工具栏正中：原文字数统计，绝对居中，不与两侧按钮抢位置 */
+.ep-count {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #6f7884;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .ep-count {
+    display: none;
   }
 }
