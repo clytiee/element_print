@@ -6,7 +6,8 @@
   "permissions": ["activeTab", "scripting", "storage", "unlimitedStorage"],
   "host_permissions": [
     "https://api-free.deepl.com/*",
-    "https://api.deepl.com/*"
+    "https://api.deepl.com/*",
+    "https://fanyi-api.baidu.com/*"
   ],
   "background": {
     "service_worker": "src/background.js",

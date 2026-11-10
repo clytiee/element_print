@@ -179,13 +179,24 @@
         <section class="ep-field">
           <div class="ep-field__label">双语对照</div>
           <label class="ep-check"><input type="checkbox" id="bilingualOn" /><span>自动翻译</span></label>
-          <div class="ep-bi-row">
+          <div class="ep-field__row ep-row-gap"><span>翻译引擎</span><button type="button" id="translateBtn" class="ep-mini">翻译</button></div>
+          <select class="ep-select" id="biEngine">
+            <option value="deepl">DeepL</option>
+            <option value="baidu">百度翻译</option>
+          </select>
+          <em class="ep-check__note" id="engineNote"></em>
+          <div class="ep-bi-row" id="deeplKeyRow">
             <input class="ep-input" id="deeplKey" type="password" placeholder="DeepL Auth Key（免费版以 :fx 结尾）" autocomplete="off" spellcheck="false" />
-            <button type="button" id="translateBtn" class="ep-mini">翻译</button>
+          </div>
+          <div class="ep-bi-row" id="baiduAppIdRow" hidden>
+            <input class="ep-input" id="baiduAppId" placeholder="百度翻译 APP ID" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="ep-bi-row" id="baiduKeyRow" hidden>
+            <input class="ep-input" id="baiduKey" type="password" placeholder="百度翻译密钥" autocomplete="off" spellcheck="false" />
           </div>
           <div class="ep-field__row ep-row-gap"><span>原文列宽</span><em id="vBiSplit"></em></div>
           <input id="biSplit" type="range" min="35" max="70" step="1" />
-          <em class="ep-check__note" id="translateStatus">Key 以 :fx 结尾自动走免费端点</em>
+          <em class="ep-check__note" id="translateStatus"></em>
           <div class="ep-field__row ep-row-gap">
             <span>缓存上限</span>
             <input class="ep-input ep-input--num" id="biCacheMax" type="number" min="100" max="20000" step="100" />

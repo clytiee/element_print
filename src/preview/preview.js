@@ -29,6 +29,30 @@ function biActive() {
   return Boolean(state.settings.bilingual) || state.biShown;
 }
 
+// 翻译引擎：两家凭据各存一份，界面按当前引擎只显示自己那组
+function syncBiCreds() {
+  const s = state.settings;
+  const baidu = s.engine === "baidu";
+  $("deeplKeyRow").hidden = baidu;
+  $("baiduAppIdRow").hidden = !baidu;
+  $("baiduKeyRow").hidden = !baidu;
+  $("engineNote").textContent = baidu
+    ? "免费版约 5 万字符/月，QPS 约 1"
+    : "Key 以 :fx 结尾自动走免费端点";
+}
+
+function engineReady(s) {
+  return s.engine === "baidu"
+    ? Boolean(s.baiduAppId && s.baiduKey)
+    : Boolean(s.deeplKey);
+}
+
+function engineMissingText(s) {
+  return s.engine === "baidu"
+    ? "先在右栏填百度 APP ID 和密钥"
+    : "先在右栏填 DeepL Auth Key";
+}
+
 /* ---------- 工具 ---------- */
 
 function pad(n) {
@@ -321,6 +345,10 @@ function syncControls() {
 
   $("bilingualOn").checked = Boolean(s.bilingual);
   $("deeplKey").value = s.deeplKey || "";
+  $("biEngine").value = s.engine === "baidu" ? "baidu" : "deepl";
+  $("baiduAppId").value = s.baiduAppId || "";
+  $("baiduKey").value = s.baiduKey || "";
+  syncBiCreds();
   $("biSplit").value = String(s.biSplit);
   $("vBiSplit").textContent = s.biSplit + " / " + (100 - s.biSplit);
   $("biCacheMax").value = String(s.biCacheMax);
@@ -785,7 +813,6 @@ async function lookUpTranslations(texts) {
   const s = state.settings;
   const pending = [];
   const pendingTexts = [];
-
   texts.forEach((t) => {
     if (!t) return;
     const key = biTextKey(t);
@@ -804,8 +831,11 @@ async function lookUpTranslations(texts) {
   try {
     resp = await chrome.runtime.sendMessage({
       type: "ep:translate",
+      engine: s.engine === "baidu" ? "baidu" : "deepl",
       texts: pendingTexts,
       key: s.deeplKey,
+      appid: s.baiduAppId,
+      baiduKey: s.baiduKey,
       targetLang: s.targetLang || "ZH",
     });
   } catch (err) {
@@ -934,8 +964,8 @@ async function refreshBilingual(opts = {}) {
   }
 
   let error = null;
-  if (!s.deeplKey) {
-    error = "未填 DeepL Auth Key";
+  if (!engineReady(s)) {
+    error = engineMissingText(s);
   } else {
     const miss = texts.length - hit;
     biStatus("翻译中…");
@@ -951,13 +981,12 @@ async function refreshBilingual(opts = {}) {
   }
 
   if (error) {
-    // 失败就留在原文视图，不要给出一片空白右列让人以为是版式没生效
+    // 失败时保留对照层（左原文右空位），只在状态行写清楚原因：
+    // 之前直接把整层收掉，看起来像「切回了原文」，反而看不出是翻译失败
     hideToast();
-    const box = $("bilingual");
-    box.hidden = true;
-    box.innerHTML = "";
     biStatus("翻译未成功：" + error, true);
     console.warn("[Element Print] 翻译未成功：", error);
+    buildBilingual(rows);
     applySettings();
     return;
   }
@@ -982,8 +1011,11 @@ function switchTheme(theme) {
   if (!preset) return;
   // Key 这类跨版式保留的字段不跟着重置
   const keep = {
+    engine: state.settings.engine,
     deeplKey: state.settings.deeplKey,
     deeplFree: state.settings.deeplFree,
+    baiduAppId: state.settings.baiduAppId,
+    baiduKey: state.settings.baiduKey,
     targetLang: state.settings.targetLang,
     bilingual: state.settings.bilingual,
   };
@@ -1058,6 +1090,16 @@ function bindControls() {
     refreshBilingual();
   });
   $("deeplKey").addEventListener("input", (e) => update({ deeplKey: e.target.value }));
+  $("baiduAppId").addEventListener("input", (e) => update({ baiduAppId: e.target.value }));
+  $("baiduKey").addEventListener("input", (e) => update({ baiduKey: e.target.value }));
+  $("biEngine").addEventListener("change", (e) => {
+    update({ engine: e.target.value === "baidu" ? "baidu" : "deepl" });
+    // 换引擎等于换一门翻译：把「已翻过」的记号清掉，下次进来会重新尝试
+    biDone = false;
+    biSig = "";
+    syncBiCreds();
+    if (biActive()) refreshBilingual();
+  });
   $("translateBtn").addEventListener("click", () => {
     // 只翻「更改」标着的段落，其余用缓存
     refreshBilingual({ send: true });
@@ -1070,8 +1112,8 @@ function bindControls() {
 
   // 工具栏「翻译」：单次行为，只让这一个窗口显示对照，不去动「自动翻译」开关
   $("biBtn").addEventListener("click", () => {
-    if (!state.settings.deeplKey) {
-      $("hintText").textContent = "先在右栏填 DeepL Auth Key";
+    if (!engineReady(state.settings)) {
+      $("hintText").textContent = engineMissingText(state.settings);
       setTimeout(() => {
         $("hintText").textContent = HINT_TEXT;
       }, 2600);

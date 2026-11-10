@@ -68,7 +68,10 @@ export const DEFAULT_SETTINGS = {
   biCacheMax: 5000, // 最多保留多少段译文缓存，超出按最近使用裁旧
   deeplKey: "", // DeepL Auth Key（仅存本地）
   deeplFree: true, // true 走免费端点 api-free.deepl.com
-  targetLang: "ZH", // DeepL 目标语言代码
+  engine: "deepl", // 翻译引擎：deepl / baidu
+  baiduAppId: "", // 百度翻译开放平台 APP ID
+  baiduKey: "", // 百度翻译开放平台密钥
+  targetLang: "ZH", // 目标语言（DeepL 用大写码，百度用小写码，后台换算）
 };
 
 // 切版式时套用的整套参数；之后仍可单独微调
@@ -195,6 +198,9 @@ function normalize(raw) {
   base.biCacheMax = clamp(raw.biCacheMax, 100, 20000, base.biCacheMax);
   if (typeof raw.deeplKey === "string") base.deeplKey = raw.deeplKey.trim().slice(0, 200);
   if (typeof raw.deeplFree === "boolean") base.deeplFree = raw.deeplFree;
+  if (raw.engine === "baidu" || raw.engine === "deepl") base.engine = raw.engine;
+  if (typeof raw.baiduAppId === "string") base.baiduAppId = raw.baiduAppId.trim().slice(0, 60);
+  if (typeof raw.baiduKey === "string") base.baiduKey = raw.baiduKey.trim().slice(0, 60);
   if (typeof raw.targetLang === "string" && /^[A-Za-z-]{2,8}$/.test(raw.targetLang)) {
     base.targetLang = raw.targetLang.toUpperCase();
   }
