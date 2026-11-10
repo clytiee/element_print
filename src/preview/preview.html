@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>Element Print · 打印预览</title>
+  <link rel="stylesheet" href="../shared/article.css" />
+  <link rel="stylesheet" href="preview.css" />
+  <style id="pageRule"></style>
+</head>
+<body>
+  <div class="ep-app">
+    <main class="ep-stage">
+      <div class="ep-hint">拖动右侧设置即时生效 · 打印为 A4 纵向</div>
+      <div class="ep-viewport" id="viewport">
+        <div class="ep-sheetWrap" id="sheetWrap">
+          <div class="ep-sheet" id="sheet">
+            <div class="ep-head">
+              <h1 class="ep-title" id="title"></h1>
+              <div class="ep-rule"></div>
+              <div class="ep-meta" id="meta">
+                <a class="ep-meta__url" id="metaUrl" href="#" target="_blank" rel="noreferrer"></a>
+                <span class="ep-meta__time" id="metaTime"></span>
+              </div>
+            </div>
+            <div class="ep-body" id="body"></div>
+          </div>
+        </div>
+        <div class="ep-error" id="error" hidden></div>
+      </div>
+    </main>
+
+    <aside class="ep-panel">
+      <header class="ep-panel__head">
+        <div class="ep-panel__title">版式设置</div>
+        <div class="ep-panel__sub" id="sourceInfo"></div>
+      </header>
+
+      <div class="ep-panel__body">
+        <section class="ep-field">
+          <div class="ep-field__label">栏数</div>
+          <div class="ep-seg" id="segColumns">
+            <button type="button" data-value="1" class="is-active">单栏</button>
+            <button type="button" data-value="2">两栏</button>
+          </div>
+        </section>
+
+        <section class="ep-field">
+          <div class="ep-field__row"><span>字号</span><em id="vFontSize"></em></div>
+          <input id="fontSize" type="range" min="10" max="22" step="0.5" />
+        </section>
+
+        <section class="ep-field">
+          <div class="ep-field__row"><span>行高</span><em id="vLineHeight"></em></div>
+          <input id="lineHeight" type="range" min="1.2" max="2.4" step="0.05" />
+        </section>
+
+        <section class="ep-field">
+          <div class="ep-field__row"><span>段前间距</span><em id="vParaBefore"></em></div>
+          <input id="paraBefore" type="range" min="0" max="40" step="1" />
+        </section>
+
+        <section class="ep-field">
+          <div class="ep-field__row"><span>段后间距</span><em id="vParaAfter"></em></div>
+          <input id="paraAfter" type="range" min="0" max="48" step="1" />
+        </section>
+
+        <section class="ep-field">
+          <div class="ep-field__row"><span>页边距</span><em id="vMargin"></em></div>
+          <input id="margin" type="range" min="6" max="35" step="1" />
+        </section>
+
+        <section class="ep-field ep-field--checks">
+          <label class="ep-check"><input type="checkbox" id="showUrl" /><span>显示网址</span></label>
+          <label class="ep-check"><input type="checkbox" id="showTime" /><span>显示时间戳</span></label>
+        </section>
+      </div>
+
+      <footer class="ep-panel__foot">
+        <button type="button" id="printBtn" class="ep-btn ep-btn--primary">打印</button>
+        <button type="button" id="exportBtn" class="ep-btn">导出 HTML</button>
+        <button type="button" id="resetBtn" class="ep-btn ep-btn--ghost">重置版式</button>
+      </footer>
+    </aside>
+  </div>
+
+  <script type="module" src="preview.js"></script>
+</body>
+</html>

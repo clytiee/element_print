@@ -1,0 +1,98 @@
+/* 选取模式的浮层样式，通过 chrome.scripting.insertCSS 注入，不受页面 CSP 干扰 */
+
+.ep-pick-ui {
+  all: initial;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+.ep-pick-box {
+  position: fixed;
+  z-index: 2147483000;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 2px solid #2f6feb;
+  background: rgba(47, 111, 235, 0.12);
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.06);
+  border-radius: 2px;
+  transition: left 60ms linear, top 60ms linear, width 60ms linear, height 60ms linear;
+}
+
+.ep-pick-tag {
+  position: fixed;
+  z-index: 2147483001;
+  pointer-events: none;
+  max-width: 240px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #2f6feb;
+  color: #fff;
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.28);
+}
+
+.ep-pick-bar {
+  position: fixed;
+  z-index: 2147483002;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 8px 14px;
+  border-radius: 10px;
+  background: #16233a;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.3);
+}
+
+.ep-pick-hint {
+  color: #e8ecf3;
+  font-size: 12px;
+  line-height: 18px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.ep-pick-exit {
+  all: initial;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #2f6feb;
+  color: #fff;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ep-pick-exit:hover {
+  background: #3d7bf5;
+}
+
+.ep-pick-toast {
+  position: fixed;
+  z-index: 2147483003;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.98);
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #16233a;
+  color: #fff;
+  font-size: 13px;
+  line-height: 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.34);
+}
+
+.ep-pick-toast.is-on {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}

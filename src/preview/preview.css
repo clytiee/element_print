@@ -1,0 +1,283 @@
+/* 预览页外壳：画布 + 右侧设置面板（打印时只留纸张） */
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: #eceef1;
+  color: #1c1f23;
+  font: 13px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+.ep-app {
+  display: flex;
+  height: 100vh;
+  min-height: 0;
+}
+
+/* ---------- 画布 ---------- */
+
+.ep-stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ep-hint {
+  flex: 0 0 auto;
+  padding: 9px 18px;
+  color: #7a828d;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  background: #f5f6f8;
+  border-bottom: 1px solid #e2e5ea;
+}
+
+.ep-viewport {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 26px 30px 60px;
+  display: block;
+}
+
+.ep-sheetWrap {
+  margin: 0 auto;
+}
+
+.ep-sheet {
+  transform: scale(var(--ep-scale));
+  transform-origin: top left;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(15, 23, 42, 0.06);
+}
+
+.ep-error {
+  max-width: 520px;
+  margin: 80px auto;
+  padding: 18px 20px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid #e2e5ea;
+  color: #4a515b;
+  line-height: 1.7;
+}
+
+/* ---------- 设置面板 ---------- */
+
+.ep-panel {
+  flex: 0 0 286px;
+  width: 286px;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-left: 1px solid #e1e4e9;
+}
+
+.ep-panel__head {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid #edeff2;
+}
+
+.ep-panel__title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.ep-panel__sub {
+  margin-top: 4px;
+  color: #8a929c;
+  font-size: 11.5px;
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.ep-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 18px 6px;
+}
+
+.ep-field {
+  padding: 0 0 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #f1f3f6;
+}
+
+.ep-field:last-child,
+.ep-field--checks {
+  border-bottom: 0;
+  margin-bottom: 0;
+}
+
+.ep-field__label {
+  display: block;
+  margin-bottom: 8px;
+  color: #6d7580;
+  font-size: 12px;
+}
+
+.ep-field__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: #6d7580;
+  font-size: 12px;
+}
+
+.ep-field__row em {
+  font-style: normal;
+  color: #202733;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.ep-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 3px;
+  background: #f2f4f7;
+  border-radius: 8px;
+}
+
+.ep-seg button {
+  appearance: none;
+  border: 0;
+  padding: 7px 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #4c5561;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.ep-seg button:hover {
+  color: #1c1f23;
+}
+
+.ep-seg button.is-active {
+  background: #fff;
+  color: #131722;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+input[type="range"] {
+  width: 100%;
+  margin: 0;
+  accent-color: #2f6feb;
+  cursor: pointer;
+}
+
+.ep-field--checks {
+  padding-top: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ep-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #33393f;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.ep-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: #2f6feb;
+  cursor: pointer;
+}
+
+/* ---------- 底部操作 ---------- */
+
+.ep-panel__foot {
+  flex: 0 0 auto;
+  padding: 12px 18px 16px;
+  border-top: 1px solid #edeff2;
+  display: grid;
+  gap: 8px;
+}
+
+.ep-btn {
+  appearance: none;
+  border: 1px solid #dfe3e9;
+  border-radius: 8px;
+  padding: 9px 12px;
+  background: #fff;
+  color: #25303f;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.ep-btn:hover {
+  background: #f6f8fa;
+  border-color: #cfd5de;
+}
+
+.ep-btn--primary {
+  background: #16233a;
+  border-color: #16233a;
+  color: #fff;
+  font-weight: 600;
+}
+
+.ep-btn--primary:hover {
+  background: #223251;
+  border-color: #223251;
+}
+
+.ep-btn--ghost {
+  border-color: transparent;
+  color: #7a828d;
+  background: transparent;
+}
+
+.ep-btn--ghost:hover {
+  background: #f4f6f8;
+  color: #33393f;
+}
+
+/* ---------- 打印 ---------- */
+
+@media print {
+  html,
+  body {
+    background: #fff;
+  }
+
+  .ep-panel,
+  .ep-hint {
+    display: none !important;
+  }
+
+  .ep-viewport {
+    padding: 0;
+    overflow: visible;
+  }
+
+  .ep-sheet {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+
+  .ep-sheetWrap {
+    width: auto !important;
+    height: auto !important;
+  }
+}
