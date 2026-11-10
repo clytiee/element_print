@@ -282,12 +282,19 @@
   text-align: center;
 }
 
+/* 引文块：两侧缩进、上下留白，首行不再缩进（自身缩进已是分段标志） */
 .ep-body blockquote {
-  margin: var(--ep-para-before) 0 var(--ep-para-after);
+  margin: max(0.8em, var(--ep-para-before)) 2em max(0.8em, var(--ep-para-after));
   padding: 0 0 0 0.9em;
   border-left: 2px solid #d5d8dd;
   color: #3c3c3c;
   font-style: normal;
+  text-indent: 0;
+}
+
+.ep-body blockquote p,
+.ep-body blockquote .ep-para {
+  text-indent: 0;
 }
 
 .ep-body table {
@@ -347,10 +354,12 @@
   border-top: 1px solid #cfd3d8;
 }
 
-/* 一级标题跨栏：双栏时让 h1/h2 横跨两栏（学术刊常见） */
+/* 一级标题跨栏：双栏时让 h1/h2 横跨两栏（学术刊常见）。
+   跨栏后下方直接接两栏正文，上下留白要比普通小标题更大才不显拥挤 */
 .ep-sheet.is-span-head .ep-body h1,
 .ep-sheet.is-span-head .ep-body h2 {
   column-span: all;
+  margin: calc(var(--ep-para-before) + 0.7em) 0 0.85em;
 }
 
 /* ---------- 打印 ---------- */

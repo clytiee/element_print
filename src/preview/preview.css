@@ -81,6 +81,51 @@ body {
   color: #fff;
 }
 
+/* 编辑态的格式栏：紧贴顶部提示条下方 */
+.ep-format {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 18px 8px;
+  overflow-x: auto;
+}
+
+.ep-format__sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: #e2e6ec;
+  flex: 0 0 auto;
+}
+
+.ep-fmt {
+  appearance: none;
+  flex: 0 0 auto;
+  border: 1px solid #dfe3e9;
+  border-radius: 6px;
+  padding: 3px 10px;
+  background: #fff;
+  color: #3b4450;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.ep-fmt:hover {
+  background: #eef1f5;
+  border-color: #cfd5de;
+}
+
+.ep-fmt.is-on {
+  background: var(--ep-accent);
+  border-color: var(--ep-accent);
+  color: #fff;
+}
+
+
 /* 编辑态：纸面描一圈，正文可直接改写 */
 .ep-sheet.is-editing {
   outline: 2px solid var(--ep-accent);
@@ -232,8 +277,18 @@ body {
   grid-template-columns: 1fr 1fr;
   gap: 6px;
   padding: 3px;
-  background: #f2f4f7;
   border-radius: 8px;
+  background: #f2f4f7;
+}
+
+/* 版式有三个（原版 / 学术期刊 / 公文）时均分成三列 */
+.ep-seg--three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.ep-seg--three button {
+  font-size: 12px;
+  padding: 7px 2px;
 }
 
 .ep-seg button {

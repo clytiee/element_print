@@ -1,0 +1,66 @@
+/* 党政机关公文版式（GB/T 9704-2012 的常用参数，只取与摘录版面相关的部分）。
+   基座排版在 article.css，这里只补公文特有的对齐与层级字体。 */
+
+/* 标题：二号小标宋，居中，标题下不划线（公文标题与正文之间不空行） */
+.ep-sheet[data-theme="gov"] .ep-title {
+  font-family: var(--ep-title-font);
+  font-weight: 500; /* 小标宋本身是粗宋，系统宋体用常规+字距更接近 */
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  text-align: center;
+}
+
+.ep-sheet[data-theme="gov"] .ep-rule {
+  display: none;
+}
+
+.ep-sheet[data-theme="gov"] .ep-head {
+  margin-bottom: 0;
+}
+
+.ep-sheet[data-theme="gov"] .ep-meta {
+  justify-content: center;
+  font-size: 9pt;
+}
+
+.ep-sheet[data-theme="gov"] .ep-body {
+  text-align: justify;
+}
+
+/* 层次序数字体：一级「一、」黑体，二级「（一）」楷体，三级及以下仿宋加粗 */
+.ep-sheet[data-theme="gov"] .ep-body h1,
+.ep-sheet[data-theme="gov"] .ep-body h2 {
+  font-family: "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif;
+  font-weight: 400;
+  font-size: 1em;
+  margin: 0;
+  text-indent: 2em;
+}
+
+.ep-sheet[data-theme="gov"] .ep-body h3,
+.ep-sheet[data-theme="gov"] .ep-body h4 {
+  font-family: KaiTi, "Kaiti SC", STKaiti, "楷体", serif;
+  font-weight: 400;
+  font-size: 1em;
+  margin: 0;
+  text-indent: 2em;
+}
+
+.ep-sheet[data-theme="gov"] .ep-body h5,
+.ep-sheet[data-theme="gov"] .ep-body h6 {
+  font-family: var(--ep-body-font);
+  font-weight: 700;
+  font-size: 1em;
+  margin: 0;
+  text-indent: 2em;
+}
+
+/* 表格与图在公文里用五号，图注居中 */
+.ep-sheet[data-theme="gov"] .ep-body table {
+  font-size: 0.875em;
+}
+
+.ep-sheet[data-theme="gov"] .ep-body figcaption {
+  font-size: 0.875em;
+  text-align: center;
+}

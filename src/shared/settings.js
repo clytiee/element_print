@@ -111,6 +111,30 @@ export const THEME_PRESETS = {
     showHeader: true,
     showFooter: true,
   },
+  // 党政机关公文（GB/T 9704）：三号仿宋、固定行距 28pt、非对称页边距
+  gov: {
+    theme: "gov",
+    columns: 1,
+    fontSize: 16, // 三号
+    titleSize: 22, // 二号
+    lineHeightMode: "fixed",
+    lineHeight: 1.75,
+    lineHeightFixed: 28,
+    paraBefore: 0,
+    paraAfter: 0,
+    indent: 2,
+    bodyFont: "fangsong",
+    titleFont: "song",
+    spanHead: false,
+    marginTop: 37,
+    marginRight: 26,
+    marginBottom: 35,
+    marginLeft: 28,
+    showUrl: false,
+    showTime: false,
+    showHeader: false, // 公文页眉位置留给份号/密级，正文摘录不画
+    showFooter: true, // 页码在版心底（地脚）
+  },
 };
 
 // 页边距预置：窄 / 中 / 宽（学术期刊用「宽」）

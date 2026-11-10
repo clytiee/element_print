@@ -339,6 +339,7 @@ function setEditing(on) {
     node.spellcheck = false;
   });
   $("sheet").classList.toggle("is-editing", on);
+  $("formatBar").hidden = !on;
   $("editBtn").textContent = on ? "完成" : "编辑";
   $("editBtn").classList.toggle("is-on", on);
   if (!on && document.activeElement && document.activeElement.blur) {
@@ -346,6 +347,77 @@ function setEditing(on) {
   }
   if (!on && state.settings) $("pageRule").textContent = buildPageRule(state.settings);
   fit();
+}
+
+// 光标所在的段落块（正文里的 p / div / li 等）
+const PARAGRAPH_SELECTOR = "p, div, li, dd, dt, h1, h2, h3, h4, h5, h6, blockquote, figcaption";
+
+function blockAtCaret() {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return null;
+  let node = sel.anchorNode;
+  if (node && node.nodeType === 3) node = node.parentElement;
+  if (!node || !node.closest) return null;
+  const block = node.closest(PARAGRAPH_SELECTOR);
+  if (!block || block === $("body") || !$("body").contains(block)) return null;
+  return block;
+}
+
+// 段落实际首行缩进（含版面设置带来的缩进，不只行内值）
+function blockIndentPx(block) {
+  if (!block) return 0;
+  const px = parseFloat(getComputedStyle(block).textIndent);
+  return Number.isFinite(px) ? px : 0;
+}
+
+// 段首缩进切换：有无之间来回切，切到无时打上 ep-no-indent 免得被版面缩进设置盖回去
+function toggleIndent() {
+  if (!editing) return;
+  const block = blockAtCaret();
+  if (!block) return;
+  if (block.tagName !== "P") block.classList.add("ep-para");
+  if (blockIndentPx(block) > 0.5) {
+    block.style.textIndent = "0";
+    block.classList.add("ep-no-indent");
+  } else {
+    block.style.textIndent = "2em";
+    block.classList.remove("ep-no-indent");
+  }
+  syncFormatState();
+}
+
+// 格式按钮的高亮态：选区在加粗/斜体里时按钮点亮
+function syncFormatState() {
+  if (!editing) return;
+  $("formatBar").querySelectorAll("button[data-cmd]").forEach((btn) => {
+    if (btn.dataset.cmd === "indent") {
+      btn.classList.toggle("is-on", blockIndentPx(blockAtCaret()) > 0.5);
+      return;
+    }
+    let on = false;
+    try {
+      on = document.queryCommandState(btn.dataset.cmd);
+    } catch {
+      on = false;
+    }
+    btn.classList.toggle("is-on", on);
+  });
+}
+
+// 粗体 / 斜体 / 下划线 / 删除线 / 左右对齐，作用于当前选区
+function applyFormat(cmd) {
+  if (!editing) return;
+  if (cmd === "indent") {
+    toggleIndent();
+    return;
+  }
+  try {
+    document.execCommand("styleWithCSS", false, true);
+    document.execCommand(cmd, false, null);
+  } catch {
+    /* 命令不可用时静默，不改动内容 */
+  }
+  syncFormatState();
 }
 
 /* ---------- 删减 ---------- */
@@ -515,6 +587,16 @@ function bindControls() {
   });
 
   $("editBtn").addEventListener("click", () => setEditing(!editing));
+
+  // 按下时就阻止默认，避免按钮抢走输入焦点导致选区丢失
+  $("formatBar").addEventListener("mousedown", (e) => {
+    if (e.target.closest("button[data-cmd]")) e.preventDefault();
+  });
+  $("formatBar").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-cmd]");
+    if (btn) applyFormat(btn.dataset.cmd);
+  });
+  document.addEventListener("selectionchange", syncFormatState);
   $("trimBtn").addEventListener("click", () => setTrimming(!trimming));
   $("imgBtn").addEventListener("click", () => setImagesHidden(!hideImages));
 
@@ -552,7 +634,11 @@ async function inlineFontFaces() {
 
 async function buildExportHtml() {
   const s = state.settings;
-  const cssPaths = ["src/shared/article.css", "src/shared/themes/academic.css"];
+  const cssPaths = [
+    "src/shared/article.css",
+    "src/shared/themes/academic.css",
+    "src/shared/themes/gov.css",
+  ];
   const css = (
     await Promise.all(
       cssPaths.map((path) => fetch(chrome.runtime.getURL(path)).then((res) => res.text()))

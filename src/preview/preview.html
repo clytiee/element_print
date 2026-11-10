@@ -5,6 +5,7 @@
   <title>Element Print · 打印预览</title>
   <link rel="stylesheet" href="../shared/article.css" />
   <link rel="stylesheet" href="../shared/themes/academic.css" />
+  <link rel="stylesheet" href="../shared/themes/gov.css" />
   <link rel="stylesheet" href="preview.css" />
   <style id="pageRule"></style>
 </head>
@@ -18,6 +19,19 @@
           <button type="button" id="trimBtn" class="ep-mini">删减</button>
           <button type="button" id="imgBtn" class="ep-mini">有图</button>
         </div>
+      </div>
+      <!-- 编辑时的格式栏：作用于当前选区 -->
+      <div class="ep-format" id="formatBar" hidden>
+        <button type="button" class="ep-fmt" data-cmd="bold">粗体</button>
+        <button type="button" class="ep-fmt" data-cmd="italic">斜体</button>
+        <button type="button" class="ep-fmt" data-cmd="underline">下划线</button>
+        <button type="button" class="ep-fmt" data-cmd="strikeThrough">删除线</button>
+        <span class="ep-format__sep"></span>
+        <button type="button" class="ep-fmt" data-cmd="justifyLeft">左对齐</button>
+        <button type="button" class="ep-fmt" data-cmd="justifyCenter">居中</button>
+        <button type="button" class="ep-fmt" data-cmd="justifyRight">右对齐</button>
+        <span class="ep-format__sep"></span>
+        <button type="button" class="ep-fmt" data-cmd="indent">首行缩进</button>
       </div>
       <div class="ep-viewport" id="viewport">
         <div class="ep-sheetWrap" id="sheetWrap">
@@ -54,9 +68,10 @@
       <div class="ep-panel__body">
         <section class="ep-field">
           <div class="ep-field__label">版式</div>
-          <div class="ep-seg" id="segTheme">
+          <div class="ep-seg ep-seg--three" id="segTheme">
             <button type="button" data-value="paper" class="is-active">原版</button>
             <button type="button" data-value="academic">学术期刊</button>
+            <button type="button" data-value="gov">公文</button>
           </div>
         </section>
 
