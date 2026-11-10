@@ -1,5 +1,44 @@
 // 版面设置的默认值与持久化（chrome.storage.local）
 
+// 正文字体 / 标题字体预设：库里只存 key，渲染时换成 font-family 栈。
+// 所有栈都按「先拉丁、后中文」排列，混排时西文与汉字各自命中合适的字体。
+export const FONT_PRESETS = {
+  auto: {
+    label: "自动（中文宋体 · 西文 Times）",
+    stack:
+      '"Times New Roman", Georgia, "Noto Serif SC", "Source Han Serif SC", "思源宋体 CN", "Songti SC", "SimSun", serif',
+  },
+  song: {
+    label: "宋体（思源宋 / 宋体）",
+    stack: '"Noto Serif SC", "Source Han Serif SC", "思源宋体 CN", "Songti SC", "SimSun", serif',
+  },
+  hei: {
+    label: "黑体（思源黑 / 雅黑）",
+    stack:
+      '"Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif',
+  },
+  kai: {
+    label: "楷体",
+    stack: 'KaiTi, "Kaiti SC", STKaiti, "楷体", serif',
+  },
+  fangsong: {
+    label: "仿宋",
+    stack: 'FangSong, STFangsong, "仿宋", "华文仿宋", serif',
+  },
+  times: {
+    label: "Times New Roman（西文衬线）",
+    stack: '"Times New Roman", Times, "Liberation Serif", serif',
+  },
+  georgia: {
+    label: "Georgia（西文衬线）",
+    stack: 'Georgia, "Times New Roman", serif',
+  },
+  sans: {
+    label: "无衬线（Segoe / 苹方）",
+    stack: '"Segoe UI", -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif',
+  },
+};
+
 export const DEFAULT_SETTINGS = {
   theme: "paper", // paper（原版报纸感） | academic（学术期刊）
   columns: 1, // 1 | 2
@@ -11,6 +50,8 @@ export const DEFAULT_SETTINGS = {
   paraBefore: 0, // px
   paraAfter: 9, // px
   indent: 0, // 首行缩进（字）
+  bodyFont: "auto", // FONT_PRESETS 的 key
+  titleFont: "inherit", // inherit（跟随正文）| FONT_PRESETS 的 key
   spanHead: false, // 双栏时一级标题是否跨栏
   marginTop: 15, // mm
   marginRight: 15,
@@ -18,6 +59,8 @@ export const DEFAULT_SETTINGS = {
   marginLeft: 15,
   showUrl: true,
   showTime: false,
+  showHeader: true, // 页眉（Element Print / 摘自 域名）
+  showFooter: true, // 页脚（品牌 + 页码）
 };
 
 // 切版式时套用的整套参数；之后仍可单独微调
@@ -33,6 +76,8 @@ export const THEME_PRESETS = {
     paraBefore: 0,
     paraAfter: 9,
     indent: 0,
+    bodyFont: "auto",
+    titleFont: "inherit",
     spanHead: false,
     marginTop: 15,
     marginRight: 15,
@@ -40,6 +85,8 @@ export const THEME_PRESETS = {
     marginLeft: 15,
     showUrl: true,
     showTime: false,
+    showHeader: true,
+    showFooter: true,
   },
   academic: {
     theme: "academic",
@@ -52,6 +99,8 @@ export const THEME_PRESETS = {
     paraBefore: 0,
     paraAfter: 0,
     indent: 2,
+    bodyFont: "auto",
+    titleFont: "hei",
     spanHead: true,
     marginTop: 22,
     marginRight: 20,
@@ -59,6 +108,8 @@ export const THEME_PRESETS = {
     marginLeft: 20,
     showUrl: false,
     showTime: false,
+    showHeader: true,
+    showFooter: true,
   },
 };
 
@@ -103,6 +154,12 @@ function normalize(raw) {
   if (typeof raw.spanHead === "boolean") base.spanHead = raw.spanHead;
   if (typeof raw.showUrl === "boolean") base.showUrl = raw.showUrl;
   if (typeof raw.showTime === "boolean") base.showTime = raw.showTime;
+  if (typeof raw.showHeader === "boolean") base.showHeader = raw.showHeader;
+  if (typeof raw.showFooter === "boolean") base.showFooter = raw.showFooter;
+  if (FONT_PRESETS[raw.bodyFont]) base.bodyFont = raw.bodyFont;
+  if (raw.titleFont === "inherit" || FONT_PRESETS[raw.titleFont]) {
+    base.titleFont = raw.titleFont;
+  }
   return base;
 }
 

@@ -4,6 +4,7 @@ import {
   DEFAULT_SETTINGS,
   THEME_PRESETS,
   MARGIN_PRESETS,
+  FONT_PRESETS,
   loadSettings,
   saveSettings,
 } from "../shared/settings.js";
@@ -17,6 +18,7 @@ const $ = (id) => document.getElementById(id);
 const state = {
   settings: { ...DEFAULT_SETTINGS },
   payload: null,
+  lang: "zh",
   ready: false,
 };
 
@@ -86,6 +88,22 @@ function markParagraphs(root) {
   });
 }
 
+// 正文以拉丁字母为主时按西文规则排版（不缩进、靠段间距分段、允许断词）
+function detectLang(root) {
+  const text = (root.textContent || "").slice(0, 20000);
+  const cjk = (text.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
+  const latin = (text.match(/[A-Za-z]/g) || []).length;
+  if (!cjk && !latin) return "zh";
+  return latin / (latin + cjk) > 0.65 ? "en" : "zh";
+}
+
+function setSheetLang(lang) {
+  const sheet = $("sheet");
+  sheet.dataset.lang = lang;
+  if (lang === "en") sheet.setAttribute("lang", "en");
+  else sheet.setAttribute("lang", "zh-CN");
+}
+
 function showError(text) {
   $("error").textContent = text;
   $("error").hidden = false;
@@ -108,6 +126,8 @@ function render(payload) {
   $("title").textContent = payload.title;
   $("body").innerHTML = payload.html;
   markParagraphs($("body"));
+  state.lang = detectLang($("body"));
+  setSheetLang(state.lang);
 
   const link = $("siteLink");
   link.textContent = siteNameOf(payload.sourceUrl);
@@ -145,16 +165,40 @@ function buildPageRule(s) {
     `font-family:${GUTTER_FONT};font-size:8pt;width:50%;vertical-align:top;` +
     `padding:1.2mm 0 0;margin:4mm 0 0;border-top:0.5pt solid #c9ccd1;`;
 
+  const headBoxes = s.showHeader === false
+    ? ""
+    : `@top-left{content:${cssString(brand)};${top}text-align:left;font-weight:500;letter-spacing:.06em;color:#4a4f57;}` +
+      `@top-right{content:${cssString(src)};${top}text-align:right;color:#6b6b6b;}`;
+  // 页码在页脚右侧，关掉页脚时页码一起不出现
+  const footBoxes = s.showFooter === false
+    ? ""
+    : `@bottom-left{content:${cssString(brand)};${bottom}text-align:left;color:#6b6b6b;}` +
+      `@bottom-right{content:counter(page) " / " counter(pages);${bottom}text-align:right;color:#6b6b6b;font-variant-numeric:tabular-nums;}`;
+
   return (
     `@page{size:A4;margin:${s.marginTop}mm ${s.marginRight}mm ${s.marginBottom}mm ${s.marginLeft}mm;` +
-    `@top-left{content:${cssString(brand)};${top}text-align:left;font-weight:500;letter-spacing:.06em;color:#4a4f57;}` +
-    `@top-right{content:${cssString(src)};${top}text-align:right;color:#6b6b6b;}` +
-    `@bottom-left{content:${cssString(brand)};${bottom}text-align:left;color:#6b6b6b;}` +
-    `@bottom-right{content:counter(page) " / " counter(pages);${bottom}text-align:right;color:#6b6b6b;font-variant-numeric:tabular-nums;}}`
+    headBoxes +
+    footBoxes +
+    `}`
   );
 }
 
 /* ---------- 版式 ---------- */
+
+// 正文字体栈：选了「自动」且正文是西文时，换成纯拉丁衬线，不挂中文兜底
+function bodyFontStack(key, lang) {
+  const preset = FONT_PRESETS[key] || FONT_PRESETS.auto;
+  if (key === "auto" && lang === "en") {
+    return '"Times New Roman", Georgia, "Liberation Serif", serif';
+  }
+  return preset.stack;
+}
+
+// 标题字体：「继承（跟随正文）」时直接复用正文栈
+function titleFontStack(s, lang) {
+  if (!s.titleFont || s.titleFont === "inherit") return bodyFontStack(s.bodyFont, lang);
+  return (FONT_PRESETS[s.titleFont] || FONT_PRESETS.auto).stack;
+}
 
 function applySettings() {
   const s = state.settings;
@@ -178,6 +222,12 @@ function applySettings() {
   $("sheet").dataset.theme = s.theme || "paper";
   $("sheet").classList.toggle("is-span-head", Boolean(s.spanHead));
 
+  root.style.setProperty("--ep-body-font", bodyFontStack(s.bodyFont, state.lang));
+  root.style.setProperty("--ep-title-font", titleFontStack(s, state.lang));
+
+  $("pageHead").hidden = s.showHeader === false;
+  $("pageFoot").hidden = s.showFooter === false;
+
   $("pageRule").textContent = buildPageRule(s);
 
   $("metaUrl").hidden = !s.showUrl;
@@ -191,6 +241,8 @@ function syncControls() {
   const s = state.settings;
   const fixedLine = s.lineHeightMode === "fixed";
 
+  $("bodyFont").value = s.bodyFont || "auto";
+  $("titleFont").value = s.titleFont || "inherit";
   $("fontSize").value = String(s.fontSize);
   $("titleSize").value = String(s.titleSize);
 
@@ -212,6 +264,8 @@ function syncControls() {
   $("showUrl").checked = s.showUrl;
   $("showTime").checked = s.showTime;
   $("spanHead").checked = Boolean(s.spanHead);
+  $("showHeader").checked = s.showHeader !== false;
+  $("showFooter").checked = s.showFooter !== false;
 
   $("vFontSize").textContent = s.fontSize + "pt";
   $("vTitleSize").textContent = s.titleSize + "pt";
@@ -411,6 +465,8 @@ function bindControls() {
   });
 
   $("fontSize").addEventListener("input", (e) => update({ fontSize: Number(e.target.value) }));
+  $("bodyFont").addEventListener("change", (e) => update({ bodyFont: e.target.value }));
+  $("titleFont").addEventListener("change", (e) => update({ titleFont: e.target.value }));
   $("titleSize").addEventListener("input", (e) => update({ titleSize: Number(e.target.value) }));
   $("lineHeight").addEventListener("input", (e) => {
     const value = Number(e.target.value);
@@ -438,6 +494,8 @@ function bindControls() {
   $("showUrl").addEventListener("change", (e) => update({ showUrl: e.target.checked }));
   $("showTime").addEventListener("change", (e) => update({ showTime: e.target.checked }));
   $("spanHead").addEventListener("change", (e) => update({ spanHead: e.target.checked }));
+  $("showHeader").addEventListener("change", (e) => update({ showHeader: e.target.checked }));
+  $("showFooter").addEventListener("change", (e) => update({ showFooter: e.target.checked }));
 
   $("resetBtn").addEventListener("click", () => {
     switchTheme(state.settings.theme || "paper");
@@ -509,6 +567,8 @@ async function buildExportHtml() {
     `--ep-para-after:${s.paraAfter}px`,
     `--ep-columns:${s.columns === 2 ? 2 : 1}`,
     `--ep-indent:${s.indent}em`,
+    `--ep-body-font:${bodyFontStack(s.bodyFont, state.lang)}`,
+    `--ep-title-font:${titleFontStack(s, state.lang)}`,
     `--ep-mt:${s.marginTop}mm`,
     `--ep-mr:${s.marginRight}mm`,
     `--ep-mb:${s.marginBottom}mm`,
@@ -529,7 +589,7 @@ async function buildExportHtml() {
   const title = state.payload ? state.payload.title : "Element Print";
 
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${state.lang === "en" ? "en" : "zh-CN"}">
 <head>
 <meta charset="utf-8">
 <title>${esc(title)}</title>
@@ -545,7 +605,7 @@ ${buildPageRule(s)}
 </style>
 </head>
 <body>
-<div class="ep-sheet${s.spanHead ? " is-span-head" : ""}" data-theme="${s.theme || "paper"}">
+<div class="ep-sheet${s.spanHead ? " is-span-head" : ""}" data-theme="${s.theme || "paper"}" data-lang="${state.lang}" lang="${state.lang === "en" ? "en" : "zh-CN"}">
 ${sheetHtml}
 </div>
 </body>
@@ -569,8 +629,19 @@ async function exportHtml() {
 
 /* ---------- 启动 ---------- */
 
+// 字体下拉的选项直接由 FONT_PRESETS 生成，避免两处各写一份
+function fillFontSelects() {
+  const entries = Object.entries(FONT_PRESETS);
+  const options = entries
+    .map(([key, preset]) => `<option value="${key}">${esc(preset.label)}</option>`)
+    .join("");
+  $("bodyFont").innerHTML = options;
+  $("titleFont").innerHTML = `<option value="inherit">跟随正文</option>` + options;
+}
+
 async function init() {
   state.settings = await loadSettings();
+  fillFontSelects();
   syncControls();
   bindControls();
 

@@ -3,7 +3,7 @@
    标题居中且用黑体、标题下压细线。 */
 
 .ep-sheet[data-theme="academic"] .ep-title {
-  font-family: "SimHei", "Heiti SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-family: var(--ep-title-font);
   font-weight: 700;
   line-height: 1.35;
   letter-spacing: 0;
@@ -44,7 +44,7 @@
 .ep-sheet[data-theme="academic"] .ep-body h4,
 .ep-sheet[data-theme="academic"] .ep-body h5,
 .ep-sheet[data-theme="academic"] .ep-body h6 {
-  font-family: "SimHei", "Heiti SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-family: var(--ep-title-font);
   font-size: 1.06em;
   margin: 0.7em 0 0.15em;
   text-indent: 0;

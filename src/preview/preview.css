@@ -197,6 +197,29 @@ body {
   font-size: 12px;
 }
 
+/* 字体下拉：与滑块、分段控件同一套配色 */
+.ep-select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 30px 7px 10px;
+  border: 1px solid #d9dce1;
+  border-radius: 7px;
+  background: #fff
+    url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 5 5-5' fill='none' stroke='%236d7580' stroke-width='1.4'/%3E%3C/svg%3E")
+    no-repeat right 10px center;
+  color: #202733;
+  font: inherit;
+  font-size: 12px;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.ep-select:focus {
+  outline: none;
+  border-color: #8b93a1;
+}
+
 .ep-field__row em {
   font-style: normal;
   color: #202733;
@@ -265,6 +288,14 @@ input[type="range"] {
   height: 15px;
   accent-color: var(--ep-accent);
   cursor: pointer;
+}
+
+/* 勾选项后面的灰色注释 */
+.ep-check__note {
+  margin-left: 6px;
+  color: #8b939d;
+  font-size: 11px;
+  font-style: normal;
 }
 
 .ep-label-row {
