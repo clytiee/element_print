@@ -475,9 +475,39 @@ function syncBiEdit(e) {
   row.node.innerHTML = col.firstElementChild.innerHTML;
 }
 
+// 进入编辑时留一份内容快照：Esc 退出时用来判断有没有改动，取消则按快照还原
+let editSnapshot = null;
+
+const EDIT_REGIONS = ["title", "body", "pageHead", "pageFoot"];
+
+function takeEditSnapshot() {
+  const snap = {};
+  EDIT_REGIONS.forEach((id) => {
+    snap[id] = $(id).innerHTML;
+  });
+  return snap;
+}
+
+function editChanged() {
+  if (!editSnapshot) return false;
+  return EDIT_REGIONS.some((id) => editSnapshot[id] !== $(id).innerHTML);
+}
+
+function restoreEditSnapshot() {
+  if (!editSnapshot) return;
+  EDIT_REGIONS.forEach((id) => {
+    if (editSnapshot[id] !== $(id).innerHTML) $(id).innerHTML = editSnapshot[id];
+  });
+  editSnapshot = null;
+  refreshWordCount();
+  fit();
+}
+
 function setEditing(on) {
   if (on && trimming) setTrimming(false);
+  if (on && pickingTitle) setPickingTitle(false);
   editing = on;
+  if (on) editSnapshot = takeEditSnapshot();
   const bi = biActive();
   [ $("title"), $("pageHead"), $("pageFoot") ].forEach((node) => {
     node.contentEditable = on ? "true" : "false";
@@ -494,6 +524,7 @@ function setEditing(on) {
   if (on && bi) $("bilingual").addEventListener("input", syncBiEdit);
   $("sheet").classList.toggle("is-editing", on);
   $("formatBar").hidden = !on;
+  $("hintText").textContent = on ? "可直接改字，格式用下方图标 · Esc 取消（不保存）" : baseHint();
   $("editBtn").textContent = on ? "完成" : "编辑";
   $("editBtn").classList.toggle("is-on", on);
   if (!on && document.activeElement && document.activeElement.blur) {
@@ -845,6 +876,23 @@ const TRIM_BLOCKS = new Set([
 ]);
 
 const HINT_TEXT = $("hintText").textContent;
+let hintTimer = 0;
+
+// 回到基线提示：翻译引擎凭据没填时显示缺什么，否则显示默认说明
+function baseHint() {
+  const s = state.settings;
+  if (s && !engineReady(s) && biAllowed()) return engineMissingText(s);
+  return HINT_TEXT;
+}
+
+// 临时占用提示条（几秒后自动回落），用于按钮被拒时的说明
+function flashHint(text, ms) {
+  clearTimeout(hintTimer);
+  $("hintText").textContent = text;
+  hintTimer = setTimeout(() => {
+    $("hintText").textContent = baseHint();
+  }, ms || 2600);
+}
 
 /* ---------- 原文字数统计（工具栏正中） ---------- */
 
@@ -930,18 +978,76 @@ function onTrimClick(e) {
 
 function setTrimming(on) {
   if (on && editing) setEditing(false);
+  if (on && pickingTitle) setPickingTitle(false);
   trimming = on;
   const root = biActive() ? $("bilingual") : $("body");
   $("body").classList.toggle("is-trimming", on);
   $("trimBtn").classList.toggle("is-on", on);
   $("trimBtn").textContent = on ? "退出删减" : "删减";
-  $("hintText").textContent = on ? "点击要删除的块 · Esc 退出删减" : HINT_TEXT;
+  $("hintText").textContent = on ? "点击要删除的块 · Esc 退出删减" : baseHint();
   if (on) {
     root.addEventListener("mousemove", onTrimMove);
     root.addEventListener("click", onTrimClick, true);
   } else {
     root.removeEventListener("mousemove", onTrimMove);
     root.removeEventListener("click", onTrimClick, true);
+    clearTrimHover();
+  }
+}
+
+/* ---------- 选取一段当标题 ---------- */
+
+let pickingTitle = false;
+
+function onPickMove(e) {
+  const target = trimTarget(e.target);
+  if (target === trimHover) return;
+  clearTrimHover();
+  if (target) {
+    trimHover = target;
+    target.classList.add("ep-trim-hover");
+  }
+}
+
+function onPickClick(e) {
+  const target = trimTarget(e.target);
+  if (!target) return;
+  e.preventDefault();
+  e.stopPropagation();
+  clearTrimHover();
+  const text = (target.textContent || "").replace(/\s+/g, " ").trim();
+  if (!text) return;
+  // 换成标题：页面上那行大字与导出用的标题一起换掉
+  $("title").textContent = text;
+  if (state.payload) state.payload.title = text;
+  document.title = text + " · Element Print";
+  // 剪切：这一块从正文里拿走（双语时连 #body 里对应的原文块一起拿）
+  if (biActive()) {
+    const col = target.querySelector(".ep-bi__src");
+    const row = col && col.firstElementChild ? col.firstElementChild.__epRow : null;
+    if (row && row.node && row.node.isConnected) row.node.remove();
+  }
+  target.remove();
+  refreshWordCount();
+  setPickingTitle(false);
+  fit();
+}
+
+function setPickingTitle(on) {
+  if (on && editing) setEditing(false);
+  if (on && trimming) setTrimming(false);
+  pickingTitle = on;
+  const root = biActive() ? $("bilingual") : $("body");
+  $("body").classList.toggle("is-trimming", on);
+  $("titleBtn").classList.toggle("is-on", on);
+  $("titleBtn").textContent = on ? "退出选取" : "标题";
+  $("hintText").textContent = on ? "点击要用作标题的块 · Esc 退出" : baseHint();
+  if (on) {
+    root.addEventListener("mousemove", onPickMove);
+    root.addEventListener("click", onPickClick, true);
+  } else {
+    root.removeEventListener("mousemove", onPickMove);
+    root.removeEventListener("click", onPickClick, true);
     clearTrimHover();
   }
 }
@@ -955,6 +1061,7 @@ function setImagesHidden(on) {
   $("sheet").classList.toggle("is-noimg", on);
   $("imgBtn").classList.toggle("is-on", on);
   $("imgBtn").textContent = on ? "无图" : "有图";
+  $("imgBtn").title = on ? "当前隐藏图片：再点恢复显示图片" : "切换图片显示：无图时图片不参与排版与打印";
   fit();
 }
 
@@ -1423,10 +1530,7 @@ function bindControls() {
   $("biBtn").addEventListener("click", () => {
     if (!biAllowed()) return;
     if (!engineReady(state.settings)) {
-      $("hintText").textContent = engineMissingText(state.settings);
-      setTimeout(() => {
-        $("hintText").textContent = HINT_TEXT;
-      }, 2600);
+      flashHint(engineMissingText(state.settings));
       return;
     }
     if (!biActive()) {
@@ -1503,12 +1607,26 @@ function bindControls() {
   $("trimBtn").addEventListener("click", () => {
     setTrimming(!trimming);
   });
+  $("titleBtn").addEventListener("click", () => {
+    setPickingTitle(!pickingTitle);
+  });
   $("imgBtn").addEventListener("click", () => setImagesHidden(!hideImages));
 
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && trimming) {
+    if (e.key !== "Escape") return;
+    if (trimming) {
       e.preventDefault();
       setTrimming(false);
+    } else if (pickingTitle) {
+      e.preventDefault();
+      setPickingTitle(false);
+    } else if (editing) {
+      e.preventDefault();
+      // 有改动时先确认；确认「取消」等于不保存，按快照还原后退出
+      if (editChanged() && window.confirm("文章有改动，确认取消（不保存）吗？")) {
+        restoreEditSnapshot();
+      }
+      setEditing(false);
     }
   });
 

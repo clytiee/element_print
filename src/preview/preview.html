@@ -16,13 +16,14 @@
         <span class="ep-hint__text" id="hintText">右侧设置即时生效 · 打印为 A4 纵向</span>
         <span class="ep-count" id="wordCount"></span>
         <div class="ep-hint__actions">
-          <button type="button" id="editBtn" class="ep-mini">编辑</button>
-          <button type="button" id="trimBtn" class="ep-mini">删减</button>
-          <button type="button" id="imgBtn" class="ep-mini">有图</button>
+          <button type="button" id="editBtn" class="ep-mini" title="进入编辑：直接修改标题、正文与页眉页脚（Esc 退出，有改动会确认）">编辑</button>
+          <button type="button" id="trimBtn" class="ep-mini" title="进入删减：点击要删掉的段落、图片或表格所在块（Esc 退出）">删减</button>
+          <button type="button" id="titleBtn" class="ep-mini" title="设置标题：从正文选择并替换当前标题（Esc 退出）">标题</button>
+          <button type="button" id="imgBtn" class="ep-mini" title="切换图片显示：无图时图片不参与排版与打印">有图</button>
           <div class="ep-bi-switch">
-            <button type="button" id="origBtn" class="ep-mini ep-mini--soft ep-mini--seg">原文</button>
+            <button type="button" id="origBtn" class="ep-mini ep-mini--soft ep-mini--seg" title="回到单栏原文视图">原文</button>
             <span class="ep-bi-switch__sep"></span>
-            <button type="button" id="biBtn" class="ep-mini ep-mini--soft ep-mini--seg">翻译</button>
+            <button type="button" id="biBtn" class="ep-mini ep-mini--soft ep-mini--seg" title="翻译：左原文右译文对照，只补未译与已更改的段落">翻译</button>
           </div>
         </div>
       </div>

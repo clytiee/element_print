@@ -100,6 +100,8 @@ body {
 }
 
 .ep-hint__text {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -109,6 +111,7 @@ body {
   display: flex;
   gap: 6px;
   flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .ep-mini {
@@ -712,9 +715,11 @@ input[type="range"] {
 
 /* 工具栏正中：原文字数统计，绝对居中，不与两侧按钮抢位置 */
 .ep-count {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: #6f7884;
   font-size: 11px;
   letter-spacing: 0.02em;
