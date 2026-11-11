@@ -26,18 +26,62 @@
           </div>
         </div>
       </div>
-      <!-- 编辑时的格式栏：作用于当前选区 -->
+      <!-- 编辑时的格式栏：作用于当前选区，全部为图标按钮，悬停显示名称 -->
       <div class="ep-format" id="formatBar" hidden>
-        <button type="button" class="ep-fmt" data-cmd="bold">粗体</button>
-        <button type="button" class="ep-fmt" data-cmd="italic">斜体</button>
-        <button type="button" class="ep-fmt" data-cmd="underline">下划线</button>
-        <button type="button" class="ep-fmt" data-cmd="strikeThrough">删除线</button>
+        <button type="button" class="ep-fmt" data-cmd="fontDown" title="缩小字号" aria-label="缩小字号">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><text x="3" y="12" font-size="11" fill="currentColor">A</text><text x="8.5" y="8" font-size="7.5" fill="currentColor">−</text></svg>
+        </button>
+        <button type="button" class="ep-fmt" data-cmd="fontUp" title="放大字号" aria-label="放大字号">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><text x="2.5" y="12" font-size="11" fill="currentColor">A</text><text x="8.5" y="8" font-size="7.5" fill="currentColor">+</text></svg>
+        </button>
         <span class="ep-format__sep"></span>
-        <button type="button" class="ep-fmt" data-cmd="justifyLeft">左对齐</button>
-        <button type="button" class="ep-fmt" data-cmd="justifyCenter">居中</button>
-        <button type="button" class="ep-fmt" data-cmd="justifyRight">右对齐</button>
+        <button type="button" class="ep-fmt" data-cmd="bold" title="粗体" aria-label="粗体">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><text x="8" y="12" text-anchor="middle" font-size="13" font-weight="700" fill="currentColor">B</text></svg>
+        </button>
+        <button type="button" class="ep-fmt" data-cmd="italic" title="斜体" aria-label="斜体">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><text x="8" y="12" text-anchor="middle" font-size="13" font-style="italic" font-family="Georgia,serif" fill="currentColor">I</text></svg>
+        </button>
+        <button type="button" class="ep-fmt" data-cmd="underline" title="下划线" aria-label="下划线">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><text x="8" y="11.5" text-anchor="middle" font-size="12" fill="currentColor">U</text><rect x="3.5" y="13.2" width="9" height="1.4" fill="currentColor"/></svg>
+        </button>
+        <button type="button" class="ep-fmt" data-cmd="strikeThrough" title="删除线" aria-label="删除线">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><text x="8" y="12" text-anchor="middle" font-size="12" fill="currentColor">S</text><rect x="3" y="7.3" width="10" height="1.3" fill="currentColor"/></svg>
+        </button>
         <span class="ep-format__sep"></span>
-        <button type="button" class="ep-fmt" data-cmd="indent">首行缩进</button>
+        <button type="button" class="ep-fmt" data-cmd="justifyLeft" title="左对齐" aria-label="左对齐">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3" width="11" height="1.6" fill="currentColor"/><rect x="2.5" y="7.2" width="7" height="1.6" fill="currentColor"/><rect x="2.5" y="11.4" width="11" height="1.6" fill="currentColor"/></svg>
+        </button>
+        <button type="button" class="ep-fmt" data-cmd="justifyCenter" title="居中" aria-label="居中">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3" width="11" height="1.6" fill="currentColor"/><rect x="4.5" y="7.2" width="7" height="1.6" fill="currentColor"/><rect x="2.5" y="11.4" width="11" height="1.6" fill="currentColor"/></svg>
+        </button>
+        <button type="button" class="ep-fmt" data-cmd="justifyRight" title="右对齐" aria-label="右对齐">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="3" width="11" height="1.6" fill="currentColor"/><rect x="6.5" y="7.2" width="7" height="1.6" fill="currentColor"/><rect x="2.5" y="11.4" width="11" height="1.6" fill="currentColor"/></svg>
+        </button>
+        <span class="ep-format__sep"></span>
+        <button type="button" class="ep-fmt" data-cmd="indent" title="首行缩进" aria-label="首行缩进">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="6" y="3" width="7.5" height="1.6" fill="currentColor"/><rect x="6" y="7.2" width="7.5" height="1.6" fill="currentColor"/><rect x="6" y="11.4" width="7.5" height="1.6" fill="currentColor"/><path d="M2.2 6.2 L4.6 8 L2.2 9.8 Z" fill="currentColor"/></svg>
+        </button>
+        <span class="ep-format__sep"></span>
+        <button type="button" class="ep-fmt" data-cmd="h2" title="一级标题" aria-label="一级标题">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><text x="8" y="12" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor">H2</text></svg>
+        </button>
+        <button type="button" class="ep-fmt" data-cmd="h3" title="二级标题" aria-label="二级标题">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><text x="8" y="12" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor">H3</text></svg>
+        </button>
+        <button type="button" class="ep-fmt" data-cmd="quote" title="引文块" aria-label="引文块">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.4" y="3.4" width="1.6" height="9.2" fill="currentColor"/><text x="4" y="12" font-size="12" font-family="Georgia,serif" fill="currentColor">“</text></svg>
+        </button>
+        <span class="ep-format__sep"></span>
+        <button type="button" class="ep-fmt" data-cmd="ol" title="有序列表" aria-label="有序列表">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><text x="1" y="5.6" font-size="5" fill="currentColor">1</text><text x="1" y="10.6" font-size="5" fill="currentColor">2</text><text x="1" y="15.4" font-size="5" fill="currentColor">3</text><rect x="6" y="3.4" width="9" height="1.4" fill="currentColor"/><rect x="6" y="8.4" width="9" height="1.4" fill="currentColor"/><rect x="6" y="13.2" width="9" height="1.4" fill="currentColor"/></svg>
+        </button>
+        <button type="button" class="ep-fmt" data-cmd="ul" title="无序列表" aria-label="无序列表">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="2.6" cy="4.1" r="1.5" fill="currentColor"/><circle cx="2.6" cy="9.1" r="1.5" fill="currentColor"/><circle cx="2.6" cy="13.7" r="1.5" fill="currentColor"/><rect x="6" y="3.4" width="9" height="1.4" fill="currentColor"/><rect x="6" y="8.4" width="9" height="1.4" fill="currentColor"/><rect x="6" y="13.2" width="9" height="1.4" fill="currentColor"/></svg>
+        </button>
+        <span class="ep-format__sep"></span>
+        <button type="button" class="ep-fmt" data-cmd="clearFormat" title="清除格式" aria-label="清除格式">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><text x="6" y="12" text-anchor="middle" font-size="12" fill="currentColor">A</text><rect x="5.3" y="1.5" width="1.4" height="13" fill="currentColor" transform="rotate(70 6 8)"/></svg>
+        </button>
       </div>
       <!-- 翻译进度提示：浮在工具栏右下方 -->
       <div class="ep-toast" id="translateToast" hidden><span class="ep-toast__dot"></span><span id="translateToastText"></span></div>

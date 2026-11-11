@@ -226,7 +226,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 0 18px 8px;
+  padding: 8px 18px 2px;
   overflow-x: auto;
 }
 
@@ -241,15 +241,27 @@ body {
 .ep-fmt {
   appearance: none;
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
   border: 1px solid #dfe3e9;
   border-radius: 6px;
-  padding: 3px 10px;
+  padding: 0;
   background: #fff;
   color: #3b4450;
   font: inherit;
   font-size: 12px;
+  line-height: 1;
   cursor: pointer;
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.ep-fmt svg {
+  display: block;
+  width: 16px;
+  height: 16px;
 }
 
 .ep-fmt:hover {

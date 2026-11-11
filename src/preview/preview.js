@@ -212,6 +212,10 @@ function labelText(node) {
 }
 
 const GUTTER_FONT = '"EP Plex Sans", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif';
+// 字标与页脚格言用 Georgia；页眉网址用 Verdana；页码/时间戳保持无衬线（Georgia 数字是旧式）
+const BRAND_FONT = 'Georgia, "Constantia", "Times New Roman", serif';
+const QUOTE_FONT = 'Georgia, "Constantia", "Times New Roman", serif';
+const URL_FONT = 'Verdana, "Segoe UI", sans-serif';
 
 function buildPageRule(s) {
   const head = $("pageHead");
@@ -222,23 +226,23 @@ function buildPageRule(s) {
 
 
   // 左右两块各占 50%，边框拼成一条整线（页边距盒不能跨盒连画）
-  const top =
-    `font-family:${GUTTER_FONT};font-size:8pt;width:50%;vertical-align:bottom;` +
+  const top = (fam) =>
+    `font-family:${fam};font-size:8pt;width:50%;vertical-align:bottom;` +
     `padding:0 0 1.2mm;margin:0 0 6mm;border-bottom:0.5pt solid #c9ccd1;`;
   // 名言较长，页脚左盒放宽到 74%，页码只占剩下的一点
-  const bottom = (w) =>
-    `font-family:${GUTTER_FONT};font-size:8pt;width:${w};vertical-align:top;` +
+  const bottom = (w, fam) =>
+    `font-family:${fam};font-size:8pt;width:${w};vertical-align:top;` +
     `padding:1.2mm 0 0;margin:4mm 0 0;border-top:0.5pt solid #c9ccd1;`;
 
   const headBoxes = s.showHeader === false
     ? ""
-    : `@top-left{content:${cssString(brand)};${top}text-align:left;font-weight:500;letter-spacing:.06em;color:#4a4f57;}` +
-      `@top-right{content:${cssString(src)};${top}text-align:right;color:#6b6b6b;}`;
+    : `@top-left{content:${cssString(brand)};${top(BRAND_FONT)}text-align:left;font-weight:500;letter-spacing:.06em;color:#4a4f57;}` +
+      `@top-right{content:${cssString(src)};${top(URL_FONT)}text-align:right;color:#6b6b6b;}`;
   // 页码在页脚右侧，关掉页脚时页码一起不出现
   const footBoxes = s.showFooter === false
     ? ""
-    : `@bottom-left{content:${cssString(quote)};${bottom(quote ? "74%" : "50%")}text-align:left;color:#6b6b6b;}` +
-      `@bottom-right{content:counter(page) " / " counter(pages);${bottom(quote ? "24%" : "50%")}text-align:right;color:#6b6b6b;font-variant-numeric:tabular-nums;}`;
+    : `@bottom-left{content:${cssString(quote)};${bottom(quote ? "74%" : "50%", QUOTE_FONT)}text-align:left;color:#6b6b6b;}` +
+      `@bottom-right{content:counter(page) " / " counter(pages);${bottom(quote ? "24%" : "50%", GUTTER_FONT)}text-align:right;color:#6b6b6b;font-variant-numeric:tabular-nums;}`;
 
   return (
     `@page{size:A4;margin:${s.marginTop}mm ${s.marginRight}mm ${s.marginBottom}mm ${s.marginLeft}mm;` +
@@ -498,6 +502,8 @@ function setEditing(on) {
   if (!on && state.settings) $("pageRule").textContent = buildPageRule(state.settings);
   // 退出编辑时重排一次对照层：刚改过的段落立刻变成红色「更改」
   if (!on && bi) refreshBilingual();
+  // 进入编辑不主动落光标：没有选区就是没有选区，格式栏全部熄灭，点正文之后才跟段落走
+  if (on) syncFormatState();
   fit();
 }
 
@@ -548,14 +554,39 @@ function toggleIndent() {
 // 格式按钮的高亮态：选区在加粗/斜体里时按钮点亮
 function syncFormatState() {
   if (!editing) return;
-  $("formatBar").querySelectorAll("button[data-cmd]").forEach((btn) => {
+  const bar = $("formatBar");
+  const root = editRoot();
+  const sel = window.getSelection();
+  // 光标不在可编辑区（比如刚点完按钮、选区已被浏览器清掉）时全部熄灭，别误亮
+  if (!sel || !sel.rangeCount || !root.contains(sel.getRangeAt(0).startContainer)) {
+    bar.querySelectorAll("button[data-cmd]").forEach((btn) => btn.classList.remove("is-on"));
+    return;
+  }
+  bar.querySelectorAll("button[data-cmd]").forEach((btn) => {
+    if (btn.dataset.cmd === "fontUp" || btn.dataset.cmd === "fontDown") return;
+    if (btn.dataset.cmd === "clearFormat") return;
     if (btn.dataset.cmd === "indent") {
       btn.classList.toggle("is-on", blockIndentPx(blockAtCaret()) > 0.5);
       return;
     }
+    if (btn.dataset.cmd === "h2" || btn.dataset.cmd === "h3") {
+      const block = blockAtCaret();
+      const want = btn.dataset.cmd.toUpperCase();
+      btn.classList.toggle("is-on", Boolean(block) && block.closest(want) !== null);
+      return;
+    }
+    if (btn.dataset.cmd === "quote") {
+      const block = blockAtCaret();
+      btn.classList.toggle("is-on", Boolean(block) && block.closest("BLOCKQUOTE") !== null);
+      return;
+    }
+    const execCmd =
+      btn.dataset.cmd === "ol" ? "insertOrderedList"
+      : btn.dataset.cmd === "ul" ? "insertUnorderedList"
+      : btn.dataset.cmd;
     let on = false;
     try {
-      on = document.queryCommandState(btn.dataset.cmd);
+      on = document.queryCommandState(execCmd);
     } catch {
       on = false;
     }
@@ -563,11 +594,237 @@ function syncFormatState() {
   });
 }
 
+// 双语对照时改的是左栏克隆，直接改样式不触发 input，手动回写一次
+function syncBiClone(block) {
+  if (!biActive() || !block) return;
+  const col = block.closest ? block.closest(".ep-bi__src") : null;
+  const row = col && col.firstElementChild ? col.firstElementChild.__epRow : null;
+  if (row && row.node && row.node.isConnected) row.node.innerHTML = block.innerHTML;
+}
+
+// 字号增减：有选区就包一层带 font-size 的 span，光标没选区就改整段
+const FONT_MIN_PX = 8;
+const FONT_MAX_PX = 48;
+
+function changeFontSize(delta) {
+  if (!editing) return;
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  const root = editRoot();
+  if (!root.contains(range.startContainer)) return;
+  const baseEl = range.startContainer.nodeType === 3 ? range.startContainer.parentElement : range.startContainer;
+  const cur = parseFloat(getComputedStyle(baseEl).fontSize) || 16;
+  const next = Math.min(FONT_MAX_PX, Math.max(FONT_MIN_PX, Math.round(cur + delta)));
+
+  if (range.collapsed) {
+    const block = blockAtCaret();
+    if (!block) return;
+    block.style.fontSize = next + "px";
+    syncBiClone(block);
+  } else {
+    const frag = range.extractContents();
+    const span = document.createElement("span");
+    span.style.fontSize = next + "px";
+    span.appendChild(frag);
+    range.insertNode(span);
+    const after = document.createRange();
+    after.selectNodeContents(span);
+    sel.removeAllRanges();
+    sel.addRange(after);
+    if (baseEl.closest) syncBiClone(baseEl.closest(PARAGRAPH_SELECTOR));
+  }
+  syncFormatState();
+}
+
+// 块级切换：一级标题（h2）/ 二级标题（h3），已是该块时再点一次退回普通段落
+// 正文里的大标题被提到 #body 之外，h2 才是正文最高一级，也因此由「标题跨栏」管
+function toggleBlock(name) {
+  if (!editing) return;
+  const block = blockAtCaret();
+  if (!block) return;
+  const cur = block.tagName.toLowerCase();
+  const target = cur === name ? "p" : name;
+  try {
+    document.execCommand("formatBlock", false, "<" + target + ">");
+  } catch {
+    return;
+  }
+  const next = blockAtCaret();
+  if (next) next.classList.remove("ep-no-indent");
+  syncBiClone(next || block);
+  syncFormatState();
+}
+
+// 光标在容器内的纯文本偏移 / 按偏移把光标放回去：
+// 拆改 DOM 后浏览器会丢掉原来的选区，不还原的话下一次点按钮就取不到所在段落
+function caretTextOffset(root) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return null;
+  const range = sel.getRangeAt(0);
+  if (!root.contains(range.endContainer)) return null;
+  const pre = range.cloneRange();
+  pre.selectNodeContents(root);
+  pre.setEnd(range.endContainer, range.endOffset);
+  return pre.toString().length;
+}
+
+function placeCaretAt(root, offset) {
+  if (!root) return;
+  const sel = window.getSelection();
+  if (!sel) return;
+  const range = document.createRange();
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let left = Math.max(0, offset || 0);
+  let node = walker.nextNode();
+  while (node) {
+    const len = node.nodeValue.length;
+    if (left <= len) {
+      range.setStart(node, left);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+    left -= len;
+    node = walker.nextNode();
+  }
+  range.selectNodeContents(root);
+  range.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+// 引文块只有一个：已在 blockquote 里再点就取消，而不是往里套第二层
+function toggleQuote() {
+  if (!editing) return;
+  const block = blockAtCaret();
+  if (!block) return;
+  const outer = block.closest("blockquote");
+  if (!outer || !editRoot().contains(outer)) {
+    try {
+      document.execCommand("formatBlock", false, "<blockquote>");
+    } catch {
+      return;
+    }
+    syncBiClone(blockAtCaret());
+    syncFormatState();
+    return;
+  }
+  // 取消：拆掉外层 blockquote，把里面的内容还原成普通段落（不留裸文本）
+  const offset = caretTextOffset(outer);
+  const kids = Array.from(outer.children);
+  let replacement = null;
+  if (kids.length === 1 && /^(P|DIV)$/.test(kids[0].tagName)) {
+    replacement = kids[0];
+    outer.replaceWith(replacement);
+  } else if (kids.length === 0) {
+    replacement = document.createElement("p");
+    replacement.innerHTML = outer.innerHTML;
+    outer.replaceWith(replacement);
+  } else {
+    const frag = document.createDocumentFragment();
+    kids.forEach((node) => frag.appendChild(node));
+    replacement = kids[0];
+    outer.replaceWith(frag);
+  }
+  // 把光标放回替代节点，否则下一次点击取不到段落，按钮就像失效了
+  placeCaretAt(replacement, offset);
+  const inner = blockAtCaret();
+  if (inner) {
+    inner.classList.remove("ep-no-indent");
+    syncBiClone(inner);
+  }
+  syncFormatState();
+}
+
+// 清除格式：行内格式、字号、缩进、标题/引文/列表一律还原成普通段落
+function clearFormatting() {
+  if (!editing) return;
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  const root = editRoot();
+  if (!root.contains(range.startContainer)) return;
+  const block = blockAtCaret();
+
+  try {
+    document.execCommand("removeFormat");
+  } catch {
+    /* 命令不可用时继续做元素级清理 */
+  }
+
+  // 行内样式（字号、缩进是前面的按钮写进去的，removeFormat 未必带走）
+  const scopeEl = range.collapsed
+    ? block
+    : (range.commonAncestorContainer.nodeType === 3
+        ? range.commonAncestorContainer.parentElement
+        : range.commonAncestorContainer);
+  if (scopeEl && scopeEl.querySelectorAll) {
+    [scopeEl].concat(Array.from(scopeEl.querySelectorAll("[style]"))).forEach((node) => {
+      if (!node.style) return;
+      node.style.fontSize = "";
+      node.style.textIndent = "";
+      node.classList.remove("ep-no-indent");
+      if (!node.getAttribute("style")) node.removeAttribute("style");
+    });
+  }
+
+  // 块级：列表先退出，再把 h1/h3/blockquote 还原成 p
+  if (block) {
+    const list = block.closest("ol, ul");
+    if (list) {
+      try {
+        document.execCommand(list.tagName === "OL" ? "insertOrderedList" : "insertUnorderedList", false, null);
+      } catch {
+        /* 忽略 */
+      }
+    }
+    if (/^(H1|H2|H3|H4|H5|H6|BLOCKQUOTE)$/.test(block.tagName)) {
+      try {
+        document.execCommand("formatBlock", false, "<p>");
+      } catch {
+        /* 忽略 */
+      }
+    }
+  }
+  syncBiClone(blockAtCaret() || block);
+  syncFormatState();
+}
+
 // 粗体 / 斜体 / 下划线 / 删除线 / 左右对齐，作用于当前选区
 function applyFormat(cmd) {
   if (!editing) return;
+  if (cmd === "clearFormat") {
+    clearFormatting();
+    return;
+  }
   if (cmd === "indent") {
     toggleIndent();
+    return;
+  }
+  if (cmd === "fontUp" || cmd === "fontDown") {
+    changeFontSize(cmd === "fontUp" ? 1 : -1);
+    return;
+  }
+  if (cmd === "h2" || cmd === "h3") {
+    toggleBlock(cmd);
+    return;
+  }
+  if (cmd === "quote") {
+    toggleQuote();
+    return;
+  }
+  if (cmd === "ol" || cmd === "ul") {
+    try {
+      document.execCommand("styleWithCSS", false, true);
+      document.execCommand(cmd === "ol" ? "insertOrderedList" : "insertUnorderedList", false, null);
+    } catch {
+      return;
+    }
+    const block = blockAtCaret();
+    syncBiClone(block);
+    syncFormatState();
     return;
   }
   try {

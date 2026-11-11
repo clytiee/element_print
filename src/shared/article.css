@@ -105,6 +105,7 @@
 
 .ep-gutter__title {
   flex: none;
+  font-family: Georgia, "Constantia", "Times New Roman", serif;
   font-weight: 500;
   letter-spacing: 0.06em;
   color: #4a4f57;
@@ -117,7 +118,13 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  font-family: Georgia, "Constantia", "Times New Roman", serif;
   color: #6b6b6b;
+}
+
+/* 页眉里的网址用 Verdana：小字号下仍清楚，数字也不会挤在一起 */
+.ep-gutter__src {
+  font-family: Verdana, "Segoe UI", sans-serif;
 }
 
 .ep-gutter__src,
@@ -175,6 +182,7 @@
 }
 
 .ep-meta a {
+  font-family: Verdana, "Segoe UI", sans-serif;
   color: inherit;
   text-decoration: none;
   word-break: break-all;
