@@ -236,7 +236,7 @@ function buildPageRule(s) {
 
   const headBoxes = s.showHeader === false
     ? ""
-    : `@top-left{content:${cssString(brand)};${top(BRAND_FONT)}text-align:left;font-weight:500;letter-spacing:.06em;color:#4a4f57;}` +
+    : `@top-left{content:${cssString(brand)};${top(BRAND_FONT)}text-align:left;font-weight:500;letter-spacing:.12em;color:#4a4f57;}` +
       `@top-right{content:${cssString(src)};${top(URL_FONT)}text-align:right;color:#6b6b6b;}`;
   // 页码在页脚右侧，关掉页脚时页码一起不出现
   const footBoxes = s.showFooter === false
@@ -315,6 +315,7 @@ function applySettings() {
   $("metaTime").hidden = !s.showTime;
   $("meta").hidden = !s.showUrl && !s.showTime;
 
+  syncResetBtn();
   fit();
 }
 
@@ -1436,9 +1437,37 @@ function update(patch) {
   saveSettings(state.settings);
 }
 
+// 英文期刊体例：段落不缩进，靠段后留白分隔；中文仍是两字符缩进、段间不留白
+function langFitPreset(preset, lang) {
+  if (preset.theme !== "academic" || lang !== "en") return preset;
+  const fontPx = preset.fontSize * 4 / 3; // pt → px（96dpi）
+  return {
+    ...preset,
+    indent: 0,
+    paraAfter: Math.round(fontPx * 0.55),
+  };
+}
+
+// 「重置版式」只在当前参数偏离该版式默认值时可点
+function syncResetBtn() {
+  const s = state.settings;
+  const preset = langFitPreset(THEME_PRESETS[s.theme || "paper"], state.lang);
+  const btn = $("resetBtn");
+  if (!preset || !btn) return;
+  const dirty = Object.keys(preset).some((key) => s[key] !== preset[key]);
+  btn.disabled = !dirty;
+  btn.title = dirty
+    ? "重置版式：把当前参数恢复为「" + themeLabel(preset.theme) + "」的默认值"
+    : "当前就是这个版式的默认设置，没有可重置的改动";
+}
+
+function themeLabel(theme) {
+  return theme === "academic" ? "学术期刊" : theme === "gov" ? "公文" : "原版";
+}
+
 // 切版式：整套参数按该版式的推荐值重置，之后仍可单项微调
 function switchTheme(theme) {
-  const preset = THEME_PRESETS[theme];
+  const preset = langFitPreset(THEME_PRESETS[theme], state.lang);
   if (!preset) return;
   // Key 这类跨版式保留的字段不跟着重置
   const keep = {
