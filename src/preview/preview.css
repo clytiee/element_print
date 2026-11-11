@@ -105,6 +105,52 @@ body {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  position: relative;
+}
+
+/* 提示文字底部一道蓝光，从左往右划过 */
+.ep-hint__text::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  border-radius: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(47, 111, 235, 0) 0%,
+    rgba(47, 111, 235, 0.35) 22%,
+    #2f6feb 50%,
+    rgba(47, 111, 235, 0.35) 78%,
+    rgba(47, 111, 235, 0) 100%
+  );
+  background-size: 38% 100%;
+  background-repeat: no-repeat;
+}
+
+/* 提示文字一换内容就重跑 3 次（由 JS 加 .is-sweeping 触发） */
+.ep-hint__text.is-sweeping::after {
+  animation: ep-hint-sweep 2s linear 3;
+}
+
+@keyframes ep-hint-sweep {
+  0% {
+    background-position: -40% 0;
+  }
+  100% {
+    background-position: 140% 0;
+  }
+}
+
+/* 系统开了「减少动效」就不闪了，只留一条静态细线 */
+@media (prefers-reduced-motion: reduce) {
+  .ep-hint__text.is-sweeping::after {
+    animation: none;
+    background-size: 100% 100%;
+    opacity: 0.5;
+  }
 }
 
 .ep-hint__actions {

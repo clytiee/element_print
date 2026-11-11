@@ -51,8 +51,8 @@ function engineReady(s) {
 
 function engineMissingText(s) {
   return s.engine === "baidu"
-    ? "先在右栏填百度 APP ID 和密钥"
-    : "先在右栏填 DeepL Auth Key";
+    ? "翻译须先在右栏填百度 APP ID 和密钥"
+    : "翻译须先在右栏填 DeepL Auth Key";
 }
 
 /* ---------- 工具 ---------- */
@@ -524,7 +524,7 @@ function setEditing(on) {
   if (on && bi) $("bilingual").addEventListener("input", syncBiEdit);
   $("sheet").classList.toggle("is-editing", on);
   $("formatBar").hidden = !on;
-  $("hintText").textContent = on ? "可直接改字，格式用下方图标 · Esc 取消（不保存）" : baseHint();
+  setHint(on ? "可直接改字，格式用下方图标 · Esc 取消（不保存）" : baseHint());
   $("editBtn").textContent = on ? "完成" : "编辑";
   $("editBtn").classList.toggle("is-on", on);
   if (!on && document.activeElement && document.activeElement.blur) {
@@ -878,6 +878,22 @@ const TRIM_BLOCKS = new Set([
 const HINT_TEXT = $("hintText").textContent;
 let hintTimer = 0;
 
+// 重跑提示条底部那道蓝光（进页面一次，之后每次换文案再来一次）
+function restartHintSweep() {
+  const node = $("hintText");
+  node.classList.remove("is-sweeping");
+  void node.offsetWidth; // 强制回流，动画才能重新开始
+  node.classList.add("is-sweeping");
+}
+
+// 提示条统一入口：文案真变了才重播蓝光
+function setHint(text) {
+  const node = $("hintText");
+  if (node.textContent === text) return;
+  node.textContent = text;
+  restartHintSweep();
+}
+
 // 回到基线提示：翻译引擎凭据没填时显示缺什么，否则显示默认说明
 function baseHint() {
   const s = state.settings;
@@ -888,9 +904,9 @@ function baseHint() {
 // 临时占用提示条（几秒后自动回落），用于按钮被拒时的说明
 function flashHint(text, ms) {
   clearTimeout(hintTimer);
-  $("hintText").textContent = text;
+  setHint(text);
   hintTimer = setTimeout(() => {
-    $("hintText").textContent = baseHint();
+    setHint(baseHint());
   }, ms || 2600);
 }
 
@@ -984,7 +1000,7 @@ function setTrimming(on) {
   $("body").classList.toggle("is-trimming", on);
   $("trimBtn").classList.toggle("is-on", on);
   $("trimBtn").textContent = on ? "退出删减" : "删减";
-  $("hintText").textContent = on ? "点击要删除的块 · Esc 退出删减" : baseHint();
+  setHint(on ? "点击要删除的块 · Esc 退出删减" : baseHint());
   if (on) {
     root.addEventListener("mousemove", onTrimMove);
     root.addEventListener("click", onTrimClick, true);
@@ -1041,7 +1057,7 @@ function setPickingTitle(on) {
   $("body").classList.toggle("is-trimming", on);
   $("titleBtn").classList.toggle("is-on", on);
   $("titleBtn").textContent = on ? "退出选取" : "标题";
-  $("hintText").textContent = on ? "点击要用作标题的块 · Esc 退出" : baseHint();
+  setHint(on ? "点击要用作标题的块 · Esc 退出" : baseHint());
   if (on) {
     root.addEventListener("mousemove", onPickMove);
     root.addEventListener("click", onPickClick, true);
@@ -1785,6 +1801,7 @@ async function init() {
   syncBiButton();
   if (state.settings.bilingual) refreshBilingual();
   state.ready = true;
+  restartHintSweep(); // 进页面先扫一遍
 }
 
 init();
