@@ -174,6 +174,184 @@
     "TABLE", "THEAD", "TBODY", "TFOOT", "TR", "TD", "TH", "COL", "COLGROUP",
   ]);
 
+  // ---------- 页面自带的译文（浏览器翻译插件插入的中文）----------
+  // 这类元素带 data-deeptranslate-translated / data-translated 之类的标记，
+  // 抽正文时要把它们从原句里摘出来，单独作为译文交给预览页的右栏，
+  // 否则原文列会中英夹在一起。
+  const TRANS_ATTR_RE = /^(data[-_](deep)?translat|data[-_]trans$)/i;
+  const TRANS_CLASS_RE = /(^|\s)(translated|translation|deep-trans|trans-text)\b/i;
+
+  function isTransMarked(el) {
+    for (const attr of el.attributes) {
+      if (TRANS_ATTR_RE.test(attr.name.toLowerCase())) return true;
+    }
+    return TRANS_CLASS_RE.test(el.getAttribute("class") || "");
+  }
+
+  function normText(s) {
+    return String(s || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  // 往上找最近的块级祖先（段落、列表项、表格单元格…），限定在抽取范围内
+  function nearestBlock(el, root) {
+    let node = el.parentElement;
+    while (node && node !== root.parentElement) {
+      if (node === root || BLOCK_TAGS.has(node.tagName)) return node;
+      node = node.parentElement;
+    }
+    return root;
+  }
+
+  // 这些块可以按译文位置切成多段；表格里的单元格、行不能切
+  const SPLIT_TAGS = new Set([
+    "P", "DIV", "LI", "DD", "DT", "BLOCKQUOTE", "SECTION", "ARTICLE",
+    "H1", "H2", "H3", "H4", "H5", "H6", "FIGCAPTION",
+  ]);
+
+  function hasContent(frag) {
+    if (!frag) return false;
+    if (normText(frag.textContent)) return true;
+    return Boolean(frag.querySelector && frag.querySelector("img,table,hr"));
+  }
+
+  function makeBlock(tag, frag) {
+    const el = document.createElement(tag.toLowerCase());
+    el.appendChild(frag);
+    return el;
+  }
+
+  // 译文单独成块（整块都是中文）时，把译文挂到上一段正文上
+  function attachToPrev(block, dst, root) {
+    let prev = block.previousElementSibling;
+    while (prev && !normText(prev.textContent)) prev = prev.previousElementSibling;
+    const prevText = prev ? normText(prev.textContent) : "";
+    if (!prevText) return "";
+    return prevText;
+  }
+
+  /**
+   * 把译文元素从句子里摘出来，返回 [{ src, dst }]。
+   * src 与预览页 collectBiRows() 的口径一致（空白折叠、去首尾），
+   * 这样预览页可以直接用它填译文缓存，不去打翻译 API。
+   *
+   * 页面常见形态是一个块里「英文句 → 中文 span → 英文句 → 中文 span」交替，
+   * 所以要按译文位置把这个块切成多段，每段一段原文配一句译文；
+   * 只按整块取文本配对的话，整篇会只剩一句译文。
+   */
+  function splitTranslations(root) {
+    const pairs = [];
+    const marked = Array.from(root.querySelectorAll("*")).filter(isTransMarked);
+    if (!marked.length) return pairs;
+    // 嵌套标记交给最外层处理，避免同一句被拆两次
+    const tops = marked.filter((el) => !marked.some((m) => m !== el && m.contains(el)));
+
+    // 先归组：普通标记归到所在块；本身就是块级元素的标记算「整块译文」
+    const groups = new Map();
+    const loneBlocks = [];
+    tops.forEach((el) => {
+      if (BLOCK_TAGS.has(el.tagName)) {
+        loneBlocks.push(el);
+        return;
+      }
+      const block = nearestBlock(el, root);
+      if (!block) {
+        loneBlocks.push(el);
+        return;
+      }
+      if (!groups.has(block)) groups.set(block, []);
+      groups.get(block).push(el);
+    });
+
+    // 能切块的：按译文位置切分，每段成为独立段落；不可切的整块当一句
+    Array.from(groups.entries()).forEach(([block, marks]) => {
+      const parent = block.parentNode;
+      const dsts = marks.map((m) => normText(m.textContent));
+      const dstJoined = dsts.filter(Boolean).join(" ");
+      if (!dstJoined) {
+        marks.forEach((m) => m.remove());
+        return;
+      }
+
+      // 整块只有译文、没有可配的原文：挂到上一段，否则就把它当正文留着
+      if (normText(block.textContent) === dstJoined) {
+        marks.forEach((m) => m.remove());
+        const src = attachToPrev(block, dstJoined, root);
+        if (src) {
+          pairs.push({ src, dst: dstJoined });
+          block.remove();
+        }
+        return;
+      }
+
+      if (!parent || !SPLIT_TAGS.has(block.tagName)) {
+        // 不可切的块（表格单元格、行）：整块当作一句原文
+        marks.forEach((m) => m.remove());
+        pairs.push({ src: normText(block.textContent), dst: dstJoined });
+        return;
+      }
+
+      const runs = [];
+      let cursor = null;
+      marks.forEach((m) => {
+        const r = document.createRange();
+        if (cursor) r.setStartAfter(cursor);
+        else r.setStart(block, 0);
+        r.setEndBefore(m);
+        runs.push({ frag: r.extractContents(), dst: normText(m.textContent) });
+        cursor = m;
+      });
+
+      // 最后一句译文之后的正文
+      const tailRange = document.createRange();
+      if (cursor) tailRange.setStartAfter(cursor);
+      else tailRange.setStart(block, 0);
+      tailRange.setEnd(block, block.childNodes.length);
+      const tailFrag = tailRange.extractContents();
+      marks.forEach((m) => m.remove());
+
+      const segs = [];
+      runs.forEach((run) => {
+        if (!hasContent(run.frag)) {
+          // 两句译文挨着（中间没正文）：译文并到上一段
+          const last = segs[segs.length - 1];
+          if (last && run.dst) last.dst = (last.dst + " " + run.dst).trim();
+          return;
+        }
+        segs.push({ node: makeBlock(block.tagName, run.frag), dst: run.dst });
+      });
+      if (hasContent(tailFrag)) {
+        segs.push({ node: makeBlock(block.tagName, tailFrag), dst: "" });
+      }
+
+      segs.forEach((seg) => {
+        parent.insertBefore(seg.node, block);
+        const src = normText(seg.node.textContent);
+        if (seg.dst && src) pairs.push({ src, dst: seg.dst });
+      });
+      block.remove();
+    });
+
+    loneBlocks.forEach((el) => {
+      const dst = normText(el.textContent);
+      if (!dst) {
+        if (el.parentNode) el.remove();
+        return;
+      }
+      // 整块就是译文：挂到上一段原文；挂不上就当正文留着，不删内容
+      const block = BLOCK_TAGS.has(el.tagName) ? el : nearestBlock(el, root);
+      const src = block ? attachToPrev(block, dst, root) : "";
+      if (src) {
+        pairs.push({ src, dst });
+        (block || el).remove();
+        return;
+      }
+      if (BLOCK_TAGS.has(el.tagName)) return; // 它本身就是正文，保留
+      if (block) block.appendChild(el);
+    });
+
+    return pairs.slice(0, 400);
+  }
+
   function isEmptyNode(node) {
     if (!node || node.nodeType !== 1) return false;
     if (KEEP_EMPTY.has(node.tagName)) return false;
@@ -260,16 +438,24 @@
 
     clone.querySelectorAll(DROP_SELECTOR).forEach((n) => n.remove());
     absolutize(clone, base);
+    // 先摘译文再洗属性：标记属性正是判断依据，洗掉就认不出了
+    const pageTranslations = splitTranslations(clone);
     cleanAttributes(clone);
 
     const title = takeTitle(clone) || (opts.pageTitle || "").trim() || "未命名内容";
+    // 标题本身也可能被页面翻译过：抬出标题后从译文表里取同名的一条，
+    // 交给预览页显示在英文标题下面
+    const titleTrans =
+      (pageTranslations.find((pair) => pair.src === title) || {}).dst || "";
 
     await inlineImages(clone);
 
     const html = clone.outerHTML;
     return {
       title,
+      titleTrans,
       html,
+      pageTranslations,
       textPreview: toPlainText(clone).slice(0, 400),
       sourceUrl: base,
       pageTitle: opts.pageTitle || document.title || "",

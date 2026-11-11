@@ -154,14 +154,25 @@ function siteNameOf(url) {
   }
 }
 
+// 标题译文：页面翻译过标题时，中文贴在英文标题下面；只在对照视图里出现
+function syncTitleTrans() {
+  const el = $("titleTrans");
+  const text = (state.payload && state.payload.titleTrans) || "";
+  el.textContent = text;
+  el.hidden = !text || !biActive();
+}
+
 function render(payload) {
   document.title = payload.title + " · Element Print";
   $("title").textContent = payload.title;
+  syncTitleTrans();
   $("body").innerHTML = payload.html;
   markParagraphs($("body"));
+  seedPageTranslations(payload);
   state.lang = detectLang($("body"));
   setSheetLang(state.lang);
   refreshWordCount();
+  syncTitleTrans(); // 语言判定完才知道能不能进对照视图
 
   const link = $("siteLink");
   link.textContent = siteNameOf(payload.sourceUrl);
@@ -1036,7 +1047,11 @@ function onPickClick(e) {
   if (!text) return;
   // 换成标题：页面上那行大字与导出用的标题一起换掉
   $("title").textContent = text;
-  if (state.payload) state.payload.title = text;
+  if (state.payload) {
+    state.payload.title = text;
+    state.payload.titleTrans = ""; // 页面原带的那句标题译文对新标题已不成立
+  }
+  syncTitleTrans();
   document.title = text + " · Element Print";
   // 剪切：这一块从正文里拿走（双语时连 #body 里对应的原文块一起拿）
   if (biActive()) {
@@ -1119,6 +1134,26 @@ function hideToast(delay) {
   toastTimer = setTimeout(() => {
     $("translateToast").hidden = true;
   }, delay);
+}
+
+// 页面上本来就带着译文（浏览器翻译插件插入的中文）：直接把这段译文进缓存，
+// 对照视图里就不用再打翻译 API，也不会把钱花在已经翻过的段落上。
+let biPageKeys = new Set();
+
+function seedPageTranslations(payload) {
+  const list = (payload && payload.pageTranslations) || [];
+  biPageKeys = new Set();
+  if (!list.length) return;
+  list.forEach((item) => {
+    const src = String((item && item.src) || "").replace(/\s+/g, " ").trim();
+    const dst = String((item && item.dst) || "").trim();
+    if (!src || !dst) return;
+    const key = biTextKey(src);
+    biCache.set(key, dst);
+    biUsage.set(key, Date.now());
+    biPageKeys.add(key);
+  });
+  persistBiCache();
 }
 
 // 正文顶层块即「段」；每段取纯文本送翻，一样一段
@@ -1279,7 +1314,8 @@ let biPending = 0; // 待译段落数，决定「翻译」按钮是否可点
 function biBadge(tgt, kind) {
   const badge = document.createElement("span");
   badge.className = "ep-bi__badge ep-bi__badge--" + kind;
-  badge.textContent = kind === "todo" ? "更改" : kind === "done" ? "已译" : "缓存";
+  badge.textContent =
+    kind === "todo" ? "更改" : kind === "done" ? "已译" : kind === "page" ? "页面" : "缓存";
   tgt.appendChild(badge);
 }
 
@@ -1307,7 +1343,11 @@ function buildBilingual(rows) {
       tgt.className = "ep-bi__col ep-bi__tgt" + (heading ? " is-head" : "");
       if (text) {
         tgt.textContent = text;
-        biBadge(tgt, biFresh.has(key) ? "done" : "cache");
+        // 页面自带译文优先标注，其次是本次刚翻出来的、再是缓存命中
+        biBadge(
+          tgt,
+          biPageKeys.has(key) ? "page" : biFresh.has(key) ? "done" : "cache"
+        );
       } else {
         // 没有译文：原文是刚改过（或从未翻过）的段落，等点「翻译」
         tgt.classList.add("ep-bi__tgt--none");
@@ -1334,6 +1374,7 @@ function syncBiButton() {
   // 当前处在哪个视图，就把对应那块点亮（原文不再靠置灰表示当前态，置灰会淡得看不见）
   $("origBtn").classList.toggle("is-on", !active);
   $("biBtn").classList.toggle("is-on", active);
+  syncTitleTrans(); // 标题译文只跟对照视图一起出现/隐藏
 }
 
 // 译文是否已经就绪：记住上次成功翻译时的原文指纹，内容没变就不再打 API
@@ -1384,7 +1425,8 @@ async function refreshBilingual(opts = {}) {
   const texts = rows.filter((row) => !row.wide).map((row) => row.text);
   const hit = texts.filter((t) => biCache.has(biTextKey(t))).length;
   // 本篇一段译文都没有（首次进来）：自动翻一次，不必先点按钮
-  const initial = !biDone && hit === 0;
+  // 页面自带译文时不自动发请求：没配上的段落等用户点「翻译」，别替人烧额度
+  const initial = !biDone && hit === 0 && biPageKeys.size === 0;
   const wantSend = Boolean(opts.send) || initial;
 
   if (!wantSend) {
@@ -1828,7 +1870,13 @@ async function init() {
   render(payload);
   applySettings();
   syncBiButton();
-  if (state.settings.bilingual) refreshBilingual();
+  // 页面上本来就带译文（浏览器翻译插件已翻好）：进窗口就直接给对照视图
+  const hasPageTrans = Boolean(
+    payload.pageTranslations && payload.pageTranslations.length
+  );
+  if (hasPageTrans) state.biShown = true;
+  if (state.settings.bilingual || state.biShown) refreshBilingual();
+  if (hasPageTrans && state.biShown) flashHint("页面自带译文，已放进右栏对照");
   state.ready = true;
   restartHintSweep(); // 进页面先扫一遍
 }

@@ -53,7 +53,7 @@ export const DEFAULT_SETTINGS = {
   bodyFont: "auto", // FONT_PRESETS 的 key
   titleFont: "inherit", // inherit（跟随正文）| FONT_PRESETS 的 key
   spanHead: false, // 双栏时一级标题是否跨栏
-  allowBreak: false, // 段落可否跨页（默认整段移到下一页）
+  allowBreak: true, // 段落可否跨页（默认允许段落从中间断开）
   marginTop: 15, // mm
   marginRight: 15,
   marginBottom: 15,
