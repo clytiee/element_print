@@ -10,20 +10,21 @@ export const FONT_PRESETS = {
   },
   song: {
     label: "宋体（思源宋 / 宋体）",
-    stack: '"Noto Serif SC", "Source Han Serif SC", "思源宋体 CN", "Songti SC", "SimSun", serif',
+    stack:
+      '"Times New Roman", Georgia, "Noto Serif SC", "Source Han Serif SC", "思源宋体 CN", "Songti SC", "SimSun", serif',
   },
   hei: {
     label: "黑体（思源黑 / 雅黑）",
     stack:
-      '"Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif',
+      '"Segoe UI", Arial, "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif',
   },
   kai: {
     label: "楷体",
-    stack: 'KaiTi, "Kaiti SC", STKaiti, "楷体", serif',
+    stack: '"Times New Roman", Georgia, KaiTi, "Kaiti SC", STKaiti, "楷体", serif',
   },
   fangsong: {
     label: "仿宋",
-    stack: 'FangSong, STFangsong, "仿宋", "华文仿宋", serif',
+    stack: '"Times New Roman", Georgia, FangSong, STFangsong, "仿宋", "华文仿宋", serif',
   },
   times: {
     label: "Times New Roman（西文衬线）",

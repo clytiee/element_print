@@ -112,6 +112,19 @@ function hasManualIndent(node) {
 
 // 把「只装文字、没有块级子节点」的 div/section 标成段落，
 // 否则这些站点的正文不吃首行缩进（它们的段落不是 <p>）
+// 标题被剪走、或页面本来就只有个空壳时，正文里会留下空的 <h1></h1>、
+// 空 <p></p>：它们在版面上占一段留白，还会被当成段落参与排版，这里统一清掉
+function dropEmptyBlocks() {
+  Array.from($("body").querySelectorAll("h1,h2,h3,h4,h5,h6,p,div,section,li")).forEach((node) => {
+    if (!node.isConnected) return;
+    // 还装着图片/表格/列表骨架的不算空
+    if (node.querySelector("img,table,hr,figure,pre,ul,ol,blockquote,audio,canvas")) return;
+    const text = (node.textContent || "").replace(/\u00a0/g, " ").replace(/\s+/g, "").trim();
+    if (text) return;
+    node.remove();
+  });
+}
+
 function markParagraphs(root) {
   root.querySelectorAll("p, div, section, article, dd").forEach((node) => {
     const isTextBlock = node.tagName === "P" || !hasBlockChild(node);
@@ -167,6 +180,7 @@ function render(payload) {
   $("title").textContent = payload.title;
   syncTitleTrans();
   $("body").innerHTML = payload.html;
+  dropEmptyBlocks();
   markParagraphs($("body"));
   seedPageTranslations(payload);
   state.lang = detectLang($("body"));
@@ -1053,13 +1067,22 @@ function onPickClick(e) {
   }
   syncTitleTrans();
   document.title = text + " · Element Print";
-  // 剪切：这一块从正文里拿走（双语时连 #body 里对应的原文块一起拿）
+  // 剪切：这一块从正文里拿走（双语时连 #body 里对应的原文块、以及整行对照一起拿）
+  let line = null;
   if (biActive()) {
+    line = target.closest(".ep-bi__row");
     const col = target.querySelector(".ep-bi__src");
     const row = col && col.firstElementChild ? col.firstElementChild.__epRow : null;
     if (row && row.node && row.node.isConnected) row.node.remove();
   }
+  // 只摘克隆会留下空的 <h1>/<p> 和一根空行，连外层行容器一起剪掉
+  if (line) {
+    if (line.querySelector(".ep-bi__tgt--none")) biPending = Math.max(0, biPending - 1);
+    line.remove();
+  }
   target.remove();
+  dropEmptyBlocks(); // 剪走标题块后，别让空 <h1>/<p> 留在原位
+  syncBiButton();
   refreshWordCount();
   setPickingTitle(false);
   fit();

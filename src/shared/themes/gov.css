@@ -30,7 +30,7 @@
 /* 层次序数字体：一级「一、」黑体，二级「（一）」楷体，三级及以下仿宋加粗 */
 .ep-sheet[data-theme="gov"] .ep-body h1,
 .ep-sheet[data-theme="gov"] .ep-body h2 {
-  font-family: "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif;
+  font-family: "Segoe UI", Arial, "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif;
   font-weight: 400;
   font-size: 1em;
   margin: 0;
@@ -39,7 +39,7 @@
 
 .ep-sheet[data-theme="gov"] .ep-body h3,
 .ep-sheet[data-theme="gov"] .ep-body h4 {
-  font-family: KaiTi, "Kaiti SC", STKaiti, "楷体", serif;
+  font-family: "Times New Roman", Georgia, KaiTi, "Kaiti SC", STKaiti, "楷体", serif;
   font-weight: 400;
   font-size: 1em;
   margin: 0;
