@@ -1,8 +1,17 @@
 # element_print
-一键提取元素内容，生成报纸风格的打印页，可调整样式
+一键提取元素内容，生成杂志风格的打印页，可调整样式，支持单栏、双栏，预置学术期刊版式、公文版式。
 
 ## 插件截图
+### 原文模式
 <img width="2053" height="1985" alt="image" src="https://github.com/user-attachments/assets/87ab6758-1456-4a90-b89c-4bd76f6a57e0" />
+
+### 翻译模式
+支持将已全文对照翻译的英中文混排提取为左原文、右译文的翻译模式。
+原网页（已全文翻译）：
+<img width="1279" height="1688" alt="image" src="https://github.com/user-attachments/assets/2da75b31-0800-43bf-a25b-c175e6aaec21" />
+
+插件提取后的翻译模式：
+<img width="2053" height="1985" alt="image" src="https://github.com/user-attachments/assets/a09bee87-cf12-42c0-8779-148c010fb129" />
 
 ## 安装（已解压扩展）
 
