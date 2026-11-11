@@ -1,6 +1,9 @@
 # element_print
 一键提取元素内容，生成报纸风格的打印页，可调整样式
 
+## 插件截图
+<img width="2053" height="1985" alt="image" src="https://github.com/user-attachments/assets/87ab6758-1456-4a90-b89c-4bd76f6a57e0" />
+
 ## 安装（已解压扩展）
 
 1. 打开 Chrome / Edge 扩展页：`chrome://extensions` 或 `edge://extensions`
