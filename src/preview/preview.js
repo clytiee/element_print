@@ -530,7 +530,7 @@ function syncBiEdit(e) {
 // 进入编辑时留一份内容快照：Esc 退出时用来判断有没有改动，取消则按快照还原
 let editSnapshot = null;
 
-const EDIT_REGIONS = ["title", "body", "pageHead", "pageFoot", "excerpt", "metaAuthor", "metaPubDate"];
+const EDIT_REGIONS = ["title", "titleTrans", "body", "pageHead", "pageFoot", "excerpt", "metaAuthor", "metaPubDate"];
 
 function takeEditSnapshot() {
   const snap = {};
@@ -554,9 +554,11 @@ function restoreEditSnapshot() {
     state.payload.author = $("metaAuthor").textContent.replace(/\s+/g, " ").trim();
     state.payload.publishedTime = $("metaPubDate").textContent.replace(/\s+/g, " ").trim();
     state.payload.excerpt = $("excerpt").textContent.replace(/\s+/g, " ").trim();
+    state.payload.titleTrans = $("titleTrans").textContent.replace(/\s+/g, " ").trim();
     $("metaAuthor").hidden = !state.payload.author;
     $("metaPubDate").hidden = !state.payload.publishedTime;
     $("excerpt").hidden = !state.payload.excerpt;
+    $("titleTrans").hidden = !state.payload.titleTrans;
   }
   editSnapshot = null;
   refreshWordCount();
@@ -571,6 +573,7 @@ function setEditing(on) {
   const bi = biActive();
   [
     $("title"),
+    $("titleTrans"),
     $("pageHead"),
     $("pageFoot"),
     $("excerpt"),
@@ -1726,6 +1729,7 @@ function langFitPreset(preset, lang) {
     ...preset,
     indent: 0,
     paraAfter: Math.round(fontPx * 0.55),
+    titleFont: "auto",
   };
 }
 
@@ -1932,6 +1936,7 @@ function bindControls() {
   bindMetaEdit("metaAuthor", "author");
   bindMetaEdit("metaPubDate", "publishedTime");
   bindMetaEdit("excerpt", "excerpt");
+  bindMetaEdit("titleTrans", "titleTrans");
 
   // 按下时就阻止默认，避免按钮抢走输入焦点导致选区丢失
   $("formatBar").addEventListener("mousedown", (e) => {

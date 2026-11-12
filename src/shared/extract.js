@@ -760,16 +760,17 @@
     let pageTranslations = splitTranslations(clone);
     cleanAttributes(clone);
 
-    const title = takeTitle(clone) || (opts.pageTitle || "").trim() || "未命名内容";
-    // 标题本身也可能被页面翻译过：抬出标题后从译文表里取同名的一条，
-    // 交给预览页显示在英文标题下面
-    const titleTrans =
+    const explicitTitle = normText(opts.title || "");
+    // 整页提取时标题由 Readability 单独给出；这时不能把正文首段误拎成标题
+    const title = explicitTitle || takeTitle(clone) || normText(opts.pageTitle || "") || "未命名内容";
+    const matchedTitleTrans =
       (pageTranslations.find((pair) => pair.src === title) || {}).dst || "";
+    const titleTrans = normText(opts.titleTrans || matchedTitleTrans);
 
     await inlineImages(clone);
 
     const pageMeta = readPageMeta();
-    const visibleDate = extractDateText(opts.author) || "";
+    const visibleDate = extractDateText(opts.author) || readVisibleDate();
     const authorClean = cleanAuthor(opts.author) || cleanAuthor(pageMeta.author);
     const pubDate = visibleDate || opts.publishedTime || pageMeta.publishedTime;
     const excerptText = normText(opts.excerpt || pageMeta.excerpt);

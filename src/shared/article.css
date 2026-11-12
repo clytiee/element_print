@@ -171,6 +171,7 @@
   letter-spacing: 0.04em;
   color: var(--ep-sub);
   word-break: break-word;
+  text-align: center;
 }
 
 /* 导语/摘要：标题下的斜体副题 */

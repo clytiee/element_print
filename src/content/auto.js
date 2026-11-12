@@ -30,6 +30,47 @@
     if (!sticky) setTimeout(() => (toastNode.style.display = "none"), 2600);
   }
 
+  function normText(s) {
+    return String(s || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function transMarks(el) {
+    const attrRe = /^(data[-_](deep)?translat|data[-_]trans$)/i;
+    const classRe = /(^|\s)(translated|translation|deep-trans|trans-text)\b/i;
+    const out = [];
+    const walk = (node) => {
+      Array.from(node.children || []).forEach((child) => {
+        const marked =
+          Array.from(child.attributes || []).some((a) => attrRe.test(a.name.toLowerCase())) ||
+          classRe.test(child.getAttribute("class") || "");
+        if (marked) out.push(child);
+        else walk(child);
+      });
+    };
+    walk(el);
+    return out;
+  }
+
+  // Readability 只把正文放进提取容器；标题自带的中文译文要回原页面标题节点里取
+  function readTitleTranslation(title) {
+    const wanted = normText(title);
+    if (!wanted) return "";
+    const candidates = Array.from(
+      document.querySelectorAll("h1, h2, h3, [class*=hed], [class*=headline], [class*=title]")
+    );
+    for (const el of candidates) {
+      const marks = transMarks(el);
+      if (!marks.length) continue;
+      const dst = normText(marks[marks.length - 1].textContent);
+      const src = normText(normText(el.textContent).replace(dst, ""));
+      const same =
+        src === wanted ||
+        (src.length >= 8 && wanted.length >= 8 && (src.includes(wanted) || wanted.includes(src)));
+      if (same) return dst;
+    }
+    return "";
+  }
+
   async function run() {
     toast("正在自动识别正文…", true);
 
@@ -48,9 +89,12 @@
     const holder = document.createElement("div");
     holder.innerHTML = article.content;
 
+    const titleText = article.title || document.title || "";
     const payload = await window.ElementPrintExtract.extract(holder, {
       sourceUrl: location.href,
-      pageTitle: article.title || document.title,
+      title: titleText,
+      pageTitle: titleText,
+      titleTrans: readTitleTranslation(article.title),
       author: article.byline || "",
       publishedTime: article.publishedTime || "",
       excerpt: article.excerpt || "",
