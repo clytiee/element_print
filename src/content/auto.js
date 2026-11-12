@@ -51,6 +51,9 @@
     const payload = await window.ElementPrintExtract.extract(holder, {
       sourceUrl: location.href,
       pageTitle: article.title || document.title,
+      author: article.byline || "",
+      publishedTime: article.publishedTime || "",
+      excerpt: article.excerpt || "",
     });
     if (article.title && article.title.trim()) {
       payload.title = article.title.trim();

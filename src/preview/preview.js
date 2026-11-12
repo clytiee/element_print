@@ -69,6 +69,10 @@ function fmtTime(ts) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function formatPubDate(value) {
+  return String(value || "").trim();
+}
+
 function esc(text) {
   return String(text)
     .replace(/&/g, "&amp;")
@@ -199,6 +203,17 @@ function render(payload) {
   url.textContent = payload.sourceUrl;
   url.href = payload.sourceUrl;
   $("metaTime").textContent = fmtTime(payload.createdAt);
+
+  const author = (payload.author || "").trim();
+  const pubDate = formatPubDate(payload.publishedTime);
+  $("metaAuthor").textContent = author;
+  $("metaAuthor").hidden = !author;
+  $("metaPubDate").textContent = pubDate;
+  $("metaPubDate").hidden = !pubDate;
+
+  const excerpt = (payload.excerpt || "").trim();
+  $("excerpt").textContent = excerpt;
+  $("excerpt").hidden = !excerpt;
 }
 
 /* ---------- @page（含页边距盒里的页眉页脚与页码） ---------- */
@@ -342,7 +357,9 @@ function applySettings() {
 
   $("metaUrl").hidden = !s.showUrl;
   $("metaTime").hidden = !s.showTime;
-  $("meta").hidden = !s.showUrl && !s.showTime;
+  const hasAuthor = Boolean((state.payload && state.payload.author || "").trim());
+  const hasPubDate = Boolean(formatPubDate(state.payload && state.payload.publishedTime));
+  $("meta").hidden = !(s.showUrl || s.showTime || hasAuthor || hasPubDate);
 
   syncResetBtn();
   fit();
@@ -512,7 +529,7 @@ function syncBiEdit(e) {
 // 进入编辑时留一份内容快照：Esc 退出时用来判断有没有改动，取消则按快照还原
 let editSnapshot = null;
 
-const EDIT_REGIONS = ["title", "body", "pageHead", "pageFoot"];
+const EDIT_REGIONS = ["title", "body", "pageHead", "pageFoot", "excerpt", "metaAuthor", "metaPubDate"];
 
 function takeEditSnapshot() {
   const snap = {};
@@ -532,6 +549,14 @@ function restoreEditSnapshot() {
   EDIT_REGIONS.forEach((id) => {
     if (editSnapshot[id] !== $(id).innerHTML) $(id).innerHTML = editSnapshot[id];
   });
+  if (state.payload) {
+    state.payload.author = $("metaAuthor").textContent.replace(/\s+/g, " ").trim();
+    state.payload.publishedTime = $("metaPubDate").textContent.replace(/\s+/g, " ").trim();
+    state.payload.excerpt = $("excerpt").textContent.replace(/\s+/g, " ").trim();
+    $("metaAuthor").hidden = !state.payload.author;
+    $("metaPubDate").hidden = !state.payload.publishedTime;
+    $("excerpt").hidden = !state.payload.excerpt;
+  }
   editSnapshot = null;
   refreshWordCount();
   fit();
@@ -543,7 +568,14 @@ function setEditing(on) {
   editing = on;
   if (on) editSnapshot = takeEditSnapshot();
   const bi = biActive();
-  [ $("title"), $("pageHead"), $("pageFoot") ].forEach((node) => {
+  [
+    $("title"),
+    $("pageHead"),
+    $("pageFoot"),
+    $("excerpt"),
+    $("metaAuthor"),
+    $("metaPubDate"),
+  ].forEach((node) => {
     node.contentEditable = on ? "true" : "false";
     node.spellcheck = false;
   });
@@ -1852,6 +1884,18 @@ function bindControls() {
 
   // 编辑/删减都会改变字数，sheet 上的 input 冒泡统一接住（双语左栏也在 sheet 里）
   $("sheet").addEventListener("input", scheduleWordCount);
+
+  // 标题区元信息：编辑后写回 payload，空内容自动隐藏
+  const bindMetaEdit = (id, key) => {
+    $(id).addEventListener("input", () => {
+      const text = $(id).textContent.replace(/\s+/g, " ").trim();
+      if (state.payload) state.payload[key] = text;
+      $(id).hidden = !text;
+    });
+  };
+  bindMetaEdit("metaAuthor", "author");
+  bindMetaEdit("metaPubDate", "publishedTime");
+  bindMetaEdit("excerpt", "excerpt");
 
   // 按下时就阻止默认，避免按钮抢走输入焦点导致选区丢失
   $("formatBar").addEventListener("mousedown", (e) => {

@@ -607,6 +607,141 @@
     return (root.textContent || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
   }
 
+  function firstTextBlock(root) {
+    const candidates = root.querySelectorAll(
+      "p, div, li, dd, dt, blockquote, h1, h2, h3, h4, h5, h6"
+    );
+    for (const node of candidates) {
+      const text = (node.textContent || "").replace(/\s+/g, " ").trim();
+      if (text) return node;
+    }
+    return null;
+  }
+
+  function matchesMetaText(text, author, date) {
+    const t = normText(text);
+    if (!t) return false;
+    if (author && (t === author || t.toLowerCase() === "by " + author.toLowerCase())) {
+      return true;
+    }
+    if (date && t === date) return true;
+    if (author && date) {
+      const compact = t.toLowerCase().replace(/^by\s+/, "");
+      if (
+        compact.includes(author.toLowerCase()) &&
+        compact.includes(date.toLowerCase()) &&
+        compact.length <= author.length + date.length + 8
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  const DATE_MONTH =
+    "Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?";
+
+  function extractDateText(text) {
+    if (!text) return "";
+    const s = String(text);
+    const en = s.match(new RegExp("(?:" + DATE_MONTH + ")\\s+\\d{1,2},?\\s+\\d{4}", "i"));
+    if (en) return en[0];
+    const iso = s.match(/\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}[^\s]*)?\b/);
+    return iso ? iso[0] : "";
+  }
+
+  function cleanAuthor(name) {
+    if (!name) return "";
+    let s = String(name).replace(/\s+/g, " ").trim();
+    s = s.replace(/^\s*by\s+/i, "");
+    s = s.replace(new RegExp("\\b(?:" + DATE_MONTH + ")\\s+\\d{1,2},?\\s+\\d{4}\\b", "gi"), "");
+    s = s.replace(/\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}[^\s]*)?\b/g, "");
+    s = s.replace(/\s*[·,|]\s*$/, "").trim();
+    return s;
+  }
+
+  function readVisibleDate() {
+    const selectors = [
+      "time[datetime]",
+      '[itemprop="datePublished"]',
+      ".post__title__author-date",
+      "[class*='byline']",
+      "[class*='date']",
+    ];
+    for (const sel of selectors) {
+      const el = document.querySelector(sel);
+      if (!el) continue;
+      const d = extractDateText(el.textContent);
+      if (d) return d;
+    }
+    return "";
+  }
+
+  function metaContent(selector, attr = "content") {
+    const el = document.querySelector(selector);
+    if (!el) return "";
+    return (el.getAttribute(attr) || el.textContent || "").trim();
+  }
+
+  function ldValue(node, key) {
+    if (!node || typeof node !== "object") return "";
+    const v = node[key];
+    if (typeof v === "string") return v.trim();
+    if (Array.isArray(v)) {
+      return v
+        .map((x) => (x && typeof x === "object" ? x.name : x))
+        .filter(Boolean)
+        .join(", ")
+        .trim();
+    }
+    if (v && typeof v.name === "string") return v.name.trim();
+    return "";
+  }
+
+  function readLdMetadata() {
+    let author = "";
+    let publishedTime = "";
+    let excerpt = "";
+    document.querySelectorAll('script[type="application/ld+json"]').forEach((script) => {
+      if (author && publishedTime && excerpt) return;
+      let data;
+      try {
+        data = JSON.parse(script.textContent);
+      } catch {
+        return;
+      }
+      const nodes = Array.isArray(data && data["@graph"]) ? data["@graph"] : [data];
+      nodes.forEach((node) => {
+        author = author || ldValue(node, "author");
+        publishedTime = publishedTime || ldValue(node, "datePublished");
+        excerpt = excerpt || ldValue(node, "description");
+      });
+    });
+    return { author, publishedTime, excerpt };
+  }
+
+  // 手动选取时 Readability 不在场，从 meta / JSON-LD 兜底取作者、发布日期、导语
+  function readPageMeta() {
+    const ld = readLdMetadata();
+    return {
+      author:
+        metaContent('meta[name="author"]', "content") ||
+        metaContent('meta[property="article:author"]', "content") ||
+        metaContent('meta[name="byline"]', "content") ||
+        ld.author,
+      publishedTime:
+        readVisibleDate() ||
+        metaContent('meta[property="article:published_time"]', "content") ||
+        metaContent('meta[name="pub-date"]', "content") ||
+        metaContent('meta[name="date"]', "content") ||
+        ld.publishedTime,
+      excerpt:
+        metaContent('meta[name="description"]', "content") ||
+        metaContent('meta[property="og:description"]', "content") ||
+        ld.excerpt,
+    };
+  }
+
   /**
    * @param {Element} el 命中的元素
    * @param {{sourceUrl?:string, pageTitle?:string}} opts
@@ -622,7 +757,7 @@
     cleanUiChrome(clone);
     absolutize(clone, base);
     // 先摘译文再洗属性：标记属性正是判断依据，洗掉就认不出了
-    const pageTranslations = splitTranslations(clone);
+    let pageTranslations = splitTranslations(clone);
     cleanAttributes(clone);
 
     const title = takeTitle(clone) || (opts.pageTitle || "").trim() || "未命名内容";
@@ -633,6 +768,43 @@
 
     await inlineImages(clone);
 
+    const pageMeta = readPageMeta();
+    const visibleDate = extractDateText(opts.author) || "";
+    const authorClean = cleanAuthor(opts.author) || cleanAuthor(pageMeta.author);
+    const pubDate = visibleDate || opts.publishedTime || pageMeta.publishedTime;
+    const excerptText = normText(opts.excerpt || pageMeta.excerpt);
+
+    // 作者、日期已放在标题区；正文里整块重复的作者行/日期行一并删掉
+    const metaRemoved = new Set();
+    const walkMeta = (node) => {
+      Array.from(node.children).forEach((child) => {
+        const text = normText(child.textContent);
+        if (matchesMetaText(text, authorClean, pubDate)) {
+          metaRemoved.add(text);
+          child.remove();
+          return;
+        }
+        walkMeta(child);
+      });
+    };
+    walkMeta(clone);
+    if (metaRemoved.size) {
+      for (let i = pageTranslations.length - 1; i >= 0; i--) {
+        if (metaRemoved.has(pageTranslations[i].src)) pageTranslations.splice(i, 1);
+      }
+    }
+
+    // 导语已放在标题区；若正文首段与导语完全相同，从正文删掉，避免重复
+    if (excerptText) {
+      const first = firstTextBlock(clone);
+      const firstText = first ? normText(first.textContent) : "";
+      if (firstText === excerptText) {
+        first.remove();
+        const transIdx = pageTranslations.findIndex((pair) => pair.src === excerptText);
+        if (transIdx >= 0) pageTranslations.splice(transIdx, 1);
+      }
+    }
+
     const html = clone.outerHTML;
     return {
       title,
@@ -642,6 +814,9 @@
       textPreview: toPlainText(clone).slice(0, 400),
       sourceUrl: base,
       pageTitle: opts.pageTitle || document.title || "",
+      author: authorClean,
+      publishedTime: pubDate,
+      excerpt: opts.excerpt || pageMeta.excerpt,
       tag: el.tagName.toLowerCase(),
       createdAt: Date.now(),
       bytes: html.length,

@@ -173,6 +173,17 @@
   word-break: break-word;
 }
 
+/* 导语/摘要：标题下的斜体副题 */
+.ep-excerpt {
+  margin: 1.6mm 0 0;
+  font-family: var(--ep-body-font);
+  font-size: 0.95em;
+  font-style: italic;
+  line-height: 1.55;
+  color: var(--ep-sub);
+  word-break: break-word;
+}
+
 .ep-rule {
   display: none; /* 分隔线改到页眉下，标题下不再画线 */
   height: 0;
@@ -191,6 +202,16 @@
   font-size: 8.5pt;
   line-height: 1.5;
   color: var(--ep-sub);
+}
+
+.ep-meta__byline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 0.6em;
+}
+
+#metaAuthor:not([hidden]) + #metaPubDate:not([hidden])::before {
+  content: "· ";
 }
 
 .ep-meta a {
