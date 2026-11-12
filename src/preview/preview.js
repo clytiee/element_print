@@ -968,6 +968,8 @@ function scheduleWordCount() {
 
 let trimming = false;
 let trimHover = null;
+let trimPinned = false; // 按 ↑ 选过上级后，光标移动不再跟着重新选
+let trimPointerTarget = null; // ↓ 回到指针下的元素用
 
 // 从指针下的节点往上找最近的内容块（不算正文容器本身）
 // 双语对照时一块内容对应一整行对照，悬停/删除都作用在那一行
@@ -991,7 +993,37 @@ function clearTrimHover() {
   trimHover = null;
 }
 
+// ↑：把当前悬停块上移一级到最近的内容块（对照模式行已是顶层，不再上爬）
+function trimClimb() {
+  if (!trimHover) return;
+  if (biActive()) return;
+  let parent = trimHover.parentElement;
+  while (parent && parent !== $("body")) {
+    if (TRIM_BLOCKS.has(parent.tagName)) {
+      clearTrimHover();
+      trimHover = parent;
+      trimPinned = true;
+      parent.classList.add("ep-trim-hover");
+      return;
+    }
+    parent = parent.parentElement;
+  }
+}
+
+// ↓：解除锁定，回到指针下的元素
+function trimDescend() {
+  trimPinned = false;
+  const target = trimTarget(trimPointerTarget);
+  clearTrimHover();
+  if (target) {
+    trimHover = target;
+    target.classList.add("ep-trim-hover");
+  }
+}
+
 function onTrimMove(e) {
+  trimPointerTarget = e.target;
+  if (trimPinned && trimHover) return; // 锁定后光标移动不重选
   const target = trimTarget(e.target);
   if (target === trimHover) return;
   clearTrimHover();
@@ -1002,10 +1034,27 @@ function onTrimMove(e) {
 }
 
 function onTrimClick(e) {
-  const target = trimTarget(e.target);
+  let target;
+  if (trimPinned && trimHover) {
+    // 点在锁定选区之外：解除锁定并回到指针下的元素，不删除；点在选区里才删
+    if (!trimHover.contains(e.target)) {
+      trimPinned = false;
+      target = trimTarget(e.target);
+      clearTrimHover();
+      if (target) {
+        trimHover = target;
+        target.classList.add("ep-trim-hover");
+      }
+      return;
+    }
+    target = trimHover;
+  } else {
+    target = trimTarget(e.target);
+  }
   if (!target) return;
   e.preventDefault();
   e.stopPropagation();
+  trimPinned = false;
   clearTrimHover();
   if (biActive()) {
     // 删对照行时连 #body 里对应的原文块一起删，导出才不会留残段
@@ -1026,7 +1075,7 @@ function setTrimming(on) {
   $("body").classList.toggle("is-trimming", on);
   $("trimBtn").classList.toggle("is-on", on);
   $("trimBtn").textContent = on ? "退出删减" : "删减";
-  setHint(on ? "点击要删除的块 · Esc 退出删减" : baseHint());
+  setHint(on ? "点击要删除的块 · ↑ 选上级 / ↓ 回到指针 · Esc 退出删减" : baseHint());
   if (on) {
     root.addEventListener("mousemove", onTrimMove);
     root.addEventListener("click", onTrimClick, true);
@@ -1034,6 +1083,8 @@ function setTrimming(on) {
     root.removeEventListener("mousemove", onTrimMove);
     root.removeEventListener("click", onTrimClick, true);
     clearTrimHover();
+    trimPinned = false;
+    trimPointerTarget = null;
   }
 }
 
@@ -1723,6 +1774,16 @@ function bindControls() {
   $("imgBtn").addEventListener("click", () => setImagesHidden(!hideImages));
 
   document.addEventListener("keydown", (e) => {
+    if (trimming && e.key === "ArrowUp") {
+      e.preventDefault();
+      trimClimb();
+      return;
+    }
+    if (trimming && e.key === "ArrowDown") {
+      e.preventDefault();
+      trimDescend();
+      return;
+    }
     if (e.key !== "Escape") return;
     if (trimming) {
       e.preventDefault();
