@@ -289,9 +289,10 @@
   word-break: break-all;
 }
 
-.ep-body img {
+.ep-body img,
+.ep-bi__src img {
   display: block;
-  max-width: 100%;
+  max-width: var(--ep-img-max, 100%);
   height: auto;
   margin: 0.6em auto;
   break-inside: avoid;

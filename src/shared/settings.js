@@ -67,6 +67,7 @@ export const DEFAULT_SETTINGS = {
   bilingual: false, // 双语对照：左原文 / 右译文（逐段对齐）
   biSplit: 58, // 原文列宽（%），中西文宽度差明显，默认原文略宽
   biCacheMax: 5000, // 最多保留多少段译文缓存，超出按最近使用裁旧
+  imgSize: "full", // 正文图片显示档位：small（小）| mid（中）| full（原大）
   deeplKey: "", // DeepL Auth Key（仅存本地）
   deeplFree: true, // true 走免费端点 api-free.deepl.com
   engine: "deepl", // 翻译引擎：deepl / baidu
@@ -197,6 +198,9 @@ function normalize(raw) {
   if (typeof raw.bilingual === "boolean") base.bilingual = raw.bilingual;
   base.biSplit = clamp(raw.biSplit, 35, 70, base.biSplit);
   base.biCacheMax = clamp(raw.biCacheMax, 100, 20000, base.biCacheMax);
+  if (raw.imgSize === "small" || raw.imgSize === "mid" || raw.imgSize === "full") {
+    base.imgSize = raw.imgSize;
+  }
   if (typeof raw.deeplKey === "string") base.deeplKey = raw.deeplKey.trim().slice(0, 200);
   if (typeof raw.deeplFree === "boolean") base.deeplFree = raw.deeplFree;
   if (raw.engine === "baidu" || raw.engine === "deepl") base.engine = raw.engine;

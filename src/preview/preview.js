@@ -16,6 +16,9 @@ const STORAGE_KEY = "ep:payload:" + payloadId;
 
 const $ = (id) => document.getElementById(id);
 
+// 正文图片显示档位：只改预览/打印里的最大宽度，不动抽取下来的原图
+const IMG_SIZE_MAX = { small: "40%", mid: "65%", full: "100%" };
+
 const state = {
   settings: { ...DEFAULT_SETTINGS },
   payload: null,
@@ -307,6 +310,7 @@ function applySettings() {
   root.style.setProperty("--ep-para-before", s.paraBefore + "px");
   root.style.setProperty("--ep-para-after", s.paraAfter + "px");
   root.style.setProperty("--ep-columns", s.columns === 2 ? "2" : "1");
+  root.style.setProperty("--ep-img-max", IMG_SIZE_MAX[s.imgSize] || IMG_SIZE_MAX.full);
   root.style.setProperty("--ep-indent", s.indent + "em");
   root.style.setProperty("--ep-mt", s.marginTop + "mm");
   root.style.setProperty("--ep-mr", s.marginRight + "mm");
@@ -413,6 +417,10 @@ function syncControls() {
 
   Array.from($("segColumns").querySelectorAll("button")).forEach((btn) => {
     btn.classList.toggle("is-active", Number(btn.dataset.value) === s.columns);
+  });
+
+  Array.from($("segImgSize").querySelectorAll("button")).forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.value === (s.imgSize || "full"));
   });
   // 双语对照时栏数用不上（固定单栏），按钮置灰并给一句说明
   const biNow = biActive() && !$("bilingual").hidden;
@@ -1683,6 +1691,7 @@ function switchTheme(theme) {
     baiduKey: state.settings.baiduKey,
     targetLang: state.settings.targetLang,
     bilingual: state.settings.bilingual,
+    imgSize: state.settings.imgSize,
   };
   state.settings = { ...preset, ...keep };
   syncControls();
@@ -1700,6 +1709,11 @@ function bindControls() {
     const btn = e.target.closest("button[data-value]");
     if (!btn) return;
     update({ columns: Number(btn.dataset.value) });
+  });
+  $("segImgSize").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-value]");
+    if (!btn) return;
+    update({ imgSize: btn.dataset.value });
   });
 
   $("segLineMode").addEventListener("click", (e) => {
@@ -1952,6 +1966,7 @@ async function buildExportHtml() {
     `--ep-para-before:${s.paraBefore}px`,
     `--ep-para-after:${s.paraAfter}px`,
     `--ep-columns:${biActive() ? 1 : s.columns === 2 ? 2 : 1}`,
+    `--ep-img-max:${IMG_SIZE_MAX[s.imgSize] || IMG_SIZE_MAX.full}`,
     `--ep-split:${(s.biSplit || 58)}%`,
     `--ep-indent:${s.indent}em`,
     `--ep-body-font:${bodyFontStack(s.bodyFont, state.lang)}`,
