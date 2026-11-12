@@ -17,6 +17,10 @@
     "button", "select", "textarea", "progress", "meter", "dialog",
   ].join(",");
 
+  // 工具条/评论/收藏/分享/提示气泡这类控件容器的类名片段；正文段落一般不带
+  const UI_CLASS_RE =
+    /(tooltip|popover|screen-reader|sr-only|visually-hidden|visuallyhidden|divider|comment|bookmark|share|social|toolbar|actions|preferred-source)/i;
+
   // 只保留版式需要的属性，页面自带的 style/class/id 一律剥掉，避免污染版面
   const KEEP_ATTRS = new Set([
     "href", "src", "alt", "title", "colspan", "rowspan", "start", "reversed",
@@ -65,6 +69,41 @@
     root.querySelectorAll("source[src]").forEach((s) => {
       s.setAttribute("src", absUrl(s.getAttribute("src"), base));
     });
+  }
+
+  // 带 role="img" / 可访问名 / 内嵌文字，或在图注容器里的 SVG 视为正文插图，保留；
+  // 其余只画图标的装饰性 SVG（评论、书签、分享等小图标）随控件一起清掉。
+  function isContentSvg(svg) {
+    if (svg.getAttribute("role") === "img") return true;
+    if (svg.hasAttribute("aria-label") || svg.hasAttribute("aria-labelledby")) return true;
+    if (svg.querySelector("text")) return true;
+    if (svg.closest("figure,figcaption")) return true;
+    return false;
+  }
+
+  // 抽取前清理网页控件残留：提示气泡、分隔线、评论/收藏/分享工具条、纯图标链接。
+  // 只清交互外壳，不删正文里的图片、表格与插图 SVG。
+  function cleanUiChrome(root) {
+    Array.from(root.querySelectorAll("*")).forEach((el) => {
+      if (UI_CLASS_RE.test(el.getAttribute("class") || "")) el.remove();
+    });
+    root.querySelectorAll('[role="tooltip"]').forEach((el) => el.remove());
+
+    root.querySelectorAll("svg").forEach((svg) => {
+      if (!isContentSvg(svg)) svg.remove();
+    });
+
+    root.querySelectorAll("a").forEach((a) => {
+      const href = a.getAttribute("href") || "";
+      const text = normText(a.textContent);
+      const keepsMedia = Boolean(a.querySelector("img,figure"));
+      const countOnly = /^\d{1,4}$/.test(text);
+      const emptyControl = !text && !keepsMedia;
+      const inPageCount = href.startsWith("#") && keepsMedia === false && (countOnly || !text);
+      if (emptyControl || inPageCount) a.remove();
+    });
+
+    pruneEmpty(root);
   }
 
   function cleanAttributes(root) {
@@ -580,6 +619,7 @@
     const clone = el.cloneNode(true);
 
     clone.querySelectorAll(DROP_SELECTOR).forEach((n) => n.remove());
+    cleanUiChrome(clone);
     absolutize(clone, base);
     // 先摘译文再洗属性：标记属性正是判断依据，洗掉就认不出了
     const pageTranslations = splitTranslations(clone);
@@ -608,5 +648,13 @@
     };
   }
 
-  window.ElementPrintExtract = { extract };
+  async function savePayload(payload) {
+    const id = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    await chrome.storage.local.set({ ["ep:payload:" + id]: payload });
+    const res = await chrome.runtime.sendMessage({ type: "ep:openPreview", id });
+    if (res && res.ok === false) throw new Error(res.error || "打开预览窗口失败");
+    return id;
+  }
+
+  window.ElementPrintExtract = { extract, savePayload };
 })();

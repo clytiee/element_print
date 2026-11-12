@@ -1,22 +1,85 @@
-// Service worker：工具栏按钮 → 注入选取器；收到选取结果 → 打开预览窗口。
+// Service worker：工具栏按钮 / 右键菜单 → 注入选取器或自动提取；收到结果 → 打开预览窗口。
 
 const PICKER_CSS = ["src/content/selector.css"];
 const PICKER_JS = ["src/shared/extract.js", "src/content/selector.js"];
+const AUTO_JS = [
+  "src/shared/vendor/readability.js",
+  "src/shared/extract.js",
+  "src/content/auto.js",
+];
 const PREVIEW_URL = "src/preview/preview.html";
+const MODE_KEY = "ep:extract-mode";
+const AUTO_MENU_ID = "ep-auto";
 
-chrome.action.onClicked.addListener(async (tab) => {
-  if (!tab || !tab.id) return;
-  const url = tab.url || "";
-  // activeTab 只在用户操作后授权，仍需排除浏览器内部页面
-  if (/^(chrome|edge|about|devtools|chrome-extension):/i.test(url)) {
-    return;
+async function getMode() {
+  try {
+    const got = await chrome.storage.local.get(MODE_KEY);
+    return got[MODE_KEY] === "auto" ? "auto" : "manual";
+  } catch {
+    return "manual";
   }
+}
+
+async function setMode(mode) {
+  await chrome.storage.local.set({ [MODE_KEY]: mode });
+}
+
+function modeTitle(mode) {
+  return mode === "auto" ? "√ 整页提取" : "整页提取（点击打开）";
+}
+
+function isInternalUrl(url) {
+  return /^(chrome|edge|about|devtools|chrome-extension|moz-extension):/i.test(url || "");
+}
+
+async function injectManual(tab) {
+  if (!tab || !tab.id || isInternalUrl(tab.url)) return;
   try {
     await chrome.scripting.insertCSS({ target: { tabId: tab.id }, files: PICKER_CSS });
     await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: PICKER_JS });
   } catch (err) {
     console.warn("[Element Print] 注入选取器失败：", err);
   }
+}
+
+async function injectAuto(tab) {
+  if (!tab || !tab.id || isInternalUrl(tab.url)) return;
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: AUTO_JS });
+  } catch (err) {
+    console.warn("[Element Print] 注入自动提取失败：", err);
+  }
+}
+
+chrome.action.onClicked.addListener(async (tab) => {
+  const mode = await getMode();
+  if (mode === "auto") return injectAuto(tab);
+  return injectManual(tab);
+});
+
+chrome.runtime.onInstalled.addListener(async () => {
+  await chrome.contextMenus.removeAll();
+  const mode = await getMode();
+  chrome.contextMenus.create({
+    id: AUTO_MENU_ID,
+    title: modeTitle(mode),
+    contexts: ["action"],
+  });
+});
+
+chrome.contextMenus.onClicked.addListener(async (info) => {
+  if (info.menuItemId !== AUTO_MENU_ID) return;
+  const current = await getMode();
+  const next = current === "auto" ? "manual" : "auto";
+  await setMode(next);
+  await chrome.contextMenus.update(AUTO_MENU_ID, { title: modeTitle(next) });
+});
+
+chrome.runtime.onStartup.addListener(async () => {
+  const mode = await getMode();
+  await chrome.contextMenus
+    .update(AUTO_MENU_ID, { title: modeTitle(mode) })
+    .catch(() => {});
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

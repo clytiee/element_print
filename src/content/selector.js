@@ -194,10 +194,7 @@
         sourceUrl: location.href,
         pageTitle: document.title,
       });
-      const id = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-      await chrome.storage.local.set({ ["ep:payload:" + id]: payload });
-      const res = await chrome.runtime.sendMessage({ type: "ep:openPreview", id });
-      if (res && res.ok === false) throw new Error(res.error || "打开预览窗口失败");
+      await window.ElementPrintExtract.savePayload(payload);
       hideToast();
       teardown();
     } catch (err) {

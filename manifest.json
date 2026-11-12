@@ -3,7 +3,7 @@
   "name": "Element Print",
   "version": "1.0.0",
   "description": "选取网页元素，抓取富文本，按报纸/杂志版式预览、打印或导出 HTML。",
-  "permissions": ["activeTab", "scripting", "storage", "unlimitedStorage"],
+  "permissions": ["activeTab", "scripting", "storage", "unlimitedStorage", "contextMenus"],
   "host_permissions": [
     "https://api-free.deepl.com/*",
     "https://api.deepl.com/*",
