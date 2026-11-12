@@ -83,6 +83,17 @@
         <button type="button" class="ep-fmt" data-cmd="clearFormat" title="清除格式" aria-label="清除格式">
           <svg viewBox="0 0 16 16" aria-hidden="true"><text x="6" y="12" text-anchor="middle" font-size="12" fill="currentColor">A</text><rect x="5.3" y="1.5" width="1.4" height="13" fill="currentColor" transform="rotate(70 6 8)"/></svg>
         </button>
+        <span class="ep-format__sep"></span>
+        <button type="button" class="ep-fmt" data-cmd="replace" title="查找并替换（替换文本可空）" aria-label="查找并替换">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><text x="1" y="12" font-size="9" fill="currentColor">A</text><path d="M6.4 8h3.4M8.4 5.6L10.8 8L8.4 10.4" stroke="currentColor" fill="none" stroke-width="1.1"/><text x="11" y="12" font-size="9" fill="currentColor">B</text></svg>
+        </button>
+      </div>
+      <!-- 查找替换面板：在标题、正文、页眉页脚的文本节点内全局替换 -->
+      <div class="ep-replace" id="replacePanel" hidden>
+        <input class="ep-input" id="replaceFind" type="text" placeholder="查找文本" autocomplete="off" />
+        <input class="ep-input" id="replaceRepl" type="text" placeholder="替换为（留空删除）" autocomplete="off" />
+        <button type="button" id="replaceGo" class="ep-mini">替换</button>
+        <button type="button" id="replaceClose" class="ep-mini">取消</button>
       </div>
       <!-- 翻译进度提示：浮在工具栏右下方 -->
       <div class="ep-toast" id="translateToast" hidden><span class="ep-toast__dot"></span><span id="translateToastText"></span></div>

@@ -287,6 +287,17 @@ body {
   flex: 0 0 auto;
 }
 
+.ep-replace {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 18px 8px;
+}
+
+.ep-replace .ep-input {
+  flex: 1 1 120px;
+}
+
 .ep-fmt {
   appearance: none;
   flex: 0 0 auto;

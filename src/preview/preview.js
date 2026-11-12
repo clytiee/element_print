@@ -550,6 +550,7 @@ function setEditing(on) {
   if (on && bi) $("bilingual").addEventListener("input", syncBiEdit);
   $("sheet").classList.toggle("is-editing", on);
   $("formatBar").hidden = !on;
+  if (!on) closeReplacePanel();
   setHint(on ? "可直接改字，格式用下方图标 · Esc 取消（不保存）" : baseHint());
   $("editBtn").textContent = on ? "完成" : "编辑";
   $("editBtn").classList.toggle("is-on", on);
@@ -850,8 +851,96 @@ function clearFormatting() {
 }
 
 // 粗体 / 斜体 / 下划线 / 删除线 / 左右对齐，作用于当前选区
+// 查找并替换：在标题、正文、页眉页脚的文本节点内全局替换，替换文本留空即删除全部匹配；
+// 跨多个标签被切开的片段无法命中（如 Na<sup>+</sup>），属已知边界
+let replaceOpen = false;
+
+function closeReplacePanel() {
+  replaceOpen = false;
+  $("replacePanel").hidden = true;
+}
+
+function toggleReplacePanel() {
+  if (replaceOpen) {
+    closeReplacePanel();
+    return;
+  }
+  replaceOpen = true;
+  $("replacePanel").hidden = false;
+  $("replaceFind").focus();
+}
+
+function replaceInNode(root, find, repl) {
+  let count = 0;
+  const collect = () => {
+    const nodes = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = walker.nextNode())) nodes.push(n);
+    return nodes;
+  };
+  const locate = (nodes, charIdx) => {
+    let acc = 0;
+    for (const node of nodes) {
+      const end = acc + node.nodeValue.length;
+      if (charIdx < end) return { node, off: charIdx - acc };
+      acc = end;
+    }
+    const last = nodes[nodes.length - 1];
+    return { node: last, off: last ? last.nodeValue.length : 0 };
+  };
+  let nodes = collect();
+  let full = nodes.map((n) => n.nodeValue).join("");
+  let idx = full.indexOf(find);
+  while (idx >= 0) {
+    const end = idx + find.length;
+    const start = locate(nodes, idx);
+    const endPos = locate(nodes, end);
+    const range = document.createRange();
+    range.setStart(start.node, start.off);
+    range.setEnd(endPos.node, endPos.off);
+    range.deleteContents();
+    if (repl) range.insertNode(document.createTextNode(repl));
+    count++;
+    nodes = collect();
+    full = nodes.map((n) => n.nodeValue).join("");
+    idx = full.indexOf(find);
+  }
+  return count;
+}
+
+function runReplace() {
+  const find = $("replaceFind").value;
+  const repl = $("replaceRepl").value;
+  if (!find) {
+    flashHint("查找文本不能为空");
+    return;
+  }
+  let count = 0;
+  if (biActive()) {
+    biEditTargets().forEach((col) => {
+      count += replaceInNode(col, find, repl);
+      const row = col.__epRow;
+      if (row && row.node && row.node.isConnected) row.node.innerHTML = col.innerHTML;
+    });
+  } else {
+    count += replaceInNode($("body"), find, repl);
+  }
+  [$("title"), $("pageHead"), $("pageFoot")].forEach((r) => {
+    count += replaceInNode(r, find, repl);
+  });
+  flashHint(count ? `已替换 ${count} 处` : "未找到匹配");
+  refreshWordCount();
+  fit();
+  closeReplacePanel();
+}
+
 function applyFormat(cmd) {
   if (!editing) return;
+  if (cmd === "replace") {
+    toggleReplacePanel();
+    return;
+  }
   if (cmd === "clearFormat") {
     clearFormatting();
     return;
@@ -1735,6 +1824,18 @@ function bindControls() {
     setEditing(!editing);
   });
 
+  $("replaceGo").addEventListener("click", runReplace);
+  $("replaceClose").addEventListener("click", closeReplacePanel);
+  [$("replaceFind"), $("replaceRepl")].forEach((inp) => {
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        runReplace();
+      }
+      e.stopPropagation();
+    });
+  });
+
   // 编辑/删减都会改变字数，sheet 上的 input 冒泡统一接住（双语左栏也在 sheet 里）
   $("sheet").addEventListener("input", scheduleWordCount);
 
@@ -1782,6 +1883,11 @@ function bindControls() {
     if (trimming && e.key === "ArrowDown") {
       e.preventDefault();
       trimDescend();
+      return;
+    }
+    if (replaceOpen && e.key === "Escape") {
+      e.preventDefault();
+      closeReplacePanel();
       return;
     }
     if (e.key !== "Escape") return;
