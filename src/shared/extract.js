@@ -229,14 +229,89 @@
     return prevText;
   }
 
+  // 拼译文碎片：两边都是汉字/全角标点时直接相连，否则补一个空格
+  const CJK_CHAR_RE = /[\u2e80-\u9fff\uf900-\ufaff\u3000-\u303f\uff00-\uffef]/;
+
+  function joinDst(parts) {
+    let out = "";
+    parts.forEach((part) => {
+      const text = normText(part);
+      if (!text) return;
+      if (!out) {
+        out = text;
+        return;
+      }
+      const prev = out[out.length - 1];
+      const next = text[0];
+      const needSpace = !CJK_CHAR_RE.test(prev) && !CJK_CHAR_RE.test(next);
+      out += (needSpace ? " " : "") + text;
+    });
+    return out;
+  }
+
+  // 句末标点（允许后面跟空白、引号、右括号）
+  const SENT_END_RE = /[.!?。！？…]\s*["'”’）)\]】]*$/;
+
+  /**
+   * 一个块里可能混着两种截然不同的东西：
+   *   ① 半句被翻译插件切开——「...introduce the [人名译文] ...」，句子没完，
+   *      译文是碎片，不能在这里断段，否则整段被切成一地鸡毛；
+   *   ② 原文本身就是一段接一段——「英文段 + 整段中文」，这里才该断开。
+   * 判据：断点前的原文收在句末标点上、且紧随其后的译文也收在句末标点上。
+   * 返回需要断段的那些标记元素。
+   */
+  function findParagraphCuts(block, marks) {
+    const markSet = new Set(marks);
+    const order = [];
+    const walk = (node) => {
+      Array.from(node.childNodes).forEach((child) => {
+        if (child.nodeType === 3) {
+          order.push({ type: "text", node: child });
+        } else if (child.nodeType === 1) {
+          if (markSet.has(child)) order.push({ type: "mark", node: child });
+          else walk(child);
+        }
+      });
+    };
+    walk(block);
+
+    const cuts = new Set();
+    let srcBuf = "";
+    let dstParts = [];
+    let lastMark = null;
+    order.forEach((item) => {
+      if (item.type === "mark") {
+        dstParts.push(normText(item.node.textContent));
+        lastMark = item.node;
+        return;
+      }
+      const text = normText(item.node.data);
+      if (!text) return;
+      // 上一段已经完整收尾（原文有句末点、译文也有），就从上一处译文断段
+      if (
+        lastMark &&
+        dstParts.length &&
+        srcBuf.trim().length >= 20 &&
+        SENT_END_RE.test(srcBuf) &&
+        SENT_END_RE.test(joinDst(dstParts))
+      ) {
+        cuts.add(lastMark);
+        srcBuf = "";
+        dstParts = [];
+        lastMark = null;
+      }
+      srcBuf += (srcBuf ? " " : "") + text;
+    });
+    return cuts;
+  }
+
   /**
    * 把译文元素从句子里摘出来，返回 [{ src, dst }]。
    * src 与预览页 collectBiRows() 的口径一致（空白折叠、去首尾），
    * 这样预览页可以直接用它填译文缓存，不去打翻译 API。
    *
-   * 页面常见形态是一个块里「英文句 → 中文 span → 英文句 → 中文 span」交替，
-   * 所以要按译文位置把这个块切成多段，每段一段原文配一句译文；
-   * 只按整块取文本配对的话，整篇会只剩一句译文。
+   * 只在「原文本身一段接一段」的位置断段；句中被打散的碎片译文并回整段，
+   * 避免把一句话切成若干残段。
    */
   function splitTranslations(root) {
     const pairs = [];
@@ -262,22 +337,20 @@
       groups.get(block).push(el);
     });
 
-    // 能切块的：按译文位置切分，每段成为独立段落；不可切的整块当一句
     Array.from(groups.entries()).forEach(([block, marks]) => {
       const parent = block.parentNode;
-      const dsts = marks.map((m) => normText(m.textContent));
-      const dstJoined = dsts.filter(Boolean).join(" ");
-      if (!dstJoined) {
+      const allDst = joinDst(marks.map((m) => normText(m.textContent)));
+      if (!allDst) {
         marks.forEach((m) => m.remove());
         return;
       }
 
       // 整块只有译文、没有可配的原文：挂到上一段，否则就把它当正文留着
-      if (normText(block.textContent) === dstJoined) {
+      if (normText(block.textContent) === allDst) {
         marks.forEach((m) => m.remove());
-        const src = attachToPrev(block, dstJoined, root);
+        const src = attachToPrev(block, allDst, root);
         if (src) {
-          pairs.push({ src, dst: dstJoined });
+          pairs.push({ src, dst: allDst });
           block.remove();
         }
         return;
@@ -286,44 +359,67 @@
       if (!parent || !SPLIT_TAGS.has(block.tagName)) {
         // 不可切的块（表格单元格、行）：整块当作一句原文
         marks.forEach((m) => m.remove());
-        pairs.push({ src: normText(block.textContent), dst: dstJoined });
+        pairs.push({ src: normText(block.textContent), dst: allDst });
         return;
       }
 
-      const runs = [];
-      let cursor = null;
+      const cuts = findParagraphCuts(block, marks);
+      if (!cuts.size) {
+        // 全是句中的碎片译文：整段并成一段原文，译文拼起来
+        marks.forEach((m) => m.remove());
+        const src = normText(block.textContent);
+        if (src) pairs.push({ src, dst: allDst });
+        return;
+      }
+
+      // 每段各自的译文：边界标记的译文属于它结束的那一段
+      const segDsts = [[]];
       marks.forEach((m) => {
+        const dst = normText(m.textContent);
+        if (cuts.has(m)) {
+          segDsts[segDsts.length - 1].push(dst);
+          segDsts.push([]);
+          return;
+        }
+        segDsts[segDsts.length - 1].push(dst);
+      });
+
+      // 句中的碎片标记先进范围里摘掉，免得中文被带进原文段
+      marks.forEach((m) => {
+        if (!cuts.has(m)) m.remove();
+      });
+
+      const segs = [];
+      let cursor = null;
+      Array.from(cuts).sort((a, b) => (a.compareDocumentPosition(b) & 4 ? -1 : 1)).forEach((cut, i) => {
         const r = document.createRange();
         if (cursor) r.setStartAfter(cursor);
         else r.setStart(block, 0);
-        r.setEndBefore(m);
-        runs.push({ frag: r.extractContents(), dst: normText(m.textContent) });
-        cursor = m;
+        r.setEndBefore(cut);
+        segs.push({ frag: r.extractContents(), dst: joinDst(segDsts[i] || []) });
+        cursor = cut;
       });
 
-      // 最后一句译文之后的正文
+      // 最后一段
       const tailRange = document.createRange();
       if (cursor) tailRange.setStartAfter(cursor);
       else tailRange.setStart(block, 0);
       tailRange.setEnd(block, block.childNodes.length);
-      const tailFrag = tailRange.extractContents();
-      marks.forEach((m) => m.remove());
+      segs.push({ frag: tailRange.extractContents(), dst: joinDst(segDsts[cuts.size] || []) });
+      Array.from(cuts).forEach((m) => m.remove());
 
-      const segs = [];
-      runs.forEach((run) => {
-        if (!hasContent(run.frag)) {
-          // 两句译文挨着（中间没正文）：译文并到上一段
-          const last = segs[segs.length - 1];
-          if (last && run.dst) last.dst = (last.dst + " " + run.dst).trim();
+      const out = [];
+      segs.forEach((seg) => {
+        if (!hasContent(seg.frag)) {
+          // 空段（相邻两处断点之间没有正文）：译文并到上一段
+          const last = out[out.length - 1];
+          if (last && seg.dst) last.dst = joinDst([last.dst, seg.dst]);
           return;
         }
-        segs.push({ node: makeBlock(block.tagName, run.frag), dst: run.dst });
+        out.push({ node: makeBlock(block.tagName, seg.frag), dst: seg.dst });
       });
-      if (hasContent(tailFrag)) {
-        segs.push({ node: makeBlock(block.tagName, tailFrag), dst: "" });
-      }
 
-      segs.forEach((seg) => {
+      out.forEach((seg) => {
         parent.insertBefore(seg.node, block);
         const src = normText(seg.node.textContent);
         if (seg.dst && src) pairs.push({ src, dst: seg.dst });
