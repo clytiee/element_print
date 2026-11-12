@@ -666,15 +666,23 @@
       '[itemprop="datePublished"]',
       ".post__title__author-date",
       "[class*='byline']",
+      "[class*='author']",
+      "[class*='meta']",
+      "[class*='post']",
       "[class*='date']",
     ];
+    let isoFallback = "";
     for (const sel of selectors) {
       const el = document.querySelector(sel);
       if (!el) continue;
-      const d = extractDateText(el.textContent);
-      if (d) return d;
+      const visible = extractDateText(el.textContent);
+      if (visible && /[A-Za-z]/.test(visible)) return visible;
+      isoFallback = isoFallback || visible;
+      const attrDate = el.getAttribute ? extractDateText(el.getAttribute("datetime") || "") : "";
+      if (attrDate && /[A-Za-z]/.test(attrDate)) return attrDate;
+      isoFallback = isoFallback || attrDate;
     }
-    return "";
+    return isoFallback;
   }
 
   function metaContent(selector, attr = "content") {
@@ -728,6 +736,10 @@
         metaContent('meta[name="author"]', "content") ||
         metaContent('meta[property="article:author"]', "content") ||
         metaContent('meta[name="byline"]', "content") ||
+        metaContent('[class*="byline"]') ||
+        metaContent('[class*="author"]') ||
+        metaContent('[class*="meta"]') ||
+        metaContent('[class*="post"]') ||
         ld.author,
       publishedTime:
         readVisibleDate() ||
