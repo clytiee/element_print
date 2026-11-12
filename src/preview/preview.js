@@ -5,6 +5,7 @@ import {
   THEME_PRESETS,
   MARGIN_PRESETS,
   FONT_PRESETS,
+  BODY_WEIGHTS,
   loadSettings,
   saveSettings,
 } from "../shared/settings.js";
@@ -18,6 +19,36 @@ const $ = (id) => document.getElementById(id);
 
 // 正文图片显示档位：只改预览/打印里的最大宽度，不动抽取下来的原图
 const IMG_SIZE_MAX = { small: "40%", mid: "65%", full: "100%" };
+
+// 10.3″ 掌阅 iReader：1404×1872，4:3 竖屏，页面按 157×209mm 排
+const EREADER_PAGE = {
+  w: "157mm",
+  h: "209mm",
+  mt: 11,
+  mr: 10,
+  mb: 11,
+  ml: 10,
+};
+
+// 电纸书默认排版；切到该格式时套用，之后仍可单项微调
+const EREADER_DEFAULTS = {
+  bodyWeight: "semibold",
+  fontSize: 12.5,
+  lineHeightMode: "ratio",
+  lineHeight: 1.25,
+  paraAfter: 6,
+};
+
+function applyEreaderDefaults(force = false) {
+  const s = state.settings;
+  if (force || s.bodyWeight === DEFAULT_SETTINGS.bodyWeight) s.bodyWeight = EREADER_DEFAULTS.bodyWeight;
+  if (force || s.fontSize === DEFAULT_SETTINGS.fontSize) s.fontSize = EREADER_DEFAULTS.fontSize;
+  if (force || s.lineHeightMode === DEFAULT_SETTINGS.lineHeightMode) s.lineHeightMode = EREADER_DEFAULTS.lineHeightMode;
+  if (force || s.lineHeight === DEFAULT_SETTINGS.lineHeight) s.lineHeight = EREADER_DEFAULTS.lineHeight;
+  if (force || s.paraAfter === DEFAULT_SETTINGS.paraAfter) s.paraAfter = EREADER_DEFAULTS.paraAfter;
+}
+
+const isEreader = (s) => s.pageFormat === "ereader";
 
 const state = {
   settings: { ...DEFAULT_SETTINGS },
@@ -182,8 +213,14 @@ function syncTitleTrans() {
   el.hidden = !text || !biActive();
 }
 
+function updateDocumentTitle() {
+  const base = state.payload && state.payload.title ? state.payload.title : "Element Print";
+  const suffix = isEreader(state.settings) ? " - e-ink" : "";
+  document.title = `${base}${suffix} · Element Print`;
+}
+
 function render(payload) {
-  document.title = payload.title + " · Element Print";
+  updateDocumentTitle();
   $("title").textContent = payload.title;
   syncTitleTrans();
   $("body").innerHTML = payload.html;
@@ -261,10 +298,11 @@ const QUOTE_FONT = 'Georgia, "Constantia", "Times New Roman", serif';
 const URL_FONT = 'Verdana, "Segoe UI", sans-serif';
 
 function buildPageRule(s) {
+  const er = isEreader(s);
   const head = $("pageHead");
   const brand = labelText(head && head.querySelector(".ep-gutter__title")) || "Element Print";
   const src = labelText($("pageSource"));
-  // 页脚左下角：随机格言（关闭时留空，页码仍在右下）
+  // 页脚左下角：随机格言（关闭时留空，右下品牌名仍保留）
   const quote = s.showQuote === false ? "" : quoteLine;
 
 
@@ -277,18 +315,25 @@ function buildPageRule(s) {
     `font-family:${fam};font-size:8pt;width:${w};vertical-align:top;` +
     `padding:1.2mm 0 0;margin:4mm 0 0;border-top:0.5pt solid #c9ccd1;`;
 
-  const headBoxes = s.showHeader === false
+  const headBoxes = er || s.showHeader === false
     ? ""
     : `@top-left{content:${cssString(brand)};${top(BRAND_FONT)}text-align:left;font-weight:500;letter-spacing:.12em;color:#4a4f57;}` +
       `@top-right{content:${cssString(src)};${top(URL_FONT)}text-align:right;color:#6b6b6b;}`;
-  // 页码在页脚右侧，关掉页脚时页码一起不出现
-  const footBoxes = s.showFooter === false
-    ? ""
-    : `@bottom-left{content:${cssString(quote)};${bottom(quote ? "74%" : "50%", QUOTE_FONT)}text-align:left;color:#6b6b6b;}` +
-      `@bottom-right{content:counter(page) " / " counter(pages);${bottom(quote ? "24%" : "50%", GUTTER_FONT)}text-align:right;color:#6b6b6b;font-variant-numeric:tabular-nums;}`;
+  // 电纸书：页脚只保留格言；A4：保留名言 + 页码，受页脚开关控制
+  const footBoxes = er
+    ? `@bottom-left{content:${cssString(quote)};${bottom("100%", QUOTE_FONT)}text-align:left;color:#6b6b6b;}`
+    : s.showFooter === false
+      ? ""
+      : `@bottom-left{content:${cssString(quote)};${bottom(quote ? "74%" : "50%", QUOTE_FONT)}text-align:left;color:#6b6b6b;}` +
+        `@bottom-right{content:counter(page) " / " counter(pages);${bottom(quote ? "24%" : "50%", GUTTER_FONT)}text-align:right;color:#6b6b6b;font-variant-numeric:tabular-nums;}`;
+
+  const size = er ? `${EREADER_PAGE.w} ${EREADER_PAGE.h}` : "A4";
+  const margin = er
+    ? `${EREADER_PAGE.mt}mm ${EREADER_PAGE.mr}mm ${EREADER_PAGE.mb}mm ${EREADER_PAGE.ml}mm`
+    : `${s.marginTop}mm ${s.marginRight}mm ${s.marginBottom}mm ${s.marginLeft}mm`;
 
   return (
-    `@page{size:A4;margin:${s.marginTop}mm ${s.marginRight}mm ${s.marginBottom}mm ${s.marginLeft}mm;` +
+    `@page{size:${size};margin:${margin};` +
     headBoxes +
     footBoxes +
     `}`
@@ -315,6 +360,7 @@ function titleFontStack(s, lang) {
 function applySettings() {
   const s = state.settings;
   const root = document.documentElement;
+  const er = isEreader(s);
 
   root.style.setProperty("--ep-font-size", s.fontSize + "pt");
   root.style.setProperty("--ep-title-size", s.titleSize + "pt");
@@ -324,15 +370,30 @@ function applySettings() {
   );
   root.style.setProperty("--ep-para-before", s.paraBefore + "px");
   root.style.setProperty("--ep-para-after", s.paraAfter + "px");
+  root.style.setProperty("--ep-page-w", er ? EREADER_PAGE.w : "210mm");
+  root.style.setProperty("--ep-page-h", er ? EREADER_PAGE.h : "297mm");
   root.style.setProperty("--ep-columns", s.columns === 2 ? "2" : "1");
   root.style.setProperty("--ep-img-max", IMG_SIZE_MAX[s.imgSize] || IMG_SIZE_MAX.full);
   root.style.setProperty("--ep-indent", s.indent + "em");
-  root.style.setProperty("--ep-mt", s.marginTop + "mm");
-  root.style.setProperty("--ep-mr", s.marginRight + "mm");
-  root.style.setProperty("--ep-mb", s.marginBottom + "mm");
-  root.style.setProperty("--ep-ml", s.marginLeft + "mm");
+  root.style.setProperty(
+    "--ep-mt",
+    er ? EREADER_PAGE.mt + "mm" : s.marginTop + "mm"
+  );
+  root.style.setProperty(
+    "--ep-mr",
+    er ? EREADER_PAGE.mr + "mm" : s.marginRight + "mm"
+  );
+  root.style.setProperty(
+    "--ep-mb",
+    er ? EREADER_PAGE.mb + "mm" : s.marginBottom + "mm"
+  );
+  root.style.setProperty(
+    "--ep-ml",
+    er ? EREADER_PAGE.ml + "mm" : s.marginLeft + "mm"
+  );
 
   $("sheet").dataset.theme = s.theme || "paper";
+  $("sheet").dataset.bodyWeight = s.bodyWeight || "normal";
   $("sheet").classList.toggle("is-span-head", Boolean(s.spanHead));
   // 段落可跨页：正文本体与对照层都要放开 break-inside
   $("body").classList.toggle("is-breakable", Boolean(s.allowBreak));
@@ -342,22 +403,26 @@ function applySettings() {
   const biOn = biActive() && !$("bilingual").hidden;
   $("sheet").classList.toggle("is-bi", biOn);
   $("body").hidden = biOn;
-  // 对照行本身就是左右两列，页面再分栏会变成四列，故双语时锁单栏
-  if (biOn) root.style.setProperty("--ep-columns", "1");
+  // 对照行本身就是左右两列，页面再分栏会变成四列；电纸书竖屏也固定单栏
+  if (biOn || er) root.style.setProperty("--ep-columns", "1");
   root.style.setProperty("--ep-split", (s.biSplit || 57) + "%");
   if (biResizer) biResizer.hidden = !biOn;
 
   root.style.setProperty("--ep-body-font", bodyFontStack(s.bodyFont, state.lang));
+  root.style.setProperty("--ep-body-weight", String(BODY_WEIGHTS[s.bodyWeight] || 400));
   root.style.setProperty("--ep-title-font", titleFontStack(s, state.lang));
 
-  $("pageHead").hidden = s.showHeader === false;
-  $("pageFoot").hidden = s.showFooter === false;
+  $("pageHead").hidden = er || s.showHeader === false;
+  // 电纸书固定打开页脚，只显示格言；A4 页脚受开关控制并显示页码
+  $("pageFoot").hidden = !er && s.showFooter === false;
+  $("pageNo").hidden = er;
   renderQuote();
 
   $("pageRule").textContent = buildPageRule(s);
 
   $("metaUrl").hidden = !s.showUrl;
   $("metaTime").hidden = !s.showTime;
+  updateDocumentTitle();
   const hasAuthor = Boolean((state.payload && state.payload.author || "").trim());
   const hasPubDate = Boolean(formatPubDate(state.payload && state.payload.publishedTime));
   $("meta").hidden = !(s.showUrl || s.showTime || hasAuthor || hasPubDate);
@@ -371,6 +436,9 @@ function syncControls() {
   const fixedLine = s.lineHeightMode === "fixed";
 
   $("bodyFont").value = s.bodyFont || "auto";
+  Array.from($("segBodyWeight").querySelectorAll("button")).forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.value === (BODY_WEIGHTS[s.bodyWeight] ? s.bodyWeight : "normal"));
+  });
   $("titleFont").value = s.titleFont || "inherit";
   $("fontSize").value = String(s.fontSize);
   $("titleSize").value = String(s.titleSize);
@@ -433,6 +501,10 @@ function syncControls() {
     btn.classList.toggle("is-active", btn.dataset.value === activePreset);
   });
 
+  Array.from($("segPageFormat").querySelectorAll("button")).forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.value === (s.pageFormat || "a4"));
+  });
+
   Array.from($("segColumns").querySelectorAll("button")).forEach((btn) => {
     btn.classList.toggle("is-active", Number(btn.dataset.value) === s.columns);
   });
@@ -440,10 +512,15 @@ function syncControls() {
   Array.from($("segImgSize").querySelectorAll("button")).forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.value === (s.imgSize || "full"));
   });
-  // 双语对照时栏数用不上（固定单栏），按钮置灰并给一句说明
+  // 双语对照和电纸书竖屏都固定单栏
+  const erNow = isEreader(s);
   const biNow = biActive() && !$("bilingual").hidden;
-  $("segColumns").classList.toggle("is-disabled", biNow);
-  $("columnsNote").textContent = biNow ? "双语对照下固定单栏" : "";
+  $("segColumns").classList.toggle("is-disabled", biNow || erNow);
+  $("columnsNote").textContent = biNow
+    ? "双语对照下固定单栏"
+    : erNow
+      ? "电纸书格式固定单栏"
+      : "";
 
   Array.from($("segTheme").querySelectorAll("button")).forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.value === (s.theme || "paper"));
@@ -1250,7 +1327,7 @@ function onPickClick(e) {
     state.payload.titleTrans = ""; // 页面原带的那句标题译文对新标题已不成立
   }
   syncTitleTrans();
-  document.title = text + " · Element Print";
+  updateDocumentTitle();
   // 剪切：这一块从正文里拿走（双语时连 #body 里对应的原文块、以及整行对照一起拿）
   let line = null;
   if (biActive()) {
@@ -1764,8 +1841,10 @@ function switchTheme(theme) {
     targetLang: state.settings.targetLang,
     bilingual: state.settings.bilingual,
     imgSize: state.settings.imgSize,
+    pageFormat: state.settings.pageFormat,
   };
   state.settings = { ...preset, ...keep };
+  if (isEreader(state.settings)) applyEreaderDefaults(true);
   syncControls();
   applySettings();
   saveSettings(state.settings);
@@ -1782,6 +1861,12 @@ function bindControls() {
     if (!btn) return;
     update({ columns: Number(btn.dataset.value) });
   });
+  $("segPageFormat").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-value]");
+    if (!btn) return;
+    const pageFormat = btn.dataset.value;
+    update(pageFormat === "ereader" ? { pageFormat, ...EREADER_DEFAULTS } : { pageFormat });
+  });
   $("segImgSize").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-value]");
     if (!btn) return;
@@ -1796,6 +1881,11 @@ function bindControls() {
 
   $("fontSize").addEventListener("input", (e) => update({ fontSize: Number(e.target.value) }));
   $("bodyFont").addEventListener("change", (e) => update({ bodyFont: e.target.value }));
+  $("segBodyWeight").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-value]");
+    if (!btn) return;
+    update({ bodyWeight: btn.dataset.value });
+  });
   $("titleFont").addEventListener("change", (e) => update({ titleFont: e.target.value }));
   $("titleSize").addEventListener("input", (e) => update({ titleSize: Number(e.target.value) }));
   $("lineHeight").addEventListener("input", (e) => {
@@ -2044,22 +2134,26 @@ async function buildExportHtml() {
     )
   ).join("\n");
   const fontFaces = await inlineFontFaces();
+  const er = isEreader(s);
   const vars = [
     `--ep-font-size:${s.fontSize}pt`,
     `--ep-title-size:${s.titleSize}pt`,
     `--ep-line-height:${s.lineHeightMode === "fixed" ? s.lineHeightFixed + "pt" : s.lineHeight}`,
     `--ep-para-before:${s.paraBefore}px`,
     `--ep-para-after:${s.paraAfter}px`,
-    `--ep-columns:${biActive() ? 1 : s.columns === 2 ? 2 : 1}`,
+    `--ep-columns:${biActive() || er ? 1 : s.columns === 2 ? 2 : 1}`,
     `--ep-img-max:${IMG_SIZE_MAX[s.imgSize] || IMG_SIZE_MAX.full}`,
     `--ep-split:${(s.biSplit || 57)}%`,
     `--ep-indent:${s.indent}em`,
     `--ep-body-font:${bodyFontStack(s.bodyFont, state.lang)}`,
+    `--ep-body-weight:${BODY_WEIGHTS[s.bodyWeight] || 400}`,
     `--ep-title-font:${titleFontStack(s, state.lang)}`,
-    `--ep-mt:${s.marginTop}mm`,
-    `--ep-mr:${s.marginRight}mm`,
-    `--ep-mb:${s.marginBottom}mm`,
-    `--ep-ml:${s.marginLeft}mm`,
+    `--ep-page-w:${er ? EREADER_PAGE.w : "210mm"}`,
+    `--ep-page-h:${er ? EREADER_PAGE.h : "297mm"}`,
+    `--ep-mt:${er ? EREADER_PAGE.mt : s.marginTop}mm`,
+    `--ep-mr:${er ? EREADER_PAGE.mr : s.marginRight}mm`,
+    `--ep-mb:${er ? EREADER_PAGE.mb : s.marginBottom}mm`,
+    `--ep-ml:${er ? EREADER_PAGE.ml : s.marginLeft}mm`,
   ].join(";");
 
   const sheetCopy = $("sheet").cloneNode(true);
@@ -2076,12 +2170,13 @@ async function buildExportHtml() {
   });
   const sheetHtml = sheetCopy.innerHTML;
   const title = state.payload ? state.payload.title : "Element Print";
+  const docTitle = er ? `${title} - e-ink` : title;
 
   return `<!DOCTYPE html>
 <html lang="${state.lang === "en" ? "en" : "zh-CN"}">
 <head>
 <meta charset="utf-8">
-<title>${esc(title)}</title>
+<title>${esc(docTitle)}</title>
 <style>
 ${css}
 ${fontFaces}
@@ -2109,7 +2204,8 @@ async function exportHtml() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = safeFileName(state.payload.title) + ".html";
+  const suffix = isEreader(state.settings) ? "-e-ink" : "";
+  a.download = safeFileName(state.payload.title) + suffix + ".html";
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -2130,6 +2226,7 @@ function fillFontSelects() {
 
 async function init() {
   state.settings = await loadSettings();
+  if (isEreader(state.settings)) applyEreaderDefaults();
   await loadBiCache(); // 上次留下的段落译文先灌进内存，命中就不必再打 API
   fillFontSelects();
   syncControls();

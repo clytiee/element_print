@@ -529,13 +529,19 @@ body {
   grid-template-columns: repeat(3, 1fr);
 }
 
+/* 字重四档均分成四列 */
+.ep-seg--four {
+  grid-template-columns: repeat(4, 1fr);
+}
+
 /* 当前用不上的分段控件（如双语对照下的栏数）置灰 */
 .ep-seg.is-disabled {
   opacity: 0.45;
   pointer-events: none;
 }
 
-.ep-seg--three button {
+.ep-seg--three button,
+.ep-seg--four button {
   font-size: 12px;
   padding: 7px 2px;
 }

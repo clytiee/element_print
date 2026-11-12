@@ -156,6 +156,14 @@
         </section>
 
         <section class="ep-field">
+          <div class="ep-field__label">页面格式</div>
+          <div class="ep-seg" id="segPageFormat">
+            <button type="button" data-value="a4" class="is-active">A4</button>
+            <button type="button" data-value="ereader">电纸书 10.3″</button>
+          </div>
+        </section>
+
+        <section class="ep-field">
           <div class="ep-field__label">图片大小</div>
           <div class="ep-seg ep-seg--three" id="segImgSize">
             <button type="button" data-value="small">小</button>
@@ -167,6 +175,16 @@
         <section class="ep-field">
           <div class="ep-field__label">正文字体</div>
           <select class="ep-select" id="bodyFont"></select>
+        </section>
+
+        <section class="ep-field">
+          <div class="ep-field__label">字重</div>
+          <div class="ep-seg ep-seg--four" id="segBodyWeight">
+            <button type="button" data-value="normal" class="is-active">常规</button>
+            <button type="button" data-value="medium">中等</button>
+            <button type="button" data-value="semibold">半粗</button>
+            <button type="button" data-value="bold">粗体</button>
+          </div>
         </section>
 
         <section class="ep-field">
@@ -244,7 +262,7 @@
           <label class="ep-check"><input type="checkbox" id="spanHead" /><span>一级标题跨栏（双栏时）</span></label>
           <label class="ep-check"><input type="checkbox" id="allowBreak" /><span>段落可跨页<em class="ep-check__note">取消勾选则整段移到下一页</em></span></label>
           <label class="ep-check"><input type="checkbox" id="showHeader" /><span>显示页眉</span></label>
-          <label class="ep-check"><input type="checkbox" id="showFooter" /><span>显示页脚<em class="ep-check__note">页码在页脚右，打印时生成</em></span></label>
+          <label class="ep-check"><input type="checkbox" id="showFooter" /><span>显示页脚<em class="ep-check__note">A4 右下页码，电纸书只显示格言</em></span></label>
           <label class="ep-check"><input type="checkbox" id="showQuote" /><span>页脚名言<em class="ep-check__note">随机一句，取自本地名句库</em></span></label>
         </section>
 

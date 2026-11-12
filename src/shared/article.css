@@ -29,6 +29,7 @@
   --ep-indent: 0em;
   /* 正文字体 / 标题字体由设置面板写入，默认「西文 Times + 中文宋体」，标题跟随正文 */
   --ep-body-font: "Times New Roman", Georgia, "Noto Serif SC", "Source Han Serif SC", "思源宋体 CN", "Songti SC", "SimSun", serif;
+  --ep-body-weight: 400;
   --ep-title-font: var(--ep-body-font);
   --ep-mt: 15mm;
   --ep-mr: 15mm;
@@ -49,13 +50,14 @@
 .ep-sheet {
   box-sizing: border-box;
   position: relative;
-  width: 210mm;
-  min-height: 297mm;
+  width: var(--ep-page-w, 210mm);
+  min-height: var(--ep-page-h, 297mm);
   padding: var(--ep-mt) var(--ep-mr) var(--ep-mb) var(--ep-ml);
   background: #fff;
   color: var(--ep-ink);
   /* 拉丁字母优先走 Times（与中文宋体笔画重量更接近），汉字再按字符回退到思源宋体 */
   font-family: var(--ep-body-font);
+  font-weight: var(--ep-body-weight);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -131,6 +133,9 @@
 .ep-gutter__page {
   min-width: 0;
   text-align: right;
+}
+
+.ep-gutter__page {
   font-variant-numeric: tabular-nums;
 }
 
@@ -280,6 +285,28 @@
 .ep-body h4,
 .ep-body h5,
 .ep-body h6 { font-size: 1.02em; }
+
+/* 正文用半粗/粗体时，原来的加粗文字靠下划线和正文拉开层级 */
+.ep-sheet[data-body-weight="semibold"] .ep-body b,
+.ep-sheet[data-body-weight="semibold"] .ep-body strong,
+.ep-sheet[data-body-weight="semibold"] .ep-body h1,
+.ep-sheet[data-body-weight="semibold"] .ep-body h2,
+.ep-sheet[data-body-weight="semibold"] .ep-body h3,
+.ep-sheet[data-body-weight="semibold"] .ep-body h4,
+.ep-sheet[data-body-weight="semibold"] .ep-body h5,
+.ep-sheet[data-body-weight="semibold"] .ep-body h6,
+.ep-sheet[data-body-weight="bold"] .ep-body b,
+.ep-sheet[data-body-weight="bold"] .ep-body strong,
+.ep-sheet[data-body-weight="bold"] .ep-body h1,
+.ep-sheet[data-body-weight="bold"] .ep-body h2,
+.ep-sheet[data-body-weight="bold"] .ep-body h3,
+.ep-sheet[data-body-weight="bold"] .ep-body h4,
+.ep-sheet[data-body-weight="bold"] .ep-body h5,
+.ep-sheet[data-body-weight="bold"] .ep-body h6 {
+  text-decoration: underline;
+  text-decoration-thickness: 0.5pt;
+  text-underline-offset: 3px;
+}
 
 .ep-body h1:first-child,
 .ep-body h2:first-child,

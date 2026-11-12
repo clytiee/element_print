@@ -40,6 +40,13 @@ export const FONT_PRESETS = {
   },
 };
 
+export const BODY_WEIGHTS = {
+  normal: 400,
+  medium: 500,
+  semibold: 600,
+  bold: 700,
+};
+
 export const DEFAULT_SETTINGS = {
   theme: "paper", // paper（原版报纸感） | academic（学术期刊）
   columns: 1, // 1 | 2
@@ -52,6 +59,7 @@ export const DEFAULT_SETTINGS = {
   paraAfter: 9, // px
   indent: 0, // 首行缩进（字）
   bodyFont: "auto", // FONT_PRESETS 的 key
+  bodyWeight: "normal", // BODY_WEIGHTS 的 key
   titleFont: "inherit", // inherit（跟随正文）| FONT_PRESETS 的 key
   spanHead: false, // 双栏时一级标题是否跨栏
   allowBreak: true, // 段落可否跨页（默认允许段落从中间断开）
@@ -64,6 +72,7 @@ export const DEFAULT_SETTINGS = {
   showHeader: true, // 页眉（Element Print / 摘自 域名）
   showFooter: true, // 页脚（品牌 + 页码）
   showQuote: true, // 页脚左下角随机显示一句名言
+  pageFormat: "a4", // a4 | ereader（10.3″ 4:3 电纸书）
   bilingual: false, // 双语对照：左原文 / 右译文（逐段对齐）
   biSplit: 57, // 原文列宽（%），中西文宽度差明显，默认原文略宽
   biCacheMax: 5000, // 最多保留多少段译文缓存，超出按最近使用裁旧
@@ -90,6 +99,7 @@ export const THEME_PRESETS = {
     paraAfter: 9,
     indent: 0,
     bodyFont: "auto",
+    bodyWeight: "normal",
     titleFont: "inherit",
     spanHead: false,
     allowBreak: true,
@@ -115,6 +125,7 @@ export const THEME_PRESETS = {
     paraAfter: 0,
     indent: 2,
     bodyFont: "auto",
+    bodyWeight: "normal",
     titleFont: "hei",
     spanHead: false,
     allowBreak: true,
@@ -141,6 +152,7 @@ export const THEME_PRESETS = {
     paraAfter: 0,
     indent: 2,
     bodyFont: "fangsong",
+    bodyWeight: "normal",
     titleFont: "song",
     spanHead: false,
     allowBreak: true,
@@ -201,6 +213,7 @@ function normalize(raw) {
   if (typeof raw.showHeader === "boolean") base.showHeader = raw.showHeader;
   if (typeof raw.showFooter === "boolean") base.showFooter = raw.showFooter;
   if (typeof raw.showQuote === "boolean") base.showQuote = raw.showQuote;
+  if (raw.pageFormat === "ereader") base.pageFormat = "ereader";
   if (typeof raw.bilingual === "boolean") base.bilingual = raw.bilingual;
   base.biSplit = clamp(raw.biSplit, 35, 70, base.biSplit);
   base.biCacheMax = clamp(raw.biCacheMax, 100, 20000, base.biCacheMax);
@@ -216,6 +229,7 @@ function normalize(raw) {
     base.targetLang = raw.targetLang.toUpperCase();
   }
   if (FONT_PRESETS[raw.bodyFont]) base.bodyFont = raw.bodyFont;
+  if (BODY_WEIGHTS[raw.bodyWeight]) base.bodyWeight = raw.bodyWeight;
   if (raw.titleFont === "inherit" || FONT_PRESETS[raw.titleFont]) {
     base.titleFont = raw.titleFont;
   }
