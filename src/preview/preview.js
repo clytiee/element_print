@@ -344,7 +344,8 @@ function applySettings() {
   $("body").hidden = biOn;
   // 对照行本身就是左右两列，页面再分栏会变成四列，故双语时锁单栏
   if (biOn) root.style.setProperty("--ep-columns", "1");
-  root.style.setProperty("--ep-split", (s.biSplit || 58) + "%");
+  root.style.setProperty("--ep-split", (s.biSplit || 57) + "%");
+  if (biResizer) biResizer.hidden = !biOn;
 
   root.style.setProperty("--ep-body-font", bodyFontStack(s.bodyFont, state.lang));
   root.style.setProperty("--ep-title-font", titleFontStack(s, state.lang));
@@ -1522,9 +1523,44 @@ function biBadge(tgt, kind) {
   tgt.appendChild(badge);
 }
 
+let biResizer = null;
+
+function ensureBiResizer() {
+  const box = $("bilingual");
+  if (!biResizer) {
+    biResizer = document.createElement("div");
+    biResizer.id = "biResizer";
+    biResizer.className = "ep-bi-resizer";
+    biResizer.addEventListener("pointerdown", onBiResizerDown);
+  }
+  if (biResizer.parentElement !== box) box.appendChild(biResizer);
+  return biResizer;
+}
+
+function onBiResizerDown(e) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  const box = $("bilingual");
+  const rect = box.getBoundingClientRect();
+  biResizer.classList.add("is-dragging");
+  const move = (ev) => {
+    const ratio = ((ev.clientX - rect.left) / rect.width) * 100;
+    const split = Math.round(Math.min(70, Math.max(35, ratio)));
+    update({ biSplit: split });
+  };
+  const up = () => {
+    biResizer.classList.remove("is-dragging");
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}
+
 function buildBilingual(rows) {
   const box = $("bilingual");
   box.innerHTML = "";
+  ensureBiResizer();
   biPending = 0;
   rows.forEach((row) => {
     const line = document.createElement("div");
@@ -2011,7 +2047,7 @@ async function buildExportHtml() {
     `--ep-para-after:${s.paraAfter}px`,
     `--ep-columns:${biActive() ? 1 : s.columns === 2 ? 2 : 1}`,
     `--ep-img-max:${IMG_SIZE_MAX[s.imgSize] || IMG_SIZE_MAX.full}`,
-    `--ep-split:${(s.biSplit || 58)}%`,
+    `--ep-split:${(s.biSplit || 57)}%`,
     `--ep-indent:${s.indent}em`,
     `--ep-body-font:${bodyFontStack(s.bodyFont, state.lang)}`,
     `--ep-title-font:${titleFontStack(s, state.lang)}`,
@@ -2024,7 +2060,7 @@ async function buildExportHtml() {
   const sheetCopy = $("sheet").cloneNode(true);
   sheetCopy.classList.remove("is-editing");
   // 「缓存」小标签只是编辑时的提示，不进导出的文档
-  sheetCopy.querySelectorAll(".ep-bi__badge").forEach((node) => node.remove());
+  sheetCopy.querySelectorAll(".ep-bi__badge, .ep-bi-resizer").forEach((node) => node.remove());
   sheetCopy.querySelectorAll(".ep-trim-hover, .is-trimming").forEach((node) => {
     node.classList.remove("ep-trim-hover");
     node.classList.remove("is-trimming");

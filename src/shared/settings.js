@@ -65,7 +65,7 @@ export const DEFAULT_SETTINGS = {
   showFooter: true, // 页脚（品牌 + 页码）
   showQuote: true, // 页脚左下角随机显示一句名言
   bilingual: false, // 双语对照：左原文 / 右译文（逐段对齐）
-  biSplit: 58, // 原文列宽（%），中西文宽度差明显，默认原文略宽
+  biSplit: 57, // 原文列宽（%），中西文宽度差明显，默认原文略宽
   biCacheMax: 5000, // 最多保留多少段译文缓存，超出按最近使用裁旧
   imgSize: "full", // 正文图片显示档位：small（小）| mid（中）| full（原大）
   deeplKey: "", // DeepL Auth Key（仅存本地）
@@ -92,6 +92,8 @@ export const THEME_PRESETS = {
     bodyFont: "auto",
     titleFont: "inherit",
     spanHead: false,
+    allowBreak: true,
+    biSplit: 57,
     marginTop: 15,
     marginRight: 15,
     marginBottom: 15,
@@ -114,7 +116,9 @@ export const THEME_PRESETS = {
     indent: 2,
     bodyFont: "auto",
     titleFont: "hei",
-    spanHead: true,
+    spanHead: false,
+    allowBreak: true,
+    biSplit: 57,
     marginTop: 22,
     marginRight: 20,
     marginBottom: 20,
@@ -139,6 +143,8 @@ export const THEME_PRESETS = {
     bodyFont: "fangsong",
     titleFont: "song",
     spanHead: false,
+    allowBreak: true,
+    biSplit: 57,
     marginTop: 37,
     marginRight: 26,
     marginBottom: 35,

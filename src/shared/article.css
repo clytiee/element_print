@@ -421,6 +421,7 @@
 
 /* 双语对照：每个段落成一行，左原文右译文，两列顶线对齐 */
 .ep-bilingual {
+  position: relative;
   display: flex;
   flex-direction: column;
   font-size: var(--ep-font-size);
@@ -433,7 +434,7 @@
 .ep-bi__row {
   display: grid;
   /* 左原文 / 右译文，宽度比例由 --ep-split 控制（中文比西文短，默认原文略宽） */
-  grid-template-columns: var(--ep-split, 58%) minmax(0, 1fr);
+  grid-template-columns: var(--ep-split, 57%) minmax(0, 1fr);
   column-gap: 2em;
   align-items: start;
   break-inside: avoid;
@@ -479,6 +480,34 @@
 
 .ep-bi__row + .ep-bi__row {
   margin-top: var(--ep-para-after);
+}
+
+/* 双语对照：栏间拖拽柄，只作用于左右两列宽度 */
+.ep-bi-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--ep-split, 57%) + 1em);
+  width: 12px;
+  margin-left: -6px;
+  cursor: col-resize;
+  z-index: 4;
+  touch-action: none;
+}
+
+.ep-bi-resizer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 2px;
+  background: transparent;
+}
+
+.ep-bi-resizer:hover::before,
+.ep-bi-resizer.is-dragging::before {
+  background: #64748b;
 }
 
 /* 译文：同字号下中文比西文显大，压一档；不缩进，免得把译文挤歪 */
