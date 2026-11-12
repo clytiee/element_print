@@ -214,6 +214,36 @@
     return Boolean(frag.querySelector && frag.querySelector("img,table,hr"));
   }
 
+  function hasBlockChild(node) {
+    return Boolean(node && Array.from(node.children).some((c) => BLOCK_TAGS.has(c.tagName)));
+  }
+
+  // 这一段译文该跟谁配对：
+  //   译文在叶子块里（只装行内内容）→ 就是那个块，按段落口径配对；
+  //   译文在「还套着别的块」的外层容器里（作者名、按钮这类）→ 退到最近的行内容器，
+  //   否则会把整块（含下面几段地址）都当成它的原文。
+  function pairUnit(el, root) {
+    const block = nearestBlock(el, root);
+    if (block && !hasBlockChild(block)) return block;
+    let node = el;
+    while (node.parentElement && node.parentElement !== root.parentElement) {
+      const parent = node.parentElement;
+      if (parent === root || hasBlockChild(parent)) break;
+      node = parent;
+    }
+    return node;
+  }
+
+  function depthOf(el, root) {
+    let depth = 0;
+    let node = el;
+    while (node && node !== root) {
+      if (node.parentElement && BLOCK_TAGS.has(node.parentElement.tagName)) depth += 1;
+      node = node.parentElement;
+    }
+    return depth;
+  }
+
   function makeBlock(tag, frag) {
     const el = document.createElement(tag.toLowerCase());
     el.appendChild(frag);
@@ -257,7 +287,8 @@
    *   ① 半句被翻译插件切开——「...introduce the [人名译文] ...」，句子没完，
    *      译文是碎片，不能在这里断段，否则整段被切成一地鸡毛；
    *   ② 原文本身就是一段接一段——「英文段 + 整段中文」，这里才该断开。
-   * 判据：断点前的原文收在句末标点上、且紧随其后的译文也收在句末标点上。
+   * 判据：紧挨译文之前的原文（同一处文字，不是累计文本）收在句末标点上、
+   * 且紧随其后的译文也收在句末标点上。只看累计文本会把句与句之间误判成断段。
    * 返回需要断段的那些标记元素。
    */
   function findParagraphCuts(block, marks) {
@@ -277,6 +308,7 @@
 
     const cuts = new Set();
     let srcBuf = "";
+    let prevText = "";
     let dstParts = [];
     let lastMark = null;
     order.forEach((item) => {
@@ -287,19 +319,23 @@
       }
       const text = normText(item.node.data);
       if (!text) return;
-      // 上一段已经完整收尾（原文有句末点、译文也有），就从上一处译文断段
+      // 上一段已经完整收尾（紧挨着的原文有句末点、译文也有），就从上一处译文断段；
+      // 紧邻的原文太短（"et al." 这类缩写）不算一段的结尾
       if (
         lastMark &&
         dstParts.length &&
         srcBuf.trim().length >= 20 &&
-        SENT_END_RE.test(srcBuf) &&
+        prevText.length >= 20 &&
+        SENT_END_RE.test(prevText) &&
         SENT_END_RE.test(joinDst(dstParts))
       ) {
         cuts.add(lastMark);
         srcBuf = "";
         dstParts = [];
+        prevText = "";
         lastMark = null;
       }
+      prevText = text;
       srcBuf += (srcBuf ? " " : "") + text;
     });
     return cuts;
@@ -320,7 +356,7 @@
     // 嵌套标记交给最外层处理，避免同一句被拆两次
     const tops = marked.filter((el) => !marked.some((m) => m !== el && m.contains(el)));
 
-    // 先归组：普通标记归到所在块；本身就是块级元素的标记算「整块译文」
+    // 先归组：按配对待（叶子块 / 行内容器）归并；本身就是块级元素的标记算「整块译文」
     const groups = new Map();
     const loneBlocks = [];
     tops.forEach((el) => {
@@ -328,20 +364,31 @@
         loneBlocks.push(el);
         return;
       }
-      const block = nearestBlock(el, root);
-      if (!block) {
+      const unit = pairUnit(el, root);
+      if (!unit) {
         loneBlocks.push(el);
         return;
       }
-      if (!groups.has(block)) groups.set(block, []);
-      groups.get(block).push(el);
+      if (!groups.has(unit)) groups.set(unit, []);
+      groups.get(unit).push(el);
     });
 
-    Array.from(groups.entries()).forEach(([block, marks]) => {
+    // 深层先处理：外层容器配对时要读到已经被清掉译文的干净原文
+    Array.from(groups.entries())
+      .sort((a, b) => depthOf(b[0], root) - depthOf(a[0], root))
+      .forEach(([block, marks]) => {
       const parent = block.parentNode;
       const allDst = joinDst(marks.map((m) => normText(m.textContent)));
       if (!allDst) {
         marks.forEach((m) => m.remove());
+        return;
+      }
+
+      // 行内容器（作者名、按钮文字这类）：只摘译文、不切块
+      if (!BLOCK_TAGS.has(block.tagName)) {
+        marks.forEach((m) => m.remove());
+        const src = normText(block.textContent);
+        if (src && src !== allDst) pairs.push({ src, dst: allDst });
         return;
       }
 
