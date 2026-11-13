@@ -237,12 +237,20 @@ function siteNameOf(url) {
   }
 }
 
-// 标题译文：页面翻译过标题时，中文贴在英文标题下面；只在对照视图里出现
+// 标题译文：页面翻译过标题时，中文贴在英文标题下面；只在翻译视图里出现
 function syncTitleTrans() {
   const el = $("titleTrans");
   const text = (state.payload && state.payload.titleTrans) || "";
   el.textContent = text;
-  el.hidden = !text || !biActive();
+  el.hidden = !text || !(biActive() || serialActive());
+}
+
+// 摘要译文：跟标题译文一样，只在对照 / 串行翻译视图里出现
+function syncExcerptTrans() {
+  const el = $("excerptTrans");
+  const text = (state.payload && state.payload.excerptTrans) || "";
+  el.textContent = text;
+  el.hidden = !text || !(biActive() || serialActive());
 }
 
 function updateDocumentTitle() {
@@ -289,6 +297,7 @@ function render(payload) {
   const excerpt = (payload.excerpt || "").trim();
   $("excerpt").textContent = excerpt;
   $("excerpt").hidden = !excerpt;
+  syncExcerptTrans();
 }
 
 /* ---------- @page（含页边距盒里的页眉页脚与页码） ---------- */
@@ -756,7 +765,7 @@ function syncBiEdit(e) {
 // 进入编辑时留一份内容快照：Esc 退出时用来判断有没有改动，取消则按快照还原
 let editSnapshot = null;
 
-const EDIT_REGIONS = ["title", "titleTrans", "body", "pageHead", "pageFoot", "excerpt", "metaAuthor", "metaPubDate"];
+const EDIT_REGIONS = ["title", "titleTrans", "body", "pageHead", "pageFoot", "excerpt", "excerptTrans", "metaAuthor", "metaPubDate"];
 
 function takeEditSnapshot() {
   const snap = {};
@@ -781,10 +790,12 @@ function restoreEditSnapshot() {
     state.payload.publishedTime = $("metaPubDate").textContent.replace(/\s+/g, " ").trim();
     state.payload.excerpt = $("excerpt").textContent.replace(/\s+/g, " ").trim();
     state.payload.titleTrans = $("titleTrans").textContent.replace(/\s+/g, " ").trim();
+    state.payload.excerptTrans = $("excerptTrans").textContent.replace(/\s+/g, " ").trim();
     $("metaAuthor").hidden = !state.payload.author;
     $("metaPubDate").hidden = !state.payload.publishedTime;
     $("excerpt").hidden = !state.payload.excerpt;
     $("titleTrans").hidden = !state.payload.titleTrans;
+    $("excerptTrans").hidden = !state.payload.excerptTrans;
   }
   editSnapshot = null;
   refreshWordCount();
@@ -803,6 +814,7 @@ function setEditing(on) {
     $("pageHead"),
     $("pageFoot"),
     $("excerpt"),
+    $("excerptTrans"),
     $("metaAuthor"),
     $("metaPubDate"),
   ].forEach((node) => {
@@ -1888,7 +1900,8 @@ function syncBiButton() {
   $("origBtn").classList.toggle("is-on", state.view === "source");
   $("mixBtn").classList.toggle("is-on", state.view === "mixed");
   $("biBtn").classList.toggle("is-on", biActive() || serialActive());
-  syncTitleTrans(); // 标题译文只跟对照视图一起出现/隐藏
+  syncTitleTrans(); // 标题译文只跟翻译视图一起出现/隐藏
+  syncExcerptTrans();
 }
 
 // 译文是否已经就绪：记住上次成功翻译时的原文指纹，内容没变就不再打 API
@@ -2302,6 +2315,7 @@ function bindControls() {
   bindMetaEdit("metaAuthor", "author");
   bindMetaEdit("metaPubDate", "publishedTime");
   bindMetaEdit("excerpt", "excerpt");
+  bindMetaEdit("excerptTrans", "excerptTrans");
   bindMetaEdit("titleTrans", "titleTrans");
 
   // 按下时就阻止默认，避免按钮抢走输入焦点导致选区丢失

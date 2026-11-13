@@ -206,6 +206,17 @@
   word-break: break-word;
 }
 
+/* 摘要译文：贴在摘要原文下面，略小一号 */
+.ep-excerpt-trans {
+  margin: 0.8mm 0 0;
+  font-family: var(--ep-body-font);
+  font-size: 0.85em;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--ep-sub);
+  word-break: break-word;
+}
+
 .ep-rule {
   display: none; /* 分隔线改到页眉下，标题下不再画线 */
   height: 0;

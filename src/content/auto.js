@@ -71,6 +71,62 @@
     return "";
   }
 
+  function sameText(src, wanted) {
+    if (!src || !wanted) return false;
+    if (src === wanted || src.includes(wanted) || wanted.includes(src)) return true;
+    const min = Math.min(src.length, wanted.length);
+    if (min < 12) return false;
+    let i = 0;
+    while (i < min && src[i] === wanted[i]) i += 1;
+    return i / min >= 0.8;
+  }
+
+  // 摘要译文：优先直接定位页面 Abstract 容器/标题，不依赖导语文本是否匹配
+  function readAbstractTranslation() {
+    const scopes = Array.from(
+      document.querySelectorAll(
+        ".hlFld-Abstract, .abstractSection, .abstractInFull, [class*=abstract], [class*=excerpt], [class*=summary]"
+      )
+    );
+    for (const el of scopes) {
+      const marks = transMarks(el);
+      if (marks.length) {
+        const longest = marks.sort((a, b) => b.textContent.length - a.textContent.length)[0];
+        return normText(longest.textContent);
+      }
+    }
+    const heads = Array.from(document.querySelectorAll("h1, h2, h3"));
+    for (const head of heads) {
+      if (!/abstract|摘要|抽象的/i.test(head.textContent)) continue;
+      const next = head.nextElementSibling || head.parentElement;
+      const marks = next ? transMarks(next) : [];
+      if (marks.length) {
+        const longest = marks.sort((a, b) => b.textContent.length - a.textContent.length)[0];
+        return normText(longest.textContent);
+      }
+    }
+    return "";
+  }
+
+  // 摘要/导语译文：回原页面摘要节点里按原文模糊匹配
+  function readExcerptTranslation(excerpt) {
+    const wanted = normText(excerpt);
+    if (!wanted) return "";
+    const candidates = document.querySelectorAll(
+      "p,div,section,blockquote,[class*=abstract],[class*=excerpt],[class*=summary],[class*=lead]"
+    );
+    for (const el of candidates) {
+      const marks = transMarks(el);
+      if (!marks.length) continue;
+      const dst = normText(marks.map((m) => m.textContent).join(" "));
+      const src = normText(el.textContent.replace(dst, ""));
+      if (!src.length) continue;
+      const lenRatio = Math.max(src.length, wanted.length) / Math.min(src.length, wanted.length);
+      if (lenRatio <= 2 && sameText(src, wanted)) return dst;
+    }
+    return "";
+  }
+
   async function run() {
     toast("正在自动识别正文…", true);
 
@@ -98,6 +154,7 @@
       author: article.byline || "",
       publishedTime: article.publishedTime || "",
       excerpt: article.excerpt || "",
+      excerptTrans: readAbstractTranslation() || readExcerptTranslation(article.excerpt || ""),
     });
     if (article.title && article.title.trim()) {
       payload.title = article.title.trim();

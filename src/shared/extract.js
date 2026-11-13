@@ -340,6 +340,27 @@
    * 且紧随其后的译文也收在句末标点上。只看累计文本会把句与句之间误判成断段。
    * 返回需要断段的那些标记元素。
    */
+  // 导语/摘要可能来自 meta 或 JSON-LD，和正文段落的空白、截断略有差异；
+  // 精确匹配失败时，再按包含关系或前缀重合度找一次对应译文。
+  function findExcerptPair(excerptText, pairs) {
+    if (!excerptText) return null;
+    const list = pairs || [];
+    const exact = list.find((pair) => pair.src === excerptText);
+    if (exact) return exact;
+    if (excerptText.length < 12) return null;
+    return (
+      list.find((pair) => {
+        const src = pair.src;
+        if (!src) return false;
+        if (src.includes(excerptText) || excerptText.includes(src)) return true;
+        const min = Math.min(src.length, excerptText.length);
+        let i = 0;
+        while (i < min && src[i] === excerptText[i]) i += 1;
+        return min >= 12 && i / min >= 0.8;
+      }) || null
+    );
+  }
+
   function findParagraphCuts(block, marks) {
     const markSet = new Set(marks);
     const order = [];
@@ -640,6 +661,33 @@
     return null;
   }
 
+  // 学术页面常把摘要放在 .abstractSection / .abstractInFull / .hlFld-Abstract 里；
+  // 这类可见摘要优先作为导语，避免回退到被 meta 截断的 description。
+  function findAbstractParagraph(root) {
+    if (!root) return null;
+    const selectors = [
+      ".hlFld-Abstract p",
+      ".abstractSection p",
+      ".abstractInFull p",
+      "[class*='abstract'] p",
+    ];
+    for (const sel of selectors) {
+      const found = Array.from(root.querySelectorAll(sel)).find((n) => normText(n.textContent));
+      if (found) return found;
+    }
+    // 类名被清洗/缺失时，再按 Abstract 标题后面的段落兜底
+    const heads = Array.from(root.querySelectorAll("h1, h2, h3"));
+    for (const head of heads) {
+      const label = normText(head.textContent).toLowerCase();
+      if (label === "abstract" || label.includes("abstract") || label === "摘要" || label === "抽象的") {
+        const next = head.nextElementSibling;
+        const p = next ? (next.matches("p") ? next : next.querySelector("p")) : null;
+        if (p && normText(p.textContent)) return p;
+      }
+    }
+    return null;
+  }
+
   function matchesMetaText(text, author, date) {
     const t = normText(text);
     if (!t) return false;
@@ -680,6 +728,16 @@
     s = s.replace(/\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}[^\s]*)?\b/g, "");
     s = s.replace(/\s*[·,|]\s*$/, "").trim();
     return s;
+  }
+
+  const EXCERPT_TRUNC_RE = /(\.\.\.|…|。。。)\s*$/;
+
+  function excerptCandidate(list) {
+    const clean = list.map((s) => normText(s || "")).filter(Boolean);
+    const complete = clean.filter((s) => !EXCERPT_TRUNC_RE.test(s));
+    const pool = complete.length ? complete : clean;
+    pool.sort((a, b) => b.length - a.length);
+    return pool[0] || "";
   }
 
   function readVisibleDate() {
@@ -769,10 +827,14 @@
         metaContent('meta[name="pub-date"]', "content") ||
         metaContent('meta[name="date"]', "content") ||
         ld.publishedTime,
-      excerpt:
-        metaContent('meta[name="description"]', "content") ||
-        metaContent('meta[property="og:description"]', "content") ||
+      excerpt: excerptCandidate([
+        metaContent('meta[property="og:description"]', "content"),
+        metaContent('meta[property="dc:description"]', "content"),
+        metaContent('meta[name="dc.description"]', "content"),
+        metaContent('meta[name="description"]', "content"),
+        metaContent('meta[name="twitter:description"]', "content"),
         ld.excerpt,
+      ]),
     };
   }
 
@@ -794,6 +856,17 @@
     const mixedClone = clone.cloneNode(true);
     // 先摘译文再洗属性：标记属性正是判断依据，洗掉就认不出了
     let pageTranslations = splitTranslations(clone);
+    // 洗属性会剥掉 class，摘要容器要在清洗前先定位好节点引用
+    const abstractNode = findAbstractParagraph(clone);
+    const mixedAbstractNode = findAbstractParagraph(mixedClone);
+    const mixedAbstractTrans = mixedAbstractNode
+      ? normText(
+          Array.from(mixedAbstractNode.querySelectorAll("*"))
+            .filter(isTransMarked)
+            .map((m) => m.textContent)
+            .join(" ")
+        )
+      : "";
     cleanAttributes(clone);
     cleanAttributes(mixedClone);
 
@@ -810,7 +883,28 @@
     const visibleDate = extractDateText(opts.author) || readVisibleDate();
     const authorClean = cleanAuthor(opts.author) || cleanAuthor(pageMeta.author);
     const pubDate = visibleDate || opts.publishedTime || pageMeta.publishedTime;
-    const excerptText = normText(opts.excerpt || pageMeta.excerpt);
+    let excerptText = excerptCandidate([opts.excerpt, pageMeta.excerpt]);
+    const abstractText = abstractNode ? normText(abstractNode.textContent) : "";
+    if (abstractText) {
+      excerptText = abstractText;
+    } else if (EXCERPT_TRUNC_RE.test(excerptText)) {
+      // meta / og:description 常被站点截断并带省略号；若正文首段就是同一段导语，用完整首段补全
+      const excerptFirst = firstTextBlock(clone);
+      const excerptFirstText = excerptFirst ? normText(excerptFirst.textContent) : "";
+      if (excerptText.length >= 20 && excerptFirstText.length > excerptText.length) {
+        let prefix = 0;
+        const min = Math.min(excerptText.length, excerptFirstText.length);
+        while (prefix < min && excerptText[prefix] === excerptFirstText[prefix]) prefix += 1;
+        if (prefix >= Math.min(60, excerptText.length * 0.8)) {
+          excerptText = excerptFirstText;
+        }
+      }
+    }
+    const excerptTruncated = EXCERPT_TRUNC_RE.test(excerptText);
+    const matchedExcerptPair = findExcerptPair(excerptText, pageTranslations);
+    const excerptTrans = normText(
+      (matchedExcerptPair ? matchedExcerptPair.dst : "") || mixedAbstractTrans || opts.excerptTrans
+    );
 
     // 作者、日期已放在标题区；正文里整块重复的作者行/日期行一并删掉
     const metaRemoved = new Set();
@@ -833,15 +927,25 @@
       }
     }
 
-    // 导语已放在标题区；若正文首段与导语完全相同，从正文删掉，避免重复
+    // 导语已放在标题区；若正文摘要段与导语相同或导语是其截断前缀，从正文删掉，避免重复
     if (excerptText) {
-      const first = firstTextBlock(clone);
-      const firstText = first ? normText(first.textContent) : "";
-      if (firstText === excerptText) {
-        first.remove();
-        const mixedFirst = firstTextBlock(mixedClone);
-        if (mixedFirst && normText(mixedFirst.textContent) === excerptText) mixedFirst.remove();
-        const transIdx = pageTranslations.findIndex((pair) => pair.src === excerptText);
+      const excerptNode = abstractNode || firstTextBlock(clone);
+      const excerptNodeText = excerptNode ? normText(excerptNode.textContent) : "";
+      const sameAsExcerpt =
+        excerptNodeText === excerptText ||
+        (excerptTruncated && excerptNodeText.startsWith(excerptText));
+      if (excerptNode && sameAsExcerpt) {
+        excerptNode.remove();
+        const mixedNode = mixedAbstractNode || firstTextBlock(mixedClone);
+        const mixedNodeText = mixedNode ? normText(mixedNode.textContent) : "";
+        const mixedSame =
+          mixedNodeText === excerptText ||
+          (excerptTruncated && mixedNodeText.startsWith(excerptText));
+        if (mixedNode && mixedSame) {
+          mixedNode.remove();
+        }
+        const matched = findExcerptPair(excerptText, pageTranslations);
+        const transIdx = matched ? pageTranslations.indexOf(matched) : -1;
         if (transIdx >= 0) pageTranslations.splice(transIdx, 1);
       }
     }
@@ -859,7 +963,8 @@
       pageTitle: opts.pageTitle || document.title || "",
       author: authorClean,
       publishedTime: pubDate,
-      excerpt: opts.excerpt || pageMeta.excerpt,
+      excerpt: excerptText,
+      excerptTrans,
       tag: el.tagName.toLowerCase(),
       createdAt: Date.now(),
       bytes: html.length,
