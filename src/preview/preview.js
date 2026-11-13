@@ -7,12 +7,14 @@ import {
   FONT_PRESETS,
   BODY_WEIGHTS,
   EREADER_DEFAULTS,
+  MOBILE_DEFAULTS,
   LAYOUT_KEYS,
   profileKey,
   pickLayout,
   pickShared,
   loadSettings,
   saveSettings,
+  flushSettings,
 } from "../shared/settings.js";
 import { QUOTES, QUOTES_EN } from "../shared/quotes.js";
 
@@ -35,6 +37,16 @@ const EREADER_PAGE = {
   ml: 10,
 };
 
+// 华为 Pura 70 Pro：1260×2844，6.77″ 可视矩形约 69.7×157.2mm，取整 70×157mm
+const MOBILE_PAGE = {
+  w: "70mm",
+  h: "157mm",
+  mt: 3,
+  mr: 3,
+  mb: 3,
+  ml: 3,
+};
+
 // 电纸书默认排版由 settings.js 统一提供
 
 function applyEreaderDefaults(force = false) {
@@ -47,6 +59,7 @@ function applyEreaderDefaults(force = false) {
 }
 
 const isEreader = (s) => s.pageFormat === "ereader";
+const isMobile = (s) => s.pageFormat === "mobile";
 
 const state = {
   settings: { ...DEFAULT_SETTINGS },
@@ -55,13 +68,33 @@ const state = {
   lang: "zh",
   ready: false,
   biShown: false, // 本次窗口里由工具栏「翻译」临时开出的对照视图，不写进设置
+  view: "source", // source（原文） | mixed（中英混排） | bi（左右对照）
 };
 
-// 「自动翻译」开关常驻生效；工具栏「翻译」只是这一次显示对照，不改开关
-// 中文正文一律不进入对照视图（开关留着，换成西文稿时会重新生效）
+// 当前是否处于左右对照视图
 function biActive() {
-  if (!biAllowed()) return false;
-  return Boolean(state.settings.bilingual) || state.biShown;
+  return state.view === "bi";
+}
+
+// 当前是否处于原始中英混排视图
+function mixedActive() {
+  return state.view === "mixed";
+}
+
+// 手机下「翻译」的隐含串行形式：原文段落后紧跟译文段落，上下堆叠
+function serialActive() {
+  return state.view === "serial";
+}
+
+// 记住工具栏所选视图；串行是手机下翻译的内部形式，落盘仍记为 bi
+function persistView() {
+  state.settings.view = state.view === "serial" ? "bi" : state.view;
+  saveSettings(state.settings, state.profiles);
+}
+
+// 是否存在可还原的混排快照（抽取时识别到内联译文才会有）
+function hasMixed() {
+  return Boolean(state.payload && state.payload.mixedHtml);
 }
 
 // 翻译引擎：两家凭据各存一份，界面按当前引擎只显示自己那组
@@ -225,6 +258,8 @@ function render(payload) {
   $("body").innerHTML = payload.html;
   dropEmptyBlocks();
   markParagraphs($("body"));
+  $("mixed").innerHTML = payload.mixedHtml || "";
+  markParagraphs($("mixed"));
   seedPageTranslations(payload);
   state.lang = detectLang($("body"));
   setSheetLang(state.lang);
@@ -271,18 +306,29 @@ function pickQuote() {
 
 function renderQuote() {
   const el = $("pageQuote");
+  const endEl = $("endQuote");
+  const mob = isMobile(state.settings);
   if (!el) return;
   if (state.settings.showQuote === false) {
     el.textContent = "";
     el.hidden = true;
+    if (endEl) { endEl.textContent = ""; endEl.hidden = true; }
     return;
   }
-  el.hidden = false;
   if (!quoteLine || quoteLang !== state.lang) {
     quoteLine = pickQuote();
     quoteLang = state.lang;
   }
-  el.textContent = quoteLine;
+  if (mob && endEl) {
+    el.textContent = "";
+    el.hidden = true;
+    endEl.hidden = false;
+    endEl.textContent = quoteLine;
+  } else {
+    if (endEl) { endEl.textContent = ""; endEl.hidden = true; }
+    el.hidden = false;
+    el.textContent = quoteLine;
+  }
 }
 
 
@@ -302,6 +348,8 @@ const URL_FONT = 'Verdana, "Segoe UI", sans-serif';
 
 function buildPageRule(s) {
   const er = isEreader(s);
+  const mob = isMobile(s);
+  const page = er ? EREADER_PAGE : mob ? MOBILE_PAGE : null;
   const head = $("pageHead");
   const brand = labelText(head && head.querySelector(".ep-gutter__title")) || "Element Print";
   const src = labelText($("pageSource"));
@@ -318,21 +366,23 @@ function buildPageRule(s) {
     `font-family:${fam};font-size:8pt;width:${w};vertical-align:top;` +
     `padding:1.2mm 0 0;margin:4mm 0 0;border-top:0.5pt solid #c9ccd1;`;
 
-  const headBoxes = er || s.showHeader === false
+  const headBoxes = er || mob || s.showHeader === false
     ? ""
     : `@top-left{content:${cssString(brand)};${top(BRAND_FONT)}text-align:left;font-weight:500;letter-spacing:.12em;color:#4a4f57;}` +
       `@top-right{content:${cssString(src)};${top(URL_FONT)}text-align:right;color:#6b6b6b;}`;
-  // 电纸书：页脚只保留格言；A4：保留名言 + 页码，受页脚开关控制
-  const footBoxes = er
-    ? `@bottom-left{content:${cssString(quote)};${bottom("100%", QUOTE_FONT)}text-align:left;color:#6b6b6b;}`
-    : s.showFooter === false
-      ? ""
-      : `@bottom-left{content:${cssString(quote)};${bottom(quote ? "74%" : "50%", QUOTE_FONT)}text-align:left;color:#6b6b6b;}` +
-        `@bottom-right{content:counter(page) " / " counter(pages);${bottom(quote ? "24%" : "50%", GUTTER_FONT)}text-align:right;color:#6b6b6b;font-variant-numeric:tabular-nums;}`;
+  // 电纸书：页脚只保留格言；手机版：无重复页脚，格言在文末；A4：名言 + 页码，受页脚开关控制
+  const footBoxes = mob
+    ? ""
+    : er
+      ? `@bottom-left{content:${cssString(quote)};${bottom("100%", QUOTE_FONT)}text-align:left;color:#6b6b6b;}`
+      : s.showFooter === false
+        ? ""
+        : `@bottom-left{content:${cssString(quote)};${bottom(quote ? "74%" : "50%", QUOTE_FONT)}text-align:left;color:#6b6b6b;}` +
+          `@bottom-right{content:counter(page) " / " counter(pages);${bottom(quote ? "24%" : "50%", GUTTER_FONT)}text-align:right;color:#6b6b6b;font-variant-numeric:tabular-nums;}`;
 
-  const size = er ? `${EREADER_PAGE.w} ${EREADER_PAGE.h}` : "A4";
-  const margin = er
-    ? `${EREADER_PAGE.mt}mm ${EREADER_PAGE.mr}mm ${EREADER_PAGE.mb}mm ${EREADER_PAGE.ml}mm`
+  const size = page ? `${page.w} ${page.h}` : "A4";
+  const margin = page
+    ? `${page.mt}mm ${page.mr}mm ${page.mb}mm ${page.ml}mm`
     : `${s.marginTop}mm ${s.marginRight}mm ${s.marginBottom}mm ${s.marginLeft}mm`;
 
   return (
@@ -364,6 +414,8 @@ function applySettings() {
   const s = state.settings;
   const root = document.documentElement;
   const er = isEreader(s);
+  const mob = isMobile(s);
+  const page = er ? EREADER_PAGE : mob ? MOBILE_PAGE : null;
 
   root.style.setProperty("--ep-font-size", s.fontSize + "pt");
   root.style.setProperty("--ep-title-size", s.titleSize + "pt");
@@ -373,41 +425,49 @@ function applySettings() {
   );
   root.style.setProperty("--ep-para-before", s.paraBefore + "px");
   root.style.setProperty("--ep-para-after", s.paraAfter + "px");
-  root.style.setProperty("--ep-page-w", er ? EREADER_PAGE.w : "210mm");
-  root.style.setProperty("--ep-page-h", er ? EREADER_PAGE.h : "297mm");
+  root.style.setProperty("--ep-page-w", page ? page.w : "210mm");
+  root.style.setProperty("--ep-page-h", page ? page.h : "297mm");
   root.style.setProperty("--ep-columns", s.columns === 2 ? "2" : "1");
   root.style.setProperty("--ep-img-max", IMG_SIZE_MAX[s.imgSize] || IMG_SIZE_MAX.full);
   root.style.setProperty("--ep-indent", s.indent + "em");
   root.style.setProperty(
     "--ep-mt",
-    er ? EREADER_PAGE.mt + "mm" : s.marginTop + "mm"
+    page ? page.mt + "mm" : s.marginTop + "mm"
   );
   root.style.setProperty(
     "--ep-mr",
-    er ? EREADER_PAGE.mr + "mm" : s.marginRight + "mm"
+    page ? page.mr + "mm" : s.marginRight + "mm"
   );
   root.style.setProperty(
     "--ep-mb",
-    er ? EREADER_PAGE.mb + "mm" : s.marginBottom + "mm"
+    page ? page.mb + "mm" : s.marginBottom + "mm"
   );
   root.style.setProperty(
     "--ep-ml",
-    er ? EREADER_PAGE.ml + "mm" : s.marginLeft + "mm"
+    page ? page.ml + "mm" : s.marginLeft + "mm"
   );
 
   $("sheet").dataset.theme = s.theme || "paper";
+  $("sheet").dataset.pageFormat = s.pageFormat || "a4";
   $("sheet").dataset.bodyWeight = s.bodyWeight || "normal";
   $("sheet").classList.toggle("is-span-head", Boolean(s.spanHead));
-  // 段落可跨页：正文本体与对照层都要放开 break-inside
+  // 段落可跨页：不区分原文/译文层，所有可见正文容器统一放开 break-inside
   $("body").classList.toggle("is-breakable", Boolean(s.allowBreak));
+  $("mixed").classList.toggle("is-breakable", Boolean(s.allowBreak));
   $("bilingual").classList.toggle("is-breakable", Boolean(s.allowBreak));
+  $("serial").classList.toggle("is-breakable", Boolean(s.allowBreak));
 
-  // 双语对照时正文由 #bilingual 呈现，原 #body 只是数据源
-  const biOn = biActive() && !$("bilingual").hidden;
+  // 对照视图由 #bilingual 呈现；混排视图由 #mixed 呈现；手机串行翻译由 #serial 呈现
+  const biOn = biActive();
+  const mixedOn = mixedActive();
+  const serialOn = serialActive();
   $("sheet").classList.toggle("is-bi", biOn);
-  $("body").hidden = biOn;
-  // 对照行本身就是左右两列，页面再分栏会变成四列；电纸书竖屏也固定单栏
-  if (biOn || er) root.style.setProperty("--ep-columns", "1");
+  $("body").hidden = biOn || mixedOn || serialOn;
+  $("mixed").hidden = !mixedOn;
+  $("bilingual").hidden = !biOn;
+  $("serial").hidden = !serialOn;
+  // 对照/串行翻译不再左右分栏；手机竖屏固定单栏
+  if (biOn || serialOn || mob) root.style.setProperty("--ep-columns", "1");
   root.style.setProperty("--ep-split", (s.biSplit || 57) + "%");
   if (biResizer) biResizer.hidden = !biOn;
 
@@ -415,10 +475,10 @@ function applySettings() {
   root.style.setProperty("--ep-body-weight", String(BODY_WEIGHTS[s.bodyWeight] || 400));
   root.style.setProperty("--ep-title-font", titleFontStack(s, state.lang));
 
-  $("pageHead").hidden = er || s.showHeader === false;
-  // 电纸书固定打开页脚，只显示格言；A4 页脚受开关控制并显示页码
-  $("pageFoot").hidden = !er && s.showFooter === false;
-  $("pageNo").hidden = er;
+  $("pageHead").hidden = er || mob || s.showHeader === false;
+  // 电纸书固定打开页脚，只显示格言；手机版隐藏重复页脚，格言移到文末；A4 页脚受开关控制并显示页码
+  $("pageFoot").hidden = mob || (!er && s.showFooter === false);
+  $("pageNo").hidden = er || mob;
   renderQuote();
 
   $("pageRule").textContent = buildPageRule(s);
@@ -482,9 +542,14 @@ function settingsEqual(key, s, baseline) {
 function syncModifiedMarks() {
   const s = state.settings;
   const baseline = getBaseline();
+  const colForced = biActive() || serialActive() || isMobile(s);
   Object.entries(MODIFIED_TARGETS).forEach(([key, target]) => {
     const node = target();
     if (!node) return;
+    if (key === "columns" && colForced) {
+      node.classList.remove("is-modified");
+      return;
+    }
     node.classList.toggle("is-modified", !settingsEqual(key, s, baseline));
   });
 }
@@ -570,15 +635,39 @@ function syncControls() {
   Array.from($("segImgSize").querySelectorAll("button")).forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.value === (s.imgSize || "full"));
   });
-  // 双语对照和电纸书竖屏都固定单栏
+  // 双语对照、手机竖屏固定单栏；电纸书默认单栏但允许改成双栏
   const erNow = isEreader(s);
-  const biNow = biActive() && !$("bilingual").hidden;
-  $("segColumns").classList.toggle("is-disabled", biNow || erNow);
+  const mobNow = isMobile(s);
+  const biNow = biActive() || serialActive();
+  $("segColumns").classList.toggle("is-disabled", biNow || mobNow);
   $("columnsNote").textContent = biNow
     ? "双语对照下固定单栏"
-    : erNow
-      ? "电纸书格式固定单栏"
+    : mobNow
+      ? "手机阅读固定单栏"
       : "";
+
+  // 单栏/固定单栏时，标题跨栏没有意义：禁用并取消勾选
+  const twoCol = Number(s.columns) === 2 && !biNow && !mobNow;
+  $("spanHead").disabled = !twoCol;
+  if (!twoCol) {
+    s.spanHead = false;
+    $("spanHead").checked = false;
+  } else {
+    $("spanHead").checked = Boolean(s.spanHead);
+  }
+
+  // 手机阅读不渲染页眉页脚，对应开关禁用并保持未选中
+  $("showHeader").disabled = mobNow;
+  $("showFooter").disabled = mobNow;
+  if (mobNow) {
+    s.showHeader = false;
+    s.showFooter = false;
+    $("showHeader").checked = false;
+    $("showFooter").checked = false;
+  }
+
+  // 手机不套用版式模板，模板选择器置灰
+  $("segTheme").classList.toggle("is-disabled", mobNow);
 
   Array.from($("segTheme").querySelectorAll("button")).forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.value === (s.theme || "paper"));
@@ -1743,16 +1832,62 @@ function buildBilingual(rows) {
   if (editing) setEditing(true);
 }
 
+// 手机隐含串行翻译：原文段落在上，译文段落紧跟在下，不做左右两栏
+function buildSerial(rows) {
+  const box = $("serial");
+  box.innerHTML = "";
+  biPending = 0;
+  rows.forEach((row) => {
+    const line = document.createElement("div");
+    line.className = "ep-bi__row is-serial" + (row.wide ? " is-wide" : "");
+
+    const src = document.createElement("div");
+    src.className = "ep-bi__col ep-bi__src";
+    const clone = row.node.cloneNode(true);
+    clone.__epRow = row;
+    src.appendChild(clone);
+    line.appendChild(src);
+
+    if (!row.wide) {
+      const key = row.text ? biTextKey(row.text) : "";
+      const text = key ? biCache.get(key) : "";
+      const heading = /^H[1-6]$/.test(row.node.tagName);
+      const tgt = document.createElement(heading ? row.node.tagName.toLowerCase() : "div");
+      tgt.className = "ep-bi__col ep-bi__tgt" + (heading ? " is-head" : "");
+      if (text) {
+        tgt.textContent = text;
+        biBadge(
+          tgt,
+          biPageKeys.has(key) ? "page" : biFresh.has(key) ? "done" : "cache"
+        );
+      } else {
+        tgt.classList.add("ep-bi__tgt--none");
+        biPending += 1;
+        biBadge(tgt, "todo");
+      }
+      line.appendChild(tgt);
+    }
+    box.appendChild(line);
+  });
+  box.hidden = false;
+  syncBiButton();
+}
+
 // 有未译段落才让「翻译」可点；对照未显示时工具栏按钮仍作为入口
 function syncBiButton() {
-  const active = biActive();
+  const active = biActive() || serialActive();
   const pending = biPending > 0;
   const allowed = biAllowed();
+  const hasMix = hasMixed();
   $("translateBtn").disabled = !allowed || !pending;
   $("biBtn").disabled = !allowed || (active && !pending);
+  $("mixBtn").hidden = !hasMix;
+  $("mixSep").hidden = !hasMix;
+  $("origMixSep").hidden = !hasMix;
   // 当前处在哪个视图，就把对应那块点亮（原文不再靠置灰表示当前态，置灰会淡得看不见）
-  $("origBtn").classList.toggle("is-on", !active);
-  $("biBtn").classList.toggle("is-on", active);
+  $("origBtn").classList.toggle("is-on", state.view === "source");
+  $("mixBtn").classList.toggle("is-on", state.view === "mixed");
+  $("biBtn").classList.toggle("is-on", biActive() || serialActive());
   syncTitleTrans(); // 标题译文只跟对照视图一起出现/隐藏
 }
 
@@ -1768,9 +1903,16 @@ function biSignatureOf(rows) {
   return joined.length + ":" + h.toString(36);
 }
 
+// 页面自带逐段译文时，即使正文被识别成中文，也允许打开对照/串行查看
+function hasPageTranslations() {
+  return Boolean(
+    state.payload && state.payload.pageTranslations && state.payload.pageTranslations.length
+  );
+}
+
 // 中文正文没有翻译意义：把入口按钮禁掉，避免误点白烧额度
 function biAllowed() {
-  return state.lang !== "zh";
+  return state.lang !== "zh" || hasPageTranslations();
 }
 
 async function refreshBilingual(opts = {}) {
@@ -1778,17 +1920,20 @@ async function refreshBilingual(opts = {}) {
   if (!biAllowed()) {
     const box = $("bilingual");
     box.hidden = true;
+    $("serial").hidden = true;
     box.innerHTML = "";
     state.biShown = false;
+    if (state.view === "bi" || state.view === "serial") state.view = "source";
     biStatus("中文正文不需要翻译");
     hideToast();
     syncBiButton();
     applySettings();
     return;
   }
-  if (!biActive()) {
+  if (!biActive() && !serialActive()) {
     const box = $("bilingual");
     box.hidden = true;
+    $("serial").hidden = true;
     box.innerHTML = "";
     biStatus("");
     hideToast();
@@ -1798,6 +1943,7 @@ async function refreshBilingual(opts = {}) {
   }
 
   const rows = collectBiRows();
+  const renderRows = biActive() ? buildBilingual : buildSerial;
   const sig = biSignatureOf(rows);
   biFresh.clear();
 
@@ -1811,7 +1957,7 @@ async function refreshBilingual(opts = {}) {
   if (!wantSend) {
     // 只渲染缓存命中的段落，改过的段落留「更改」红标，等点「翻译」
     biStatus("");
-    buildBilingual(rows);
+    renderRows(rows);
     applySettings();
     return;
   }
@@ -1839,13 +1985,13 @@ async function refreshBilingual(opts = {}) {
     hideToast();
     biStatus("翻译未成功：" + error, true);
     console.warn("[Element Print] 翻译未成功：", error);
-    buildBilingual(rows);
+    renderRows(rows);
     applySettings();
     return;
   }
 
   biStatus("");
-  buildBilingual(rows);
+  renderRows(rows);
   applySettings();
 }
 
@@ -1856,7 +2002,7 @@ function update(patch) {
   rememberCurrentProfile();
   syncControls();
   applySettings();
-  saveSettings(state.settings);
+  saveSettings(state.settings, state.profiles);
 }
 
 // 英文期刊体例：段落不缩进，靠段后留白分隔；中文仍是两字符缩进、段间不留白
@@ -1873,6 +2019,9 @@ function langFitPreset(preset, lang) {
 
 function getBaseline() {
   const s = state.settings;
+  if (isMobile(s)) {
+    return { ...DEFAULT_SETTINGS, ...MOBILE_DEFAULTS };
+  }
   const preset = langFitPreset(THEME_PRESETS[s.theme || "paper"], state.lang) || {};
   const baseline = { ...DEFAULT_SETTINGS, ...preset };
   if (isEreader(s)) Object.assign(baseline, EREADER_DEFAULTS);
@@ -1886,8 +2035,12 @@ function syncResetBtn() {
   if (!btn) return;
 
   const baseline = getBaseline();
-  const dirty = LAYOUT_KEYS.some((key) => !settingsEqual(key, s, baseline));
-  const formatLabel = isEreader(s) ? "电纸书" : "A4";
+  const colForced = biActive() || serialActive() || isMobile(s);
+  const dirty = LAYOUT_KEYS.some((key) => {
+    if (key === "columns" && colForced) return false;
+    return !settingsEqual(key, s, baseline);
+  });
+  const formatLabel = isEreader(s) ? "电纸书" : isMobile(s) ? "手机" : "A4纸";
   const themeName = themeLabel(baseline.theme || s.theme || "paper");
   btn.disabled = !dirty;
   btn.title = dirty
@@ -1905,9 +2058,19 @@ function rememberCurrentProfile() {
 }
 
 function loadThemeProfile(theme, pageFormat, reset = false) {
-  const preset = langFitPreset(THEME_PRESETS[theme], state.lang);
-  if (!preset) return false;
+  const isMob = pageFormat === "mobile";
+  const preset = isMob
+    ? {}
+    : langFitPreset(THEME_PRESETS[theme], state.lang) || {};
   const saved = reset ? {} : state.profiles[profileKey(theme, pageFormat)] || {};
+  if (isMob) {
+    const mobileBase = { ...DEFAULT_SETTINGS, ...MOBILE_DEFAULTS };
+    state.settings = reset
+      ? { ...mobileBase, ...pickShared(state.settings), theme, pageFormat }
+      : { ...state.settings, ...mobileBase, ...saved, theme, pageFormat };
+    state.settings.columns = 1;
+    return true;
+  }
   if (reset) {
     const shared = pickShared(state.settings);
     state.settings = { ...DEFAULT_SETTINGS, ...preset, ...shared, theme, pageFormat };
@@ -1927,19 +2090,20 @@ function switchTheme(theme, reset = false) {
   if (reset) delete state.profiles[profileKey(theme, state.settings.pageFormat)];
   syncControls();
   applySettings();
-  saveSettings(state.settings);
+  saveSettings(state.settings, state.profiles);
 }
 
 function bindControls() {
   $("segTheme").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-value]");
-    if (!btn) return;
+    if (!btn || $("segTheme").classList.contains("is-disabled")) return;
     switchTheme(btn.dataset.value);
   });
   $("segColumns").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-value]");
-    if (!btn) return;
-    update({ columns: Number(btn.dataset.value) });
+    if (!btn || $("segColumns").classList.contains("is-disabled")) return;
+    const cols = Number(btn.dataset.value);
+    update({ columns: cols, spanHead: cols === 2 ? Boolean(state.settings.spanHead) : false });
   });
   $("segPageFormat").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-value]");
@@ -1948,9 +2112,16 @@ function bindControls() {
     if (pageFormat === state.settings.pageFormat) return;
     rememberCurrentProfile();
     loadThemeProfile(state.settings.theme, pageFormat);
+    // 翻译视图随输出对象自动切换形式：手机串行，A4/电纸书左右对照
+    if (biActive() || serialActive()) {
+      state.view = pageFormat === "mobile" ? "serial" : "bi";
+      persistView();
+      refreshBilingual();
+    }
     syncControls();
     applySettings();
-    saveSettings(state.settings);
+    saveSettings(state.settings, state.profiles);
+    flushSettings(); // 页面格式选择立刻落盘，不等防抖，避免关窗后丢失
   });
   $("segImgSize").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-value]");
@@ -2009,8 +2180,10 @@ function bindControls() {
     if (e.target.checked) {
       setEditing(false);
       setTrimming(false);
+      state.view = "bi";
     } else {
       state.biShown = false; // 关掉开关时，顺手把「翻译」临时开出的视图也收掉
+      state.view = "source";
     }
     update({ bilingual: e.target.checked });
     refreshBilingual();
@@ -2024,7 +2197,7 @@ function bindControls() {
     biDone = false;
     biSig = "";
     syncBiCreds();
-    if (biActive()) refreshBilingual();
+    if (biActive() || serialActive()) refreshBilingual();
   });
   $("translateBtn").addEventListener("click", () => {
     if (!biAllowed()) return; // 中文正文：按钮虽已置灰，再兜一层
@@ -2040,28 +2213,46 @@ function bindControls() {
   // 工具栏「翻译」：单次行为，只让这一个窗口显示对照，不去动「自动翻译」开关
   $("biBtn").addEventListener("click", () => {
     if (!biAllowed()) return;
-    if (!engineReady(state.settings)) {
+    if (!engineReady(state.settings) && !hasPageTranslations()) {
       flashHint(engineMissingText(state.settings));
       return;
     }
-    if (!biActive()) {
+    if (!biActive() && !serialActive()) {
       setEditing(false);
       setTrimming(false);
       state.biShown = true;
+      // 手机隐含串行翻译；A4/电纸书走左右对照
+      state.view = isMobile(state.settings) ? "serial" : "bi";
+      persistView();
       refreshBilingual(); // 首次自动翻；之后按缓存渲染，改过的段落标红
       return;
     }
-    refreshBilingual({ send: true }); // 已在对照视图里：只补「更改」的段落
+    refreshBilingual({ send: true }); // 已在翻译视图里：只补「更改」的段落
   });
 
-  // 「原文」：收起对照视图，回到单栏原文；开着自动翻译就顺手关掉，否则下次刷新又会弹回来
-  $("origBtn").addEventListener("click", () => {
-    if (!biActive()) return;
+  // 「混排」：还原抽取时保留的原始中英交错快照
+  $("mixBtn").addEventListener("click", () => {
+    if (state.view === "mixed") return;
     setEditing(false);
     setTrimming(false);
     state.biShown = false;
+    state.view = "mixed";
+    persistView();
+    refreshBilingual();
+    applySettings();
+  });
+
+  // 「原文」：收起对照/混排视图，回到单栏原文；开着自动翻译就顺手关掉，否则下次刷新又会弹回来
+  $("origBtn").addEventListener("click", () => {
+    if (state.view === "source") return;
+    setEditing(false);
+    setTrimming(false);
+    state.biShown = false;
+    state.view = "source";
+    persistView();
     if (state.settings.bilingual) update({ bilingual: false });
     refreshBilingual();
+    applySettings();
   });
 
   $("resetBtn").addEventListener("click", () => {
@@ -2220,25 +2411,27 @@ async function buildExportHtml() {
   ).join("\n");
   const fontFaces = await inlineFontFaces();
   const er = isEreader(s);
+  const mob = isMobile(s);
+  const page = er ? EREADER_PAGE : mob ? MOBILE_PAGE : null;
   const vars = [
     `--ep-font-size:${s.fontSize}pt`,
     `--ep-title-size:${s.titleSize}pt`,
     `--ep-line-height:${s.lineHeightMode === "fixed" ? s.lineHeightFixed + "pt" : s.lineHeight}`,
     `--ep-para-before:${s.paraBefore}px`,
     `--ep-para-after:${s.paraAfter}px`,
-    `--ep-columns:${biActive() || er ? 1 : s.columns === 2 ? 2 : 1}`,
+    `--ep-columns:${biActive() || serialActive() || mob ? 1 : s.columns === 2 ? 2 : 1}`,
     `--ep-img-max:${IMG_SIZE_MAX[s.imgSize] || IMG_SIZE_MAX.full}`,
     `--ep-split:${(s.biSplit || 57)}%`,
     `--ep-indent:${s.indent}em`,
     `--ep-body-font:${bodyFontStack(s.bodyFont, state.lang)}`,
     `--ep-body-weight:${BODY_WEIGHTS[s.bodyWeight] || 400}`,
     `--ep-title-font:${titleFontStack(s, state.lang)}`,
-    `--ep-page-w:${er ? EREADER_PAGE.w : "210mm"}`,
-    `--ep-page-h:${er ? EREADER_PAGE.h : "297mm"}`,
-    `--ep-mt:${er ? EREADER_PAGE.mt : s.marginTop}mm`,
-    `--ep-mr:${er ? EREADER_PAGE.mr : s.marginRight}mm`,
-    `--ep-mb:${er ? EREADER_PAGE.mb : s.marginBottom}mm`,
-    `--ep-ml:${er ? EREADER_PAGE.ml : s.marginLeft}mm`,
+    `--ep-page-w:${page ? page.w : "210mm"}`,
+    `--ep-page-h:${page ? page.h : "297mm"}`,
+    `--ep-mt:${page ? page.mt : s.marginTop}mm`,
+    `--ep-mr:${page ? page.mr : s.marginRight}mm`,
+    `--ep-mb:${page ? page.mb : s.marginBottom}mm`,
+    `--ep-ml:${page ? page.ml : s.marginLeft}mm`,
   ].join(";");
 
   const sheetCopy = $("sheet").cloneNode(true);
@@ -2252,6 +2445,15 @@ async function buildExportHtml() {
   sheetCopy.querySelectorAll("[contenteditable]").forEach((node) => {
     node.removeAttribute("contenteditable");
     node.removeAttribute("spellcheck");
+  });
+  // 导出/打印只保留当前视图：原文、混排、对照三选一，其余数据源层整块剔除
+  sheetCopy.querySelectorAll("#body, #mixed, #bilingual").forEach((node) => {
+    const keep =
+      node.id === "body" ? !biActive() && !mixedActive() && !serialActive()
+        : node.id === "mixed" ? mixedActive()
+          : node.id === "serial" ? serialActive()
+            : biActive();
+    if (!keep) node.remove();
   });
   const sheetHtml = sheetCopy.innerHTML;
   const title = state.payload ? state.payload.title : "Element Print";
@@ -2274,7 +2476,7 @@ ${buildPageRule(s)}
 </style>
 </head>
 <body>
-<div class="ep-sheet${s.spanHead ? " is-span-head" : ""}" data-theme="${s.theme || "paper"}" data-lang="${state.lang}" lang="${state.lang === "en" ? "en" : "zh-CN"}">
+<div class="ep-sheet${s.spanHead ? " is-span-head" : ""}" data-theme="${s.theme || "paper"}" data-page-format="${s.pageFormat || "a4"}" data-lang="${state.lang}" lang="${state.lang === "en" ? "en" : "zh-CN"}">
 ${sheetHtml}
 </div>
 </body>
@@ -2319,6 +2521,7 @@ async function init() {
   fillFontSelects();
   syncControls();
   bindControls();
+  window.addEventListener("pagehide", flushSettings);
 
   if (!payloadId) {
     showError("没有拿到要打印的内容，请回到页面重新选取元素。");
@@ -2345,13 +2548,40 @@ async function init() {
   render(payload);
   applySettings();
   syncBiButton();
-  // 页面上本来就带译文（浏览器翻译插件已翻好）：进窗口就直接给对照视图
+  // 记住上次工具栏所选视图：原文 / 混排 / 翻译；翻译在手机下内部解析为串行
   const hasPageTrans = Boolean(
     payload.pageTranslations && payload.pageTranslations.length
   );
-  if (hasPageTrans) state.biShown = true;
-  if (state.settings.bilingual || state.biShown) refreshBilingual();
-  if (hasPageTrans && state.biShown) flashHint("页面自带译文，已放进右栏对照");
+  const savedView = state.settings.view;
+  let startSerial = false;
+  let startMixed = false;
+  let startBi = false;
+
+  if (savedView === "mixed" && hasMixed()) {
+    startMixed = true;
+  } else if (savedView === "bi" && biAllowed()) {
+    startSerial = isMobile(state.settings);
+    startBi = !startSerial;
+    state.biShown = true;
+  } else if (savedView !== "source") {
+    // 没有可沿用的记忆时，按内容与输出对象给默认视图
+    if (isMobile(state.settings) && hasPageTrans) {
+      startSerial = true;
+      state.biShown = true;
+    } else if (hasMixed()) {
+      startMixed = true;
+    } else if (state.settings.bilingual || hasPageTrans) {
+      startBi = biAllowed();
+      state.biShown = startBi;
+    }
+  }
+
+  state.view = startSerial ? "serial" : startMixed ? "mixed" : startBi ? "bi" : "source";
+  applySettings(); // 初始视图是在首次 applySettings 之后才确定，需同步一次容器显隐
+  if (startBi || startSerial) refreshBilingual();
+  syncBiButton();
+  if (startSerial) flashHint("手机阅读：已按原文/译文串行排列");
+  else if (startBi && hasPageTrans) flashHint("页面自带译文，已放进右栏对照");
   state.ready = true;
   restartHintSweep(); // 进页面先扫一遍
 }

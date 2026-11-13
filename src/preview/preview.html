@@ -22,8 +22,10 @@
           <button type="button" id="imgBtn" class="ep-mini" title="切换图片显示：无图时图片不参与排版与打印">有图</button>
           <div class="ep-bi-switch">
             <button type="button" id="origBtn" class="ep-mini ep-mini--soft ep-mini--seg" title="回到单栏原文视图">原文</button>
-            <span class="ep-bi-switch__sep"></span>
-            <button type="button" id="biBtn" class="ep-mini ep-mini--soft ep-mini--seg" title="翻译：左原文右译文对照，只补未译与已更改的段落">翻译</button>
+            <span class="ep-bi-switch__sep" id="origMixSep"></span>
+            <button type="button" id="mixBtn" class="ep-mini ep-mini--soft ep-mini--seg" hidden title="按原网页的中英混排方式显示">混排</button>
+            <span class="ep-bi-switch__sep" id="mixSep" hidden></span>
+            <button type="button" id="biBtn" class="ep-mini ep-mini--soft ep-mini--seg" title="翻译：A4/电纸书左右对照；手机自动按原文/译文串行排列">翻译</button>
           </div>
         </div>
       </div>
@@ -120,6 +122,9 @@
             </div>
             <div class="ep-body" id="body"></div>
             <div class="ep-bilingual ep-body" id="bilingual" hidden></div>
+            <div class="ep-body" id="mixed" hidden></div>
+            <div class="ep-body" id="serial" hidden></div>
+            <p class="ep-end-quote" id="endQuote" hidden></p>
             <div class="ep-gutter ep-gutter--foot" id="pageFoot">
               <span class="ep-gutter__quote" id="pageQuote"></span>
               <span class="ep-gutter__page" id="pageNo"></span>
@@ -138,19 +143,20 @@
 
       <div class="ep-panel__body">
         <section class="ep-field">
+          <div class="ep-field__label">输出对象</div>
+          <div class="ep-seg ep-seg--three" id="segPageFormat">
+            <button type="button" data-value="a4" class="is-active">A4纸</button>
+            <button type="button" data-value="ereader" title="10寸左右的大屏电纸书">电纸书</button>
+            <button type="button" data-value="mobile">手机</button>
+          </div>
+        </section>
+
+        <section class="ep-field">
           <div class="ep-field__label">版式</div>
           <div class="ep-seg ep-seg--three" id="segTheme">
             <button type="button" data-value="paper" class="is-active">原版</button>
             <button type="button" data-value="academic">学术期刊</button>
             <button type="button" data-value="gov">公文</button>
-          </div>
-        </section>
-
-        <section class="ep-field">
-          <div class="ep-field__label">页面格式</div>
-          <div class="ep-seg" id="segPageFormat">
-            <button type="button" data-value="a4" class="is-active">A4</button>
-            <button type="button" data-value="ereader">电纸书 10.3″</button>
           </div>
         </section>
 
@@ -239,19 +245,19 @@
           <div class="ep-margins">
             <div class="ep-margin">
               <div class="ep-field__row"><span>上</span><em id="vMarginTop"></em></div>
-              <input id="marginTop" type="range" min="6" max="40" step="1" />
+              <input id="marginTop" type="range" min="3" max="40" step="1" />
             </div>
             <div class="ep-margin">
               <div class="ep-field__row"><span>下</span><em id="vMarginBottom"></em></div>
-              <input id="marginBottom" type="range" min="6" max="40" step="1" />
+              <input id="marginBottom" type="range" min="3" max="40" step="1" />
             </div>
             <div class="ep-margin">
               <div class="ep-field__row"><span>左</span><em id="vMarginLeft"></em></div>
-              <input id="marginLeft" type="range" min="6" max="40" step="1" />
+              <input id="marginLeft" type="range" min="3" max="40" step="1" />
             </div>
             <div class="ep-margin">
               <div class="ep-field__row"><span>右</span><em id="vMarginRight"></em></div>
-              <input id="marginRight" type="range" min="6" max="40" step="1" />
+              <input id="marginRight" type="range" min="3" max="40" step="1" />
             </div>
           </div>
         </section>
@@ -262,7 +268,7 @@
           <label class="ep-check"><input type="checkbox" id="spanHead" /><span>一级标题跨栏（双栏时）</span></label>
           <label class="ep-check"><input type="checkbox" id="allowBreak" /><span>段落可跨页<em class="ep-check__note">取消勾选则整段移到下一页</em></span></label>
           <label class="ep-check"><input type="checkbox" id="showHeader" /><span>显示页眉</span></label>
-          <label class="ep-check"><input type="checkbox" id="showFooter" /><span>显示页脚<em class="ep-check__note">A4 右下页码，电纸书只显示格言</em></span></label>
+          <label class="ep-check"><input type="checkbox" id="showFooter" /><span>显示页脚<em class="ep-check__note">A4 右下页码，电纸书只格言</em></span></label>
           <label class="ep-check"><input type="checkbox" id="showQuote" /><span>页脚名言<em class="ep-check__note">随机一句，取自本地名句库</em></span></label>
         </section>
 

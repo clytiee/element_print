@@ -768,9 +768,12 @@
     clone.querySelectorAll(DROP_SELECTOR).forEach((n) => n.remove());
     cleanUiChrome(clone);
     absolutize(clone, base);
+    // 摘译文之前留一份未拆分的混排副本，供预览的「混排」视图还原原始内联中英交错
+    const mixedClone = clone.cloneNode(true);
     // 先摘译文再洗属性：标记属性正是判断依据，洗掉就认不出了
     let pageTranslations = splitTranslations(clone);
     cleanAttributes(clone);
+    cleanAttributes(mixedClone);
 
     const explicitTitle = normText(opts.title || "");
     // 整页提取时标题由 Readability 单独给出；这时不能把正文首段误拎成标题
@@ -801,6 +804,7 @@
       });
     };
     walkMeta(clone);
+    walkMeta(mixedClone);
     if (metaRemoved.size) {
       for (let i = pageTranslations.length - 1; i >= 0; i--) {
         if (metaRemoved.has(pageTranslations[i].src)) pageTranslations.splice(i, 1);
@@ -813,16 +817,20 @@
       const firstText = first ? normText(first.textContent) : "";
       if (firstText === excerptText) {
         first.remove();
+        const mixedFirst = firstTextBlock(mixedClone);
+        if (mixedFirst && normText(mixedFirst.textContent) === excerptText) mixedFirst.remove();
         const transIdx = pageTranslations.findIndex((pair) => pair.src === excerptText);
         if (transIdx >= 0) pageTranslations.splice(transIdx, 1);
       }
     }
 
     const html = clone.outerHTML;
+    const mixedHtml = pageTranslations.length ? mixedClone.outerHTML : "";
     return {
       title,
       titleTrans,
       html,
+      mixedHtml,
       pageTranslations,
       textPreview: toPlainText(clone).slice(0, 400),
       sourceUrl: base,

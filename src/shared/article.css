@@ -124,6 +124,17 @@
   color: #6b6b6b;
 }
 
+/* 手机阅读：格言作为文末收尾段，不进重复页脚 */
+.ep-end-quote {
+  margin: 1.8em 0 0;
+  padding-top: 1em;
+  border-top: 0.5pt solid #c9ccd1;
+  font-family: Georgia, "Constantia", "Times New Roman", serif;
+  font-size: 9pt;
+  line-height: 1.6;
+  color: #6b6b6b;
+}
+
 /* 页眉里的网址用 Verdana：小字号下仍清楚，数字也不会挤在一起 */
 .ep-gutter__src {
   font-family: Verdana, "Segoe UI", sans-serif;
@@ -154,6 +165,11 @@
 
 .ep-head {
   margin: 0 0 6mm;
+}
+
+/* 手机竖屏：头部与正文之间的间距收紧 */
+.ep-sheet[data-page-format="mobile"] .ep-head {
+  margin-bottom: 2mm;
 }
 
 .ep-title {
@@ -474,7 +490,18 @@
   grid-template-columns: 1fr;
 }
 
-/* 「段落可跨页」：默认整段避开分页，打开后允许段落从中间断开（孤行/寡行各留 2 行） */
+/* 手机串行翻译：原文段落在上，译文段落紧跟在下，不做左右两栏 */
+.ep-bi__row.is-serial {
+  display: block;
+}
+.ep-bi__row.is-serial .ep-bi__tgt {
+  margin: 0.35em 0 0 0;
+}
+.ep-bi__row.is-serial .ep-bi__tgt.is-head {
+  margin-left: 0;
+}
+
+/* 「段落可跨页」：不区分原文层/译文层，当前可见正文里的文字块统一允许从中间断开 */
 .ep-body.is-breakable p,
 .ep-body.is-breakable .ep-para,
 .ep-body.is-breakable li,
@@ -484,14 +511,9 @@
 .ep-body.is-breakable h3,
 .ep-body.is-breakable h4,
 .ep-body.is-breakable h5,
-.ep-body.is-breakable h6 {
-  break-inside: auto;
-  page-break-inside: auto;
-  orphans: 2;
-  widows: 2;
-}
-
-.ep-bilingual.is-breakable .ep-bi__row {
+.ep-body.is-breakable h6,
+.ep-body.is-breakable .ep-bi__row,
+.ep-body.is-breakable .ep-bi__tgt {
   break-inside: auto;
   page-break-inside: auto;
   orphans: 2;
@@ -592,6 +614,12 @@
 .ep-bi__badge--todo {
   background: rgba(251, 224, 223, 0.94);
   color: #b8352f;
+}
+
+/* 手机串行翻译：标签贴译文右侧内联排列；底色按白纸页面沿用默认标签配色 */
+.ep-bi__row.is-serial .ep-bi__badge {
+  position: static;
+  margin-left: 14px;
 }
 
 @media print {

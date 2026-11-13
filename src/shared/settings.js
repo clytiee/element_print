@@ -72,7 +72,7 @@ export const DEFAULT_SETTINGS = {
   showHeader: true, // 页眉（Element Print / 摘自 域名）
   showFooter: true, // 页脚（品牌 + 页码）
   showQuote: true, // 页脚左下角随机显示一句名言
-  pageFormat: "a4", // a4 | ereader（10.3″ 4:3 电纸书）
+  pageFormat: "a4", // a4 | ereader（10.3″ 4:3 电纸书）| mobile（手机竖屏）
   bilingual: false, // 双语对照：左原文 / 右译文（逐段对齐）
   biSplit: 57, // 原文列宽（%），中西文宽度差明显，默认原文略宽
   biCacheMax: 5000, // 最多保留多少段译文缓存，超出按最近使用裁旧
@@ -83,6 +83,7 @@ export const DEFAULT_SETTINGS = {
   baiduAppId: "", // 百度翻译开放平台 APP ID
   baiduKey: "", // 百度翻译开放平台密钥
   targetLang: "ZH", // 目标语言（DeepL 用大写码，百度用小写码，后台换算）
+  view: "source", // source（原文） | mixed（中英混排） | bi（翻译；手机下内部解析为串行）
 };
 
 // 电纸书默认排版；切到该格式时套用，之后仍可单项微调
@@ -92,6 +93,29 @@ export const EREADER_DEFAULTS = {
   lineHeightMode: "ratio",
   lineHeight: 1.25,
   paraAfter: 6,
+};
+
+// 手机竖屏默认排版：单列、宽松行距、无页眉页脚与来源信息，格言作为文末收尾
+export const MOBILE_DEFAULTS = {
+  columns: 1,
+  fontSize: 10,
+  titleSize: 13,
+  lineHeightMode: "ratio",
+  lineHeight: 1.35,
+  paraAfter: 6,
+  indent: 0,
+  bodyFont: "auto",
+  bodyWeight: "normal",
+  titleFont: "inherit",
+  marginTop: 3, // mm
+  marginRight: 3,
+  marginBottom: 3,
+  marginLeft: 3,
+  showHeader: false,
+  showFooter: false,
+  showUrl: false,
+  showTime: false,
+  showQuote: true,
 };
 
 // 随「版式 × 页面格式」分别记忆的排版项
@@ -133,10 +157,14 @@ const SHARED_KEYS = [
   "baiduAppId",
   "baiduKey",
   "targetLang",
+  "pageFormat",
+  "view",
 ];
 
 export function profileKey(theme, pageFormat) {
-  return `${theme || "paper"}:${pageFormat === "ereader" ? "ereader" : "a4"}`;
+  if (pageFormat === "mobile") return "mobile";
+  const fmt = pageFormat === "ereader" ? "ereader" : "a4";
+  return `${theme || "paper"}:${fmt}`;
 }
 
 export function pickLayout(settings) {
@@ -257,6 +285,13 @@ function clamp(value, min, max, fallback) {
 }
 
 function normalizeShared(raw, base) {
+  if (raw.pageFormat === "ereader" || raw.pageFormat === "mobile") {
+    base.pageFormat = raw.pageFormat;
+  } else {
+    base.pageFormat = "a4";
+  }
+  if (raw.view === "mixed" || raw.view === "bi") base.view = raw.view;
+  else base.view = "source";
   if (typeof raw.bilingual === "boolean") base.bilingual = raw.bilingual;
   base.biCacheMax = clamp(raw.biCacheMax, 100, 20000, base.biCacheMax);
   if (raw.imgSize === "small" || raw.imgSize === "mid" || raw.imgSize === "full") {
@@ -285,11 +320,11 @@ function normalizeLayout(raw, base) {
   base.indent = clamp(raw.indent, 0, 4, base.indent);
 
   // 旧版只有一个统一 margin，迁移成四边相同
-  const legacy = clamp(raw.margin, 6, 40, base.marginTop);
-  base.marginTop = clamp(raw.marginTop, 6, 40, legacy);
-  base.marginRight = clamp(raw.marginRight, 6, 40, legacy);
-  base.marginBottom = clamp(raw.marginBottom, 6, 40, legacy);
-  base.marginLeft = clamp(raw.marginLeft, 6, 40, legacy);
+  const legacy = clamp(raw.margin, 3, 40, base.marginTop);
+  base.marginTop = clamp(raw.marginTop, 3, 40, legacy);
+  base.marginRight = clamp(raw.marginRight, 3, 40, legacy);
+  base.marginBottom = clamp(raw.marginBottom, 3, 40, legacy);
+  base.marginLeft = clamp(raw.marginLeft, 3, 40, legacy);
 
   if (typeof raw.spanHead === "boolean") base.spanHead = raw.spanHead;
   if (typeof raw.allowBreak === "boolean") base.allowBreak = raw.allowBreak;
@@ -311,20 +346,37 @@ function normalize(raw) {
   if (!raw || typeof raw !== "object") return base;
 
   if (THEMES.includes(raw.theme)) base.theme = raw.theme;
-  if (raw.pageFormat === "ereader") base.pageFormat = "ereader";
   normalizeShared(raw, base);
 
-  const profiles = raw.profiles && typeof raw.profiles === "object" ? raw.profiles : {};
+  const profiles = raw.profiles && typeof raw.profiles === "object" ? { ...raw.profiles } : {};
   const key = profileKey(base.theme, base.pageFormat);
   let saved = profiles[key];
+  // 兼容旧的按「版式 × 手机」存下的档案：并入统一 mobile 档案
+  if (!saved && base.pageFormat === "mobile") {
+    saved = profiles[`${base.theme}:mobile`] || null;
+  }
   if (!saved && LAYOUT_KEYS.some((k) => raw[k] !== undefined)) saved = raw;
 
-  const preset = THEME_PRESETS[base.theme] || {};
-  const layoutBase = { ...DEFAULT_SETTINGS, ...preset };
+  const layoutBase =
+    base.pageFormat === "mobile"
+      ? { ...DEFAULT_SETTINGS, ...MOBILE_DEFAULTS }
+      : { ...DEFAULT_SETTINGS, ...(THEME_PRESETS[base.theme] || {}) };
   normalizeLayout(saved || {}, layoutBase);
-  if (base.pageFormat === "ereader" && (!saved || Object.keys(saved).length === 0)) {
+  if (base.pageFormat === "mobile") {
+    layoutBase.columns = 1;
+    layoutBase.showHeader = false;
+    layoutBase.showFooter = false;
+  }
+  if (layoutBase.columns !== 2) layoutBase.spanHead = false;
+  const hasSaved = saved && Object.keys(saved).length > 0;
+  if (base.pageFormat === "ereader" && !hasSaved) {
     Object.assign(layoutBase, EREADER_DEFAULTS);
   }
+
+  // layoutBase 只保留版式项；共享项以 base 为准，避免默认 pageFormat 覆盖已保存格式
+  delete layoutBase.theme;
+  delete layoutBase.pageFormat;
+  SHARED_KEYS.forEach((key) => delete layoutBase[key]);
 
   return { ...base, ...layoutBase, profiles };
 }
@@ -339,25 +391,50 @@ export async function loadSettings() {
 }
 
 let saveTimer = 0;
+let lastSettings = null;
+let lastProfiles = null;
 
-export function saveSettings(settings) {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    try {
-      const existing = await chrome.storage.local.get(STORAGE_KEY);
-      const prev = existing[STORAGE_KEY] || {};
-      const profiles = prev.profiles && typeof prev.profiles === "object" ? { ...prev.profiles } : {};
-      const key = profileKey(settings.theme, settings.pageFormat);
-      profiles[key] = pickLayout(settings);
-      const out = {
-        ...pickShared(settings),
-        theme: settings.theme,
-        pageFormat: settings.pageFormat,
-        profiles,
-      };
-      await chrome.storage.local.set({ [STORAGE_KEY]: out });
-    } catch {
-      // 存储不可用时保留内存态，下次设置变更再重试
+async function persistSettings(settings, profiles) {
+  try {
+    const existing = await chrome.storage.local.get(STORAGE_KEY);
+    const prev = existing[STORAGE_KEY] || {};
+    const mergedProfiles =
+      prev.profiles && typeof prev.profiles === "object" ? { ...prev.profiles } : {};
+    if (profiles && typeof profiles === "object") {
+      Object.entries(profiles).forEach(([key, value]) => {
+        mergedProfiles[key] = value;
+      });
     }
+    const key = profileKey(settings.theme, settings.pageFormat);
+    mergedProfiles[key] = pickLayout(settings);
+    const out = {
+      ...pickShared(settings),
+      theme: settings.theme,
+      pageFormat: settings.pageFormat,
+      profiles: mergedProfiles,
+    };
+    await chrome.storage.local.set({ [STORAGE_KEY]: out });
+  } catch {
+    // 存储不可用时保留内存态，下次设置变更再重试
+  }
+}
+
+export function saveSettings(settings, profiles) {
+  lastSettings = settings;
+  lastProfiles = profiles;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    persistSettings(lastSettings, lastProfiles);
+    lastSettings = null;
+    lastProfiles = null;
   }, 260);
+}
+
+// 预览页关闭前把还在防抖队列里的设置立刻落盘，避免页面格式这类选择丢失
+export function flushSettings() {
+  if (!lastSettings) return;
+  clearTimeout(saveTimer);
+  persistSettings(lastSettings, lastProfiles);
+  lastSettings = null;
+  lastProfiles = null;
 }
