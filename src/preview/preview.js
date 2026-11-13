@@ -228,6 +228,10 @@ function render(payload) {
   seedPageTranslations(payload);
   state.lang = detectLang($("body"));
   setSheetLang(state.lang);
+  // 语言判定后基线会随中英体例变化（缩进 / 段后 / 标题字体），
+  // 需重算一遍虚线框与重置按钮，避免沿用默认 zh 基线的旧标记
+  syncModifiedMarks();
+  syncResetBtn();
   refreshWordCount();
   syncTitleTrans(); // 语言判定完才知道能不能进对照视图
 
