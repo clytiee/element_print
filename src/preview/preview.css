@@ -476,6 +476,14 @@ body {
   font-size: 12px;
 }
 
+/* 当前组合里偏离默认值的参数，用蓝色虚线框标出 */
+.ep-field.is-modified,
+.ep-check.is-modified {
+  outline: 1px dashed var(--ep-accent);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
 .ep-field__row {
   display: flex;
   align-items: baseline;
@@ -606,6 +614,10 @@ input[type="range"] {
   color: #8b939d;
   font-size: 11px;
   font-style: normal;
+}
+
+.ep-check__note:empty {
+  display: none;
 }
 
 /* 翻译失败时的提示换成警示色，别混在灰色注释里 */

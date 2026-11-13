@@ -6,6 +6,11 @@ import {
   MARGIN_PRESETS,
   FONT_PRESETS,
   BODY_WEIGHTS,
+  EREADER_DEFAULTS,
+  LAYOUT_KEYS,
+  profileKey,
+  pickLayout,
+  pickShared,
   loadSettings,
   saveSettings,
 } from "../shared/settings.js";
@@ -30,14 +35,7 @@ const EREADER_PAGE = {
   ml: 10,
 };
 
-// 电纸书默认排版；切到该格式时套用，之后仍可单项微调
-const EREADER_DEFAULTS = {
-  bodyWeight: "semibold",
-  fontSize: 12.5,
-  lineHeightMode: "ratio",
-  lineHeight: 1.25,
-  paraAfter: 6,
-};
+// 电纸书默认排版由 settings.js 统一提供
 
 function applyEreaderDefaults(force = false) {
   const s = state.settings;
@@ -52,6 +50,7 @@ const isEreader = (s) => s.pageFormat === "ereader";
 
 const state = {
   settings: { ...DEFAULT_SETTINGS },
+  profiles: {},
   payload: null,
   lang: "zh",
   ready: false,
@@ -431,6 +430,61 @@ function applySettings() {
   fit();
 }
 
+function fieldOf(id) {
+  const node = $(id);
+  return node ? node.closest(".ep-field, .ep-check") : null;
+}
+
+const MODIFIED_TARGETS = {
+  columns: () => fieldOf("segColumns"),
+  bodyFont: () => fieldOf("bodyFont"),
+  bodyWeight: () => fieldOf("segBodyWeight"),
+  titleFont: () => fieldOf("titleFont"),
+  fontSize: () => fieldOf("fontSize"),
+  titleSize: () => fieldOf("titleSize"),
+  lineHeightMode: () => fieldOf("segLineMode"),
+  lineHeight: () => fieldOf("lineHeight"),
+  paraBefore: () => fieldOf("paraBefore"),
+  paraAfter: () => fieldOf("paraAfter"),
+  indent: () => fieldOf("indent"),
+  marginTop: () => fieldOf("marginTop"),
+  marginRight: () => fieldOf("marginRight"),
+  marginBottom: () => fieldOf("marginBottom"),
+  marginLeft: () => fieldOf("marginLeft"),
+  showUrl: () => fieldOf("showUrl"),
+  showTime: () => fieldOf("showTime"),
+  spanHead: () => fieldOf("spanHead"),
+  allowBreak: () => fieldOf("allowBreak"),
+  showHeader: () => fieldOf("showHeader"),
+  showFooter: () => fieldOf("showFooter"),
+  showQuote: () => fieldOf("showQuote"),
+  biSplit: () => fieldOf("biSplit"),
+};
+
+function settingsEqual(key, s, baseline) {
+  let actual = s[key];
+  let expected = baseline[key];
+  if (key === "lineHeight") {
+    const fixed = s.lineHeightMode === "fixed";
+    actual = fixed ? s.lineHeightFixed : s.lineHeight;
+    expected = fixed ? baseline.lineHeightFixed : baseline.lineHeight;
+  } else if (key === "titleFont") {
+    actual = titleFontStack(s, state.lang);
+    expected = titleFontStack({ titleFont: expected, bodyFont: baseline.bodyFont }, state.lang);
+  }
+  return actual === expected;
+}
+
+function syncModifiedMarks() {
+  const s = state.settings;
+  const baseline = getBaseline();
+  Object.entries(MODIFIED_TARGETS).forEach(([key, target]) => {
+    const node = target();
+    if (!node) return;
+    node.classList.toggle("is-modified", !settingsEqual(key, s, baseline));
+  });
+}
+
 function syncControls() {
   const s = state.settings;
   const fixedLine = s.lineHeightMode === "fixed";
@@ -529,6 +583,8 @@ function syncControls() {
   Array.from($("segLineMode").querySelectorAll("button")).forEach((btn) => {
     btn.classList.toggle("is-active", btn.dataset.value === (s.lineHeightMode || "ratio"));
   });
+
+  syncModifiedMarks();
 }
 
 let fitFrame = 0;
@@ -1793,6 +1849,7 @@ async function refreshBilingual(opts = {}) {
 
 function update(patch) {
   state.settings = { ...state.settings, ...patch };
+  rememberCurrentProfile();
   syncControls();
   applySettings();
   saveSettings(state.settings);
@@ -1810,41 +1867,60 @@ function langFitPreset(preset, lang) {
   };
 }
 
-// 「重置版式」只在当前参数偏离该版式默认值时可点
+function getBaseline() {
+  const s = state.settings;
+  const preset = langFitPreset(THEME_PRESETS[s.theme || "paper"], state.lang) || {};
+  const baseline = { ...DEFAULT_SETTINGS, ...preset };
+  if (isEreader(s)) Object.assign(baseline, EREADER_DEFAULTS);
+  return baseline;
+}
+
+// 「重置版式」只在当前组合参数偏离该组合默认值时可点
 function syncResetBtn() {
   const s = state.settings;
-  const preset = langFitPreset(THEME_PRESETS[s.theme || "paper"], state.lang);
   const btn = $("resetBtn");
-  if (!preset || !btn) return;
-  const dirty = Object.keys(preset).some((key) => s[key] !== preset[key]);
+  if (!btn) return;
+
+  const baseline = getBaseline();
+  const dirty = LAYOUT_KEYS.some((key) => !settingsEqual(key, s, baseline));
+  const formatLabel = isEreader(s) ? "电纸书" : "A4";
+  const themeName = themeLabel(baseline.theme || s.theme || "paper");
   btn.disabled = !dirty;
   btn.title = dirty
-    ? "重置版式：把当前参数恢复为「" + themeLabel(preset.theme) + "」的默认值"
-    : "当前就是这个版式的默认设置，没有可重置的改动";
+    ? `重置版式：把当前「${themeName} · ${formatLabel}」恢复默认值`
+    : `当前就是「${themeName} · ${formatLabel}」的默认设置，没有可重置的改动`;
 }
 
 function themeLabel(theme) {
   return theme === "academic" ? "学术期刊" : theme === "gov" ? "公文" : "原版";
 }
 
-// 切版式：整套参数按该版式的推荐值重置，之后仍可单项微调
-function switchTheme(theme) {
+function rememberCurrentProfile() {
+  const key = profileKey(state.settings.theme, state.settings.pageFormat);
+  state.profiles[key] = pickLayout(state.settings);
+}
+
+function loadThemeProfile(theme, pageFormat, reset = false) {
   const preset = langFitPreset(THEME_PRESETS[theme], state.lang);
-  if (!preset) return;
-  // Key 这类跨版式保留的字段不跟着重置
-  const keep = {
-    engine: state.settings.engine,
-    deeplKey: state.settings.deeplKey,
-    deeplFree: state.settings.deeplFree,
-    baiduAppId: state.settings.baiduAppId,
-    baiduKey: state.settings.baiduKey,
-    targetLang: state.settings.targetLang,
-    bilingual: state.settings.bilingual,
-    imgSize: state.settings.imgSize,
-    pageFormat: state.settings.pageFormat,
-  };
-  state.settings = { ...preset, ...keep };
-  if (isEreader(state.settings)) applyEreaderDefaults(true);
+  if (!preset) return false;
+  const saved = reset ? {} : state.profiles[profileKey(theme, pageFormat)] || {};
+  if (reset) {
+    const shared = pickShared(state.settings);
+    state.settings = { ...DEFAULT_SETTINGS, ...preset, ...shared, theme, pageFormat };
+  } else {
+    state.settings = { ...state.settings, ...preset, ...saved, theme, pageFormat };
+  }
+  if (pageFormat === "ereader" && Object.keys(saved).length === 0) {
+    Object.assign(state.settings, EREADER_DEFAULTS);
+  }
+  return true;
+}
+
+// 切版式：整套参数按该版式的推荐值或已保存的组合档案加载，之后仍可单项微调
+function switchTheme(theme, reset = false) {
+  if (!reset) rememberCurrentProfile();
+  if (!loadThemeProfile(theme, state.settings.pageFormat, reset)) return;
+  if (reset) delete state.profiles[profileKey(theme, state.settings.pageFormat)];
   syncControls();
   applySettings();
   saveSettings(state.settings);
@@ -1865,7 +1941,12 @@ function bindControls() {
     const btn = e.target.closest("button[data-value]");
     if (!btn) return;
     const pageFormat = btn.dataset.value;
-    update(pageFormat === "ereader" ? { pageFormat, ...EREADER_DEFAULTS } : { pageFormat });
+    if (pageFormat === state.settings.pageFormat) return;
+    rememberCurrentProfile();
+    loadThemeProfile(state.settings.theme, pageFormat);
+    syncControls();
+    applySettings();
+    saveSettings(state.settings);
   });
   $("segImgSize").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-value]");
@@ -1980,7 +2061,7 @@ function bindControls() {
   });
 
   $("resetBtn").addEventListener("click", () => {
-    switchTheme(state.settings.theme || "paper");
+    switchTheme(state.settings.theme || "paper", true);
   });
 
   $("printBtn").addEventListener("click", () => {
@@ -2225,7 +2306,10 @@ function fillFontSelects() {
 }
 
 async function init() {
-  state.settings = await loadSettings();
+  const loaded = await loadSettings();
+  state.profiles = loaded.profiles || {};
+  delete loaded.profiles;
+  state.settings = loaded;
   if (isEreader(state.settings)) applyEreaderDefaults();
   await loadBiCache(); // 上次留下的段落译文先灌进内存，命中就不必再打 API
   fillFontSelects();

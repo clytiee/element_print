@@ -85,6 +85,76 @@ export const DEFAULT_SETTINGS = {
   targetLang: "ZH", // 目标语言（DeepL 用大写码，百度用小写码，后台换算）
 };
 
+// 电纸书默认排版；切到该格式时套用，之后仍可单项微调
+export const EREADER_DEFAULTS = {
+  bodyWeight: "semibold",
+  fontSize: 12.5,
+  lineHeightMode: "ratio",
+  lineHeight: 1.25,
+  paraAfter: 6,
+};
+
+// 随「版式 × 页面格式」分别记忆的排版项
+export const LAYOUT_KEYS = [
+  "columns",
+  "fontSize",
+  "titleSize",
+  "lineHeightMode",
+  "lineHeight",
+  "lineHeightFixed",
+  "paraBefore",
+  "paraAfter",
+  "indent",
+  "bodyFont",
+  "bodyWeight",
+  "titleFont",
+  "spanHead",
+  "allowBreak",
+  "biSplit",
+  "marginTop",
+  "marginRight",
+  "marginBottom",
+  "marginLeft",
+  "showUrl",
+  "showTime",
+  "showHeader",
+  "showFooter",
+  "showQuote",
+];
+
+// 跨组合共享的全局项
+const SHARED_KEYS = [
+  "bilingual",
+  "biCacheMax",
+  "imgSize",
+  "engine",
+  "deeplKey",
+  "deeplFree",
+  "baiduAppId",
+  "baiduKey",
+  "targetLang",
+];
+
+export function profileKey(theme, pageFormat) {
+  return `${theme || "paper"}:${pageFormat === "ereader" ? "ereader" : "a4"}`;
+}
+
+export function pickLayout(settings) {
+  const out = {};
+  LAYOUT_KEYS.forEach((key) => {
+    if (settings[key] !== undefined) out[key] = settings[key];
+  });
+  return out;
+}
+
+export function pickShared(settings) {
+  const out = {};
+  SHARED_KEYS.forEach((key) => {
+    if (settings[key] !== undefined) out[key] = settings[key];
+  });
+  return out;
+}
+
 // 切版式时套用的整套参数；之后仍可单独微调
 export const THEME_PRESETS = {
   paper: {
@@ -112,6 +182,7 @@ export const THEME_PRESETS = {
     showTime: false,
     showHeader: true,
     showFooter: true,
+    showQuote: true,
   },
   academic: {
     theme: "academic",
@@ -138,6 +209,7 @@ export const THEME_PRESETS = {
     showTime: false,
     showHeader: true,
     showFooter: true,
+    showQuote: true,
   },
   // 党政机关公文（GB/T 9704）：三号仿宋、固定行距 28pt、非对称页边距
   gov: {
@@ -165,6 +237,7 @@ export const THEME_PRESETS = {
     showTime: false,
     showHeader: false, // 公文页眉位置留给份号/密级，正文摘录不画
     showFooter: true, // 页码在版心底（地脚）
+    showQuote: true,
   },
 };
 
@@ -183,11 +256,23 @@ function clamp(value, min, max, fallback) {
   return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
 }
 
-function normalize(raw) {
-  const base = { ...DEFAULT_SETTINGS };
-  if (!raw || typeof raw !== "object") return base;
+function normalizeShared(raw, base) {
+  if (typeof raw.bilingual === "boolean") base.bilingual = raw.bilingual;
+  base.biCacheMax = clamp(raw.biCacheMax, 100, 20000, base.biCacheMax);
+  if (raw.imgSize === "small" || raw.imgSize === "mid" || raw.imgSize === "full") {
+    base.imgSize = raw.imgSize;
+  }
+  if (typeof raw.deeplKey === "string") base.deeplKey = raw.deeplKey.trim().slice(0, 200);
+  if (typeof raw.deeplFree === "boolean") base.deeplFree = raw.deeplFree;
+  if (raw.engine === "baidu" || raw.engine === "deepl") base.engine = raw.engine;
+  if (typeof raw.baiduAppId === "string") base.baiduAppId = raw.baiduAppId.trim().slice(0, 60);
+  if (typeof raw.baiduKey === "string") base.baiduKey = raw.baiduKey.trim().slice(0, 60);
+  if (typeof raw.targetLang === "string" && /^[A-Za-z-]{2,8}$/.test(raw.targetLang)) {
+    base.targetLang = raw.targetLang.toUpperCase();
+  }
+}
 
-  if (THEMES.includes(raw.theme)) base.theme = raw.theme;
+function normalizeLayout(raw, base) {
   if (raw.columns === 2) base.columns = 2;
   if (raw.lineHeightMode === "fixed") base.lineHeightMode = "fixed";
 
@@ -213,27 +298,35 @@ function normalize(raw) {
   if (typeof raw.showHeader === "boolean") base.showHeader = raw.showHeader;
   if (typeof raw.showFooter === "boolean") base.showFooter = raw.showFooter;
   if (typeof raw.showQuote === "boolean") base.showQuote = raw.showQuote;
-  if (raw.pageFormat === "ereader") base.pageFormat = "ereader";
-  if (typeof raw.bilingual === "boolean") base.bilingual = raw.bilingual;
   base.biSplit = clamp(raw.biSplit, 35, 70, base.biSplit);
-  base.biCacheMax = clamp(raw.biCacheMax, 100, 20000, base.biCacheMax);
-  if (raw.imgSize === "small" || raw.imgSize === "mid" || raw.imgSize === "full") {
-    base.imgSize = raw.imgSize;
-  }
-  if (typeof raw.deeplKey === "string") base.deeplKey = raw.deeplKey.trim().slice(0, 200);
-  if (typeof raw.deeplFree === "boolean") base.deeplFree = raw.deeplFree;
-  if (raw.engine === "baidu" || raw.engine === "deepl") base.engine = raw.engine;
-  if (typeof raw.baiduAppId === "string") base.baiduAppId = raw.baiduAppId.trim().slice(0, 60);
-  if (typeof raw.baiduKey === "string") base.baiduKey = raw.baiduKey.trim().slice(0, 60);
-  if (typeof raw.targetLang === "string" && /^[A-Za-z-]{2,8}$/.test(raw.targetLang)) {
-    base.targetLang = raw.targetLang.toUpperCase();
-  }
   if (FONT_PRESETS[raw.bodyFont]) base.bodyFont = raw.bodyFont;
   if (BODY_WEIGHTS[raw.bodyWeight]) base.bodyWeight = raw.bodyWeight;
   if (raw.titleFont === "inherit" || FONT_PRESETS[raw.titleFont]) {
     base.titleFont = raw.titleFont;
   }
-  return base;
+}
+
+function normalize(raw) {
+  const base = { ...DEFAULT_SETTINGS };
+  if (!raw || typeof raw !== "object") return base;
+
+  if (THEMES.includes(raw.theme)) base.theme = raw.theme;
+  if (raw.pageFormat === "ereader") base.pageFormat = "ereader";
+  normalizeShared(raw, base);
+
+  const profiles = raw.profiles && typeof raw.profiles === "object" ? raw.profiles : {};
+  const key = profileKey(base.theme, base.pageFormat);
+  let saved = profiles[key];
+  if (!saved && LAYOUT_KEYS.some((k) => raw[k] !== undefined)) saved = raw;
+
+  const preset = THEME_PRESETS[base.theme] || {};
+  const layoutBase = { ...DEFAULT_SETTINGS, ...preset };
+  normalizeLayout(saved || {}, layoutBase);
+  if (base.pageFormat === "ereader" && (!saved || Object.keys(saved).length === 0)) {
+    Object.assign(layoutBase, EREADER_DEFAULTS);
+  }
+
+  return { ...base, ...layoutBase, profiles };
 }
 
 export async function loadSettings() {
@@ -249,7 +342,22 @@ let saveTimer = 0;
 
 export function saveSettings(settings) {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    chrome.storage.local.set({ [STORAGE_KEY]: settings }).catch(() => {});
+  saveTimer = setTimeout(async () => {
+    try {
+      const existing = await chrome.storage.local.get(STORAGE_KEY);
+      const prev = existing[STORAGE_KEY] || {};
+      const profiles = prev.profiles && typeof prev.profiles === "object" ? { ...prev.profiles } : {};
+      const key = profileKey(settings.theme, settings.pageFormat);
+      profiles[key] = pickLayout(settings);
+      const out = {
+        ...pickShared(settings),
+        theme: settings.theme,
+        pageFormat: settings.pageFormat,
+        profiles,
+      };
+      await chrome.storage.local.set({ [STORAGE_KEY]: out });
+    } catch {
+      // 存储不可用时保留内存态，下次设置变更再重试
+    }
   }, 260);
 }

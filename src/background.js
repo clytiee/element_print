@@ -352,11 +352,19 @@ async function openPreview(id) {
   if (!id) throw new Error("缺少 payload id");
   const url =
     chrome.runtime.getURL(PREVIEW_URL) + "?id=" + encodeURIComponent(id);
-  const win = await chrome.windows.create({
-    url,
-    type: "popup",
-    width: 1040,
-    height: 1000,
-  });
-  return win;
+  // 桌面端用独立弹窗；手机浏览器（狐猴/Kiwi 等）没有多窗口 API，
+  // windows.create 会抛错或返回 undefined，此时退回新标签页打开
+  try {
+    const win = await chrome.windows.create({
+      url,
+      type: "popup",
+      width: 1040,
+      height: 1000,
+    });
+    if (win) return win;
+  } catch (e) {
+    // 忽略，走下面的新标签页兜底
+  }
+  await chrome.tabs.create({ url, active: true });
+  return null;
 }
