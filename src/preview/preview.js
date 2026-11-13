@@ -349,7 +349,7 @@ const URL_FONT = 'Verdana, "Segoe UI", sans-serif';
 function buildPageRule(s) {
   const er = isEreader(s);
   const mob = isMobile(s);
-  const page = er ? EREADER_PAGE : mob ? MOBILE_PAGE : null;
+  const sizePage = er ? EREADER_PAGE : mob ? MOBILE_PAGE : null;
   const head = $("pageHead");
   const brand = labelText(head && head.querySelector(".ep-gutter__title")) || "Element Print";
   const src = labelText($("pageSource"));
@@ -380,9 +380,9 @@ function buildPageRule(s) {
         : `@bottom-left{content:${cssString(quote)};${bottom(quote ? "74%" : "50%", QUOTE_FONT)}text-align:left;color:#6b6b6b;}` +
           `@bottom-right{content:counter(page) " / " counter(pages);${bottom(quote ? "24%" : "50%", GUTTER_FONT)}text-align:right;color:#6b6b6b;font-variant-numeric:tabular-nums;}`;
 
-  const size = page ? `${page.w} ${page.h}` : "A4";
-  const margin = page
-    ? `${page.mt}mm ${page.mr}mm ${page.mb}mm ${page.ml}mm`
+  const size = sizePage ? `${sizePage.w} ${sizePage.h}` : "A4";
+  const margin = mob
+    ? `${MOBILE_PAGE.mt}mm ${MOBILE_PAGE.mr}mm ${MOBILE_PAGE.mb}mm ${MOBILE_PAGE.ml}mm`
     : `${s.marginTop}mm ${s.marginRight}mm ${s.marginBottom}mm ${s.marginLeft}mm`;
 
   return (
@@ -415,7 +415,7 @@ function applySettings() {
   const root = document.documentElement;
   const er = isEreader(s);
   const mob = isMobile(s);
-  const page = er ? EREADER_PAGE : mob ? MOBILE_PAGE : null;
+  const sizePage = er ? EREADER_PAGE : mob ? MOBILE_PAGE : null;
 
   root.style.setProperty("--ep-font-size", s.fontSize + "pt");
   root.style.setProperty("--ep-title-size", s.titleSize + "pt");
@@ -425,26 +425,26 @@ function applySettings() {
   );
   root.style.setProperty("--ep-para-before", s.paraBefore + "px");
   root.style.setProperty("--ep-para-after", s.paraAfter + "px");
-  root.style.setProperty("--ep-page-w", page ? page.w : "210mm");
-  root.style.setProperty("--ep-page-h", page ? page.h : "297mm");
+  root.style.setProperty("--ep-page-w", sizePage ? sizePage.w : "210mm");
+  root.style.setProperty("--ep-page-h", sizePage ? sizePage.h : "297mm");
   root.style.setProperty("--ep-columns", s.columns === 2 ? "2" : "1");
   root.style.setProperty("--ep-img-max", IMG_SIZE_MAX[s.imgSize] || IMG_SIZE_MAX.full);
   root.style.setProperty("--ep-indent", s.indent + "em");
   root.style.setProperty(
     "--ep-mt",
-    page ? page.mt + "mm" : s.marginTop + "mm"
+    mob ? MOBILE_PAGE.mt + "mm" : s.marginTop + "mm"
   );
   root.style.setProperty(
     "--ep-mr",
-    page ? page.mr + "mm" : s.marginRight + "mm"
+    mob ? MOBILE_PAGE.mr + "mm" : s.marginRight + "mm"
   );
   root.style.setProperty(
     "--ep-mb",
-    page ? page.mb + "mm" : s.marginBottom + "mm"
+    mob ? MOBILE_PAGE.mb + "mm" : s.marginBottom + "mm"
   );
   root.style.setProperty(
     "--ep-ml",
-    page ? page.ml + "mm" : s.marginLeft + "mm"
+    mob ? MOBILE_PAGE.ml + "mm" : s.marginLeft + "mm"
   );
 
   $("sheet").dataset.theme = s.theme || "paper";
@@ -2412,7 +2412,7 @@ async function buildExportHtml() {
   const fontFaces = await inlineFontFaces();
   const er = isEreader(s);
   const mob = isMobile(s);
-  const page = er ? EREADER_PAGE : mob ? MOBILE_PAGE : null;
+  const sizePage = er ? EREADER_PAGE : mob ? MOBILE_PAGE : null;
   const vars = [
     `--ep-font-size:${s.fontSize}pt`,
     `--ep-title-size:${s.titleSize}pt`,
@@ -2426,12 +2426,12 @@ async function buildExportHtml() {
     `--ep-body-font:${bodyFontStack(s.bodyFont, state.lang)}`,
     `--ep-body-weight:${BODY_WEIGHTS[s.bodyWeight] || 400}`,
     `--ep-title-font:${titleFontStack(s, state.lang)}`,
-    `--ep-page-w:${page ? page.w : "210mm"}`,
-    `--ep-page-h:${page ? page.h : "297mm"}`,
-    `--ep-mt:${page ? page.mt : s.marginTop}mm`,
-    `--ep-mr:${page ? page.mr : s.marginRight}mm`,
-    `--ep-mb:${page ? page.mb : s.marginBottom}mm`,
-    `--ep-ml:${page ? page.ml : s.marginLeft}mm`,
+    `--ep-page-w:${sizePage ? sizePage.w : "210mm"}`,
+    `--ep-page-h:${sizePage ? sizePage.h : "297mm"}`,
+    `--ep-mt:${mob ? MOBILE_PAGE.mt : s.marginTop}mm`,
+    `--ep-mr:${mob ? MOBILE_PAGE.mr : s.marginRight}mm`,
+    `--ep-mb:${mob ? MOBILE_PAGE.mb : s.marginBottom}mm`,
+    `--ep-ml:${mob ? MOBILE_PAGE.ml : s.marginLeft}mm`,
   ].join(";");
 
   const sheetCopy = $("sheet").cloneNode(true);

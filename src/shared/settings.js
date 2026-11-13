@@ -93,6 +93,10 @@ export const EREADER_DEFAULTS = {
   lineHeightMode: "ratio",
   lineHeight: 1.25,
   paraAfter: 6,
+  marginTop: 5,
+  marginRight: 5,
+  marginBottom: 10,
+  marginLeft: 5,
 };
 
 // 手机竖屏默认排版：单列、宽松行距、无页眉页脚与来源信息，格言作为文末收尾

@@ -257,11 +257,21 @@
     return Boolean(node && Array.from(node.children).some((c) => BLOCK_TAGS.has(c.tagName)));
   }
 
+  // 参考文献条目整体作为一个配对单元：作者、缩写、标题、来源都属于同一条引用，
+  // 不能退到 surname / given-names / article-title 这类内层小容器里逐词配对。
+  function citationEntry(el) {
+    const ref = el.closest(".ref, .reference");
+    if (ref) return ref;
+    return el.closest(".citation, .mixed-citation");
+  }
+
   // 这一段译文该跟谁配对：
   //   译文在叶子块里（只装行内内容）→ 就是那个块，按段落口径配对；
   //   译文在「还套着别的块」的外层容器里（作者名、按钮这类）→ 退到最近的行内容器，
   //   否则会把整块（含下面几段地址）都当成它的原文。
   function pairUnit(el, root) {
+    const citation = citationEntry(el);
+    if (citation) return citation;
     const block = nearestBlock(el, root);
     if (block && !hasBlockChild(block)) return block;
     let node = el;
@@ -420,6 +430,18 @@
       const allDst = joinDst(marks.map((m) => normText(m.textContent)));
       if (!allDst) {
         marks.forEach((m) => m.remove());
+        return;
+      }
+
+      // 参考文献条目：整条作为一条对照，内部人名、标题、来源不再断段；
+      // 链接里的 URL / 菜单标签不进入译文。
+      if (citationEntry(block)) {
+        marks.forEach((m) => m.remove());
+        const src = normText(block.textContent);
+        const dst = joinDst(
+          marks.filter((m) => !m.closest("a")).map((m) => normText(m.textContent))
+        );
+        if (src && dst && src !== dst) pairs.push({ src, dst });
         return;
       }
 
