@@ -626,6 +626,7 @@ function syncControls() {
   $("vMarginRight").textContent = s.marginRight + "mm";
   $("vMarginBottom").textContent = s.marginBottom + "mm";
   $("vMarginLeft").textContent = s.marginLeft + "mm";
+  syncRangeSteppers();
 
   // 四边正好等于某个预置时，对应胶囊高亮
   const activePreset = Object.keys(MARGIN_PRESETS).find((key) => {
@@ -2149,7 +2150,59 @@ function switchTheme(theme, reset = false) {
   saveSettings(state.settings, state.profiles);
 }
 
+function initRangeSteppers() {
+  document.querySelectorAll('input[type="range"]').forEach((input) => {
+    if (input.closest(".ep-slider")) return;
+    const wrap = document.createElement("div");
+    wrap.className = "ep-slider";
+    input.parentNode.insertBefore(wrap, input);
+
+    const minus = document.createElement("button");
+    minus.type = "button";
+    minus.className = "ep-slider__btn";
+    minus.textContent = "−";
+    minus.title = "减小";
+    minus.setAttribute("aria-label", "减小");
+
+    const plus = document.createElement("button");
+    plus.type = "button";
+    plus.className = "ep-slider__btn";
+    plus.textContent = "+";
+    plus.title = "增大";
+    plus.setAttribute("aria-label", "增大");
+
+    wrap.append(minus, input, plus);
+
+    const step = Number(input.step) || 1;
+    const min = Number(input.min);
+    const max = Number(input.max);
+    const stepInput = (dir) => {
+      const cur = Number(input.value);
+      let next = Number((cur + dir * step).toFixed(2));
+      next = Math.min(max, Math.max(min, next));
+      if (next === cur) return;
+      input.value = String(next);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+    minus.addEventListener("click", () => stepInput(-1));
+    plus.addEventListener("click", () => stepInput(1));
+  });
+  syncRangeSteppers();
+}
+
+function syncRangeSteppers() {
+  document.querySelectorAll(".ep-slider").forEach((wrap) => {
+    const input = wrap.querySelector('input[type="range"]');
+    if (!input) return;
+    const [minus, plus] = wrap.querySelectorAll(".ep-slider__btn");
+    const cur = Number(input.value);
+    if (minus) minus.disabled = cur <= Number(input.min);
+    if (plus) plus.disabled = cur >= Number(input.max);
+  });
+}
+
 function bindControls() {
+  initRangeSteppers();
   $("segTheme").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-value]");
     if (!btn || $("segTheme").classList.contains("is-disabled")) return;
