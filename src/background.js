@@ -96,6 +96,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       .catch((err) => sendResponse({ ok: false, error: String((err && err.message) || err) }));
     return true;
   }
+  if (msg && msg.type === "ep:closePreview") {
+    if (sender.tab && sender.tab.id) {
+      chrome.tabs.remove(sender.tab.id).catch(() => {});
+    } else if (sender.windowId) {
+      chrome.windows.remove(sender.windowId).catch(() => {});
+    }
+    return true;
+  }
   return false;
 });
 

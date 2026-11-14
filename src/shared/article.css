@@ -548,7 +548,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(var(--ep-split, 57%) + 1em);
+  left: calc(var(--ep-split, 57%) + 0.5em);
   width: 12px;
   margin-left: -6px;
   cursor: col-resize;
@@ -575,6 +575,11 @@
 .ep-bi__tgt {
   font-size: 0.94em;
   text-indent: 0;
+}
+
+/* 比例行高下译文行盒按原文字号折算，和原文保持同一行高 */
+.ep-sheet[data-line-height-mode="ratio"] .ep-bi__tgt {
+  line-height: calc(var(--ep-line-height) / 0.94);
 }
 
 /* 译文是标题时按同级标题的字号与字重走，别缩成正文小字 */

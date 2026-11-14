@@ -84,6 +84,7 @@ export const DEFAULT_SETTINGS = {
   baiduKey: "", // 百度翻译开放平台密钥
   targetLang: "ZH", // 目标语言（DeepL 用大写码，百度用小写码，后台换算）
   view: "source", // source（原文） | mixed（中英混排） | bi（翻译；手机下内部解析为串行）
+  closeAfterPrint: false, // 打印对话框关闭后自动关闭预览页
 };
 
 // 电纸书默认排版；切到该格式时套用，之后仍可单项微调
@@ -163,6 +164,7 @@ const SHARED_KEYS = [
   "targetLang",
   "pageFormat",
   "view",
+  "closeAfterPrint",
 ];
 
 export function profileKey(theme, pageFormat) {
@@ -297,6 +299,7 @@ function normalizeShared(raw, base) {
   if (raw.view === "mixed" || raw.view === "bi") base.view = raw.view;
   else base.view = "source";
   if (typeof raw.bilingual === "boolean") base.bilingual = raw.bilingual;
+  if (typeof raw.closeAfterPrint === "boolean") base.closeAfterPrint = raw.closeAfterPrint;
   base.biCacheMax = clamp(raw.biCacheMax, 100, 20000, base.biCacheMax);
   if (raw.imgSize === "small" || raw.imgSize === "mid" || raw.imgSize === "full") {
     base.imgSize = raw.imgSize;

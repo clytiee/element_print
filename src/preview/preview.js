@@ -459,6 +459,7 @@ function applySettings() {
   $("sheet").dataset.theme = s.theme || "paper";
   $("sheet").dataset.pageFormat = s.pageFormat || "a4";
   $("sheet").dataset.bodyWeight = s.bodyWeight || "normal";
+  $("sheet").dataset.lineHeightMode = s.lineHeightMode || "ratio";
   $("sheet").classList.toggle("is-span-head", Boolean(s.spanHead));
   // 段落可跨页：不区分原文/译文层，所有可见正文容器统一放开 break-inside
   $("body").classList.toggle("is-breakable", Boolean(s.allowBreak));
@@ -597,6 +598,7 @@ function syncControls() {
   $("showHeader").checked = s.showHeader !== false;
   $("showFooter").checked = s.showFooter !== false;
   $("showQuote").checked = s.showQuote !== false;
+  $("closeAfterPrint").checked = Boolean(s.closeAfterPrint);
 
   $("bilingualOn").checked = Boolean(s.bilingual);
   $("deeplKey").value = s.deeplKey || "";
@@ -2187,6 +2189,7 @@ function bindControls() {
   $("showHeader").addEventListener("change", (e) => update({ showHeader: e.target.checked }));
   $("showFooter").addEventListener("change", (e) => update({ showFooter: e.target.checked }));
   $("showQuote").addEventListener("change", (e) => update({ showQuote: e.target.checked }));
+  $("closeAfterPrint").addEventListener("change", (e) => update({ closeAfterPrint: e.target.checked }));
 
   // 双语对照：开时先退出编辑/删减（改的是原文 #body，对照层只是只读副本）
   $("bilingualOn").addEventListener("change", (e) => {
@@ -2280,6 +2283,13 @@ function bindControls() {
   // 打印前重建 @page，确保页眉里改过的文字进到页边距盒
   window.addEventListener("beforeprint", () => {
     if (state.settings) $("pageRule").textContent = buildPageRule(state.settings);
+  });
+  window.addEventListener("afterprint", () => {
+    if (state.settings && state.settings.closeAfterPrint) {
+      flushSettings();
+      window.close();
+      chrome.runtime.sendMessage({ type: "ep:closePreview" }).catch(() => {});
+    }
   });
   $("exportBtn").addEventListener("click", () => {
     exportHtml().catch((err) => showError("导出失败：" + ((err && err.message) || err)));
