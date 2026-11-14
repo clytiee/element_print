@@ -490,7 +490,7 @@
   display: grid;
   /* 左原文 / 右译文，宽度比例由 --ep-split 控制（中文比西文短，默认原文略宽） */
   grid-template-columns: var(--ep-split, 57%) minmax(0, 1fr);
-  column-gap: 2em;
+  column-gap: 1em;
   align-items: start;
   break-inside: avoid;
   page-break-inside: avoid;
