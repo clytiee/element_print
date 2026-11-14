@@ -714,6 +714,10 @@
   function extractDateText(text) {
     if (!text) return "";
     const s = String(text);
+    const usNumeric = s.match(
+      /\b\d{1,2}\/\d{1,2}\/\d{4}(?:\s+\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))?(?:\s+[A-Z]{2,5})?/
+    );
+    if (usNumeric) return usNumeric[0];
     const en = s.match(new RegExp("(?:" + DATE_MONTH + ")\\s+\\d{1,2},?\\s+\\d{4}", "i"));
     if (en) return en[0];
     const iso = s.match(/\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}[^\s]*)?\b/);
@@ -756,11 +760,9 @@
       const el = document.querySelector(sel);
       if (!el) continue;
       const visible = extractDateText(el.textContent);
-      if (visible && /[A-Za-z]/.test(visible)) return visible;
-      isoFallback = isoFallback || visible;
+      if (visible) return visible;
       const attrDate = el.getAttribute ? extractDateText(el.getAttribute("datetime") || "") : "";
-      if (attrDate && /[A-Za-z]/.test(attrDate)) return attrDate;
-      isoFallback = isoFallback || attrDate;
+      if (attrDate) return attrDate;
     }
     return isoFallback;
   }
