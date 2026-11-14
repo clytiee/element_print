@@ -539,6 +539,14 @@
   margin: 0;
 }
 
+/* 译文格中的引文与原文引文保持同款缩进、左边线 */
+.ep-bi__tgt:is(blockquote) {
+  margin: 0;
+  padding: 0 0 0 0.9em;
+  border-left: 2px solid #d5d8dd;
+  color: #3c3c3c;
+}
+
 .ep-bi__row + .ep-bi__row {
   margin-top: var(--ep-para-after);
 }

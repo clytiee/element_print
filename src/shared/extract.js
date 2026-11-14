@@ -913,7 +913,8 @@
     const walkMeta = (node) => {
       Array.from(node.children).forEach((child) => {
         const text = normText(child.textContent);
-        if (matchesMetaText(text, authorClean, pubDate)) {
+        // 只把块级容器当成重复的作者/日期行删掉；段落内同名的内联链接、强调不能移除
+        if (BLOCK_TAGS.has(child.tagName) && matchesMetaText(text, authorClean, pubDate)) {
           metaRemoved.add(text);
           child.remove();
           return;

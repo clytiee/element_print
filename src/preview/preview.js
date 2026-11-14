@@ -71,6 +71,12 @@ const state = {
   view: "source", // source（原文） | mixed（中英混排） | bi（左右对照）
 };
 
+// 本地调试入口：预览页控制台用于查看当前设置、payload 与段落译文配对
+window.__epDebug = {
+  get state() { return state; },
+  get payload() { return state.payload; },
+};
+
 // 当前是否处于左右对照视图
 function biActive() {
   return state.view === "bi";
@@ -1547,7 +1553,7 @@ function setImagesHidden(on) {
 /* ---------- 双语对照（左原文 / 右译文，逐段成对） ---------- */
 
 // 整块不翻译：表格、图、代码这类没有逐句对照的意义，单列铺满一行
-const BI_WIDE = new Set(["TABLE", "FIGURE", "IMG", "IFRAME", "VIDEO", "PRE", "HR", "BLOCKQUOTE"]);
+const BI_WIDE = new Set(["TABLE", "FIGURE", "IMG", "IFRAME", "VIDEO", "PRE", "HR"]);
 
 const biCache = new Map(); // 段落键 → 译文：内存镜像，启动时从 storage 灌入
 const biUsage = new Map(); // 段落键 → 最近使用时间，用于裁旧
@@ -1586,10 +1592,14 @@ function hideToast(delay) {
 // 页面上本来就带着译文（浏览器翻译插件插入的中文）：直接把这段译文进缓存，
 // 对照视图里就不用再打翻译 API，也不会把钱花在已经翻过的段落上。
 let biPageKeys = new Set();
+const biPlain = new Map(); // 页面自带译文的原文纯文本兜底，避免哈希口径不一致时漏配
+const biPlainPage = new Set();
 
 function seedPageTranslations(payload) {
   const list = (payload && payload.pageTranslations) || [];
   biPageKeys = new Set();
+  biPlain.clear();
+  biPlainPage.clear();
   if (!list.length) return;
   list.forEach((item) => {
     const src = String((item && item.src) || "").replace(/\s+/g, " ").trim();
@@ -1599,28 +1609,46 @@ function seedPageTranslations(payload) {
     biCache.set(key, dst);
     biUsage.set(key, Date.now());
     biPageKeys.add(key);
+    biPlain.set(src, dst);
+    biPlainPage.add(src);
   });
   persistBiCache();
+}
+
+function lookupBi(row) {
+  const key = row.text ? biTextKey(row.text) : "";
+  let text = key ? biCache.get(key) : "";
+  let page = key ? biPageKeys.has(key) : false;
+  if (!text && row.text) {
+    text = biPlain.get(row.text) || "";
+    if (text) page = biPlainPage.has(row.text);
+  }
+  return { key, text, page };
 }
 
 // 正文顶层块即「段」；每段取纯文本送翻，一样一段
 function collectBiRows() {
   const rows = [];
-  const walk = (node) => {
+  const walk = (node, quoteWrap) => {
     Array.from(node.children).forEach((child) => {
       // 表格、图、代码块：整块不切成句，单列铺满一行
       if (BI_WIDE.has(child.tagName)) {
         rows.push({ node: child, text: "", wide: true });
         return;
       }
+      // 引文外层保留边框；内部段落仍按段落配对译文，避免整块文本和内层译文键不一致
+      if (child.tagName === "BLOCKQUOTE") {
+        walk(child, child);
+        return;
+      }
       // 只装文字的块就是一段（含 div 冒充的段落）
       if (!hasBlockChild(child)) {
         const text = (child.textContent || "").replace(/\s+/g, " ").trim();
-        if (!text) return; // 空块不进对照，免得留一行空白
-        rows.push({ node: child, text, wide: false });
+        if (!text) return;
+        rows.push({ node: child, text, wide: false, quote: quoteWrap });
         return;
       }
-      walk(child);
+      walk(child, quoteWrap);
     });
   };
   walk($("body"));
@@ -1713,7 +1741,7 @@ async function lookUpTranslations(texts) {
   texts.forEach((t) => {
     if (!t) return;
     const key = biTextKey(t);
-    if (biCache.has(key)) {
+    if (biCache.has(key) || biPlain.has(t)) {
       biUsage.set(key, Date.now()); // 记一次使用，裁旧时优先保留常用的
       return;
     }
@@ -1800,6 +1828,23 @@ function onBiResizerDown(e) {
   window.addEventListener("pointerup", up);
 }
 
+function sourceClone(row) {
+  const clone = row.node.cloneNode(true);
+  clone.__epRow = row;
+  if (row.quote && row.quote !== row.node) {
+    const wrap = row.quote.cloneNode(false);
+    wrap.appendChild(clone);
+    return wrap;
+  }
+  return clone;
+}
+
+function targetTag(row) {
+  if (/^H[1-6]$/.test(row.node.tagName)) return row.node.tagName.toLowerCase();
+  if (row.quote) return "blockquote";
+  return "div";
+}
+
 function buildBilingual(rows) {
   const box = $("bilingual");
   box.innerHTML = "";
@@ -1811,24 +1856,22 @@ function buildBilingual(rows) {
 
     const src = document.createElement("div");
     src.className = "ep-bi__col ep-bi__src";
-    const clone = row.node.cloneNode(true);
-    clone.__epRow = row; // 编辑/删减时靠它把改动写回 #body 的原块
+    const clone = sourceClone(row);
     src.appendChild(clone);
     line.appendChild(src);
 
     if (!row.wide) {
-      const key = row.text ? biTextKey(row.text) : "";
-      const text = key ? biCache.get(key) : "";
+      const { key, text, page } = lookupBi(row);
       // 原文是标题时译文也用同级标题元素，跟着版式的标题样式走，而不是缩成正文小字
       const heading = /^H[1-6]$/.test(row.node.tagName);
-      const tgt = document.createElement(heading ? row.node.tagName.toLowerCase() : "div");
+      const tgt = document.createElement(targetTag(row));
       tgt.className = "ep-bi__col ep-bi__tgt" + (heading ? " is-head" : "");
       if (text) {
         tgt.textContent = text;
         // 页面自带译文优先标注，其次是本次刚翻出来的、再是缓存命中
         biBadge(
           tgt,
-          biPageKeys.has(key) ? "page" : biFresh.has(key) ? "done" : "cache"
+          page ? "page" : biFresh.has(key) ? "done" : "cache"
         );
       } else {
         // 没有译文：原文是刚改过（或从未翻过）的段落，等点「翻译」
@@ -1857,22 +1900,20 @@ function buildSerial(rows) {
 
     const src = document.createElement("div");
     src.className = "ep-bi__col ep-bi__src";
-    const clone = row.node.cloneNode(true);
-    clone.__epRow = row;
+    const clone = sourceClone(row);
     src.appendChild(clone);
     line.appendChild(src);
 
     if (!row.wide) {
-      const key = row.text ? biTextKey(row.text) : "";
-      const text = key ? biCache.get(key) : "";
+      const { key, text, page } = lookupBi(row);
       const heading = /^H[1-6]$/.test(row.node.tagName);
-      const tgt = document.createElement(heading ? row.node.tagName.toLowerCase() : "div");
+      const tgt = document.createElement(targetTag(row));
       tgt.className = "ep-bi__col ep-bi__tgt" + (heading ? " is-head" : "");
       if (text) {
         tgt.textContent = text;
         biBadge(
           tgt,
-          biPageKeys.has(key) ? "page" : biFresh.has(key) ? "done" : "cache"
+          page ? "page" : biFresh.has(key) ? "done" : "cache"
         );
       } else {
         tgt.classList.add("ep-bi__tgt--none");
@@ -1963,7 +2004,7 @@ async function refreshBilingual(opts = {}) {
   biFresh.clear();
 
   const texts = rows.filter((row) => !row.wide).map((row) => row.text);
-  const hit = texts.filter((t) => biCache.has(biTextKey(t))).length;
+  const hit = texts.filter((t) => biCache.has(biTextKey(t)) || biPlain.has(t)).length;
   // 本篇一段译文都没有（首次进来）：自动翻一次，不必先点按钮
   // 页面自带译文时不自动发请求：没配上的段落等用户点「翻译」，别替人烧额度
   const initial = !biDone && hit === 0 && biPageKeys.size === 0;
