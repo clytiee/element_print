@@ -534,6 +534,16 @@
   min-width: 0;
 }
 
+/* 混排视图：整句译文另起一行，短语译文留在句内并用淡色区分 */
+#mixed .ep-mixed-trans,
+#mixed .ep-mixed-trans--block {
+  color: var(--ep-sub);
+}
+#mixed .ep-mixed-trans--block {
+  display: block;
+  margin: 0.25em 0 0;
+}
+
 /* 原文格沿用正文排版，但格子之间不再重复叠加段间距 */
 .ep-bi__src > * {
   margin: 0;

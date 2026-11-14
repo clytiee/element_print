@@ -122,6 +122,41 @@
     });
   }
 
+  function beforeMarkText(el, root) {
+    const block = nearestBlock(el, root);
+    const range = document.createRange();
+    range.setStart(block, 0);
+    range.setEndBefore(el);
+    return normText(range.toString());
+  }
+
+  // 混排是阅读重排，不还原原网页格式：整句译文另起一行，短语/人名译文留在句内并补空格。
+  function markMixedTranslations(root, marks) {
+    marks.forEach((el) => {
+      if (!root.contains(el)) return;
+      const dst = normText(el.textContent);
+      if (!dst) return;
+      const before = beforeMarkText(el, root);
+      const heading = el.closest("h1,h2,h3,h4,h5,h6");
+      const fullSentence =
+        Boolean(heading) ||
+        (SENT_END_RE.test(before) && SENT_END_RE.test(dst));
+      el.classList.add(fullSentence ? "ep-mixed-trans--block" : "ep-mixed-trans");
+      if (!fullSentence) {
+        const prev = el.previousSibling;
+        if (
+          prev &&
+          prev.nodeType === 3 &&
+          prev.textContent &&
+          /[A-Za-z0-9]$/.test(prev.textContent) &&
+          !/\s$/.test(prev.textContent)
+        ) {
+          prev.textContent += " ";
+        }
+      }
+    });
+  }
+
   function tokenize(root) {
     const toks = [];
     const rec = (node) => {
@@ -856,6 +891,8 @@
     absolutize(clone, base);
     // 摘译文之前留一份未拆分的混排副本，供预览的「混排」视图还原原始内联中英交错
     const mixedClone = clone.cloneNode(true);
+    // 混排标记要在洗属性前先收引用，洗属性后再按整句/短语补类名
+    const mixedMarks = Array.from(mixedClone.querySelectorAll("*")).filter(isTransMarked);
     // 先摘译文再洗属性：标记属性正是判断依据，洗掉就认不出了
     let pageTranslations = splitTranslations(clone);
     // 洗属性会剥掉 class，摘要容器要在清洗前先定位好节点引用
@@ -871,6 +908,7 @@
       : "";
     cleanAttributes(clone);
     cleanAttributes(mixedClone);
+    markMixedTranslations(mixedClone, mixedMarks);
 
     const explicitTitle = normText(opts.title || "");
     // 整页提取时标题由 Readability 单独给出；这时不能把正文首段误拎成标题
