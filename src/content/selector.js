@@ -57,6 +57,14 @@
     root.appendChild(ui.bar);
   }
 
+  function describeElement(node) {
+    const tag = node.tagName.toLowerCase();
+    const id = node.id ? `#${node.id}` : "";
+    const classes = Array.from(node.classList || []).slice(0, 2);
+    const cls = classes.map((name) => `.${name}`).join("");
+    return tag + id + cls;
+  }
+
   function paint() {
     if (!hovered) return;
     const rect = hovered.getBoundingClientRect();
@@ -69,11 +77,11 @@
     for (const key of Object.keys(style)) ui.box.style[key] = style[key];
 
     const above = rect.top > 26;
-    ui.tag.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - 240)) + "px";
+    ui.tag.style.left = Math.max(4, Math.min(rect.left, window.innerWidth - 320)) + "px";
     ui.tag.style.top = (above ? rect.top - 24 : rect.bottom + 6) + "px";
 
-    // 左上角固定显示产品名
-    ui.tag.textContent = "Element Print";
+    const size = `${Math.round(rect.width)} × ${Math.round(rect.height)}`;
+    ui.tag.textContent = `Element Print · ${describeElement(hovered)} · ${size}`;
   }
 
   function hover(node) {

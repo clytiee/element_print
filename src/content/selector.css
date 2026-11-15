@@ -20,7 +20,7 @@
   position: fixed;
   z-index: 2147483001;
   pointer-events: none;
-  max-width: 240px;
+  max-width: 800px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
