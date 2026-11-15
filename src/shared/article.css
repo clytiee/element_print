@@ -271,6 +271,11 @@
   overflow-wrap: break-word;
 }
 
+.ep-body [data-ep-display="inline"] { display: inline; }
+.ep-body [data-ep-display="inline-block"] { display: inline-block; }
+.ep-body [data-ep-display="inline-flex"] { display: inline-flex; }
+.ep-body [data-ep-display="inline-grid"] { display: inline-grid; }
+
 .ep-body p,
 .ep-body .ep-para {
   margin: var(--ep-para-before) 0 var(--ep-para-after);

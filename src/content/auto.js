@@ -127,6 +127,58 @@
     return "";
   }
 
+  const BLOCK_TAG_SET = new Set([
+    "ADDRESS", "ARTICLE", "ASIDE", "BLOCKQUOTE", "DD", "DIV", "DL", "DT",
+    "FIELDSET", "FIGCAPTION", "FIGURE", "FORM", "H1", "H2", "H3", "H4",
+    "H5", "H6", "HEADER", "LI", "MAIN", "NAV", "OL", "P", "PRE", "SECTION",
+    "TABLE", "TBODY", "TD", "TFOOT", "TH", "THEAD", "TR", "UL",
+  ]);
+
+  function elementSignature(el) {
+    return {
+      tag: el.tagName.toLowerCase(),
+      cls: Array.from(el.classList || []).slice().sort().join("."),
+      text: normText(el.textContent),
+    };
+  }
+
+  // Readability 副本脱离原文档后读不到外部 CSS；回原页面实时元素取计算样式并打标记
+  function markHolderInlineDisplay(holder) {
+    const originals = Array.from(document.body.querySelectorAll("*")).filter(
+      (o) => !holder.contains(o)
+    );
+    const byId = new Map();
+    const byClassText = new Map();
+    const byText = new Map();
+
+    originals.forEach((orig) => {
+      if (orig.id && !byId.has(orig.id)) byId.set(orig.id, orig);
+      const sig = elementSignature(orig);
+      if (!sig.text) return;
+      const classTextKey = `${sig.cls}|${sig.text}`;
+      if (!byClassText.has(classTextKey)) byClassText.set(classTextKey, orig);
+      if (sig.text.length >= 4) {
+        if (!byText.has(sig.text)) byText.set(sig.text, orig);
+      }
+    });
+
+    holder.querySelectorAll("*").forEach((el) => {
+      // 默认 inline 的 span/a/strong 等不需要补标记；只处理被 CSS 改成 inline 的块级容器
+      if (!BLOCK_TAG_SET.has(el.tagName)) return;
+      const sig = elementSignature(el);
+      let orig = el.id ? byId.get(el.id) : null;
+      if (!orig && sig.text) {
+        orig = byClassText.get(`${sig.cls}|${sig.text}`) ||
+          (sig.text.length >= 4 ? byText.get(sig.text) : null);
+      }
+      if (!orig) return;
+      const display = getComputedStyle(orig).display;
+      if (/^inline/.test(display)) {
+        el.setAttribute("data-ep-display", display);
+      }
+    });
+  }
+
   async function run() {
     toast("正在自动识别正文…", true);
 
@@ -144,23 +196,44 @@
 
     const holder = document.createElement("div");
     holder.innerHTML = article.content;
+    // 脱离文档树时 getComputedStyle 只能拿到默认 block；临时挂到离屏位置，保留页面原始 inline 显示方式
+    holder.style.cssText =
+      "position:fixed;left:-99999px;top:0;visibility:hidden;pointer-events:none;";
+    document.body.appendChild(holder);
+    markHolderInlineDisplay(holder);
 
     const titleText = article.title || document.title || "";
     // Readability 在缺少 meta/JSON-LD 摘要时会用正文首段兜底；这类首段不作为摘要，避免和正文重复
     const excerptText = article.excerptFallback ? "" : article.excerpt || "";
-    const payload = await window.ElementPrintExtract.extract(holder, {
-      sourceUrl: location.href,
-      title: titleText,
-      pageTitle: titleText,
-      titleTrans: readTitleTranslation(article.title),
-      author: article.byline || "",
-      publishedTime: article.publishedTime || "",
-      excerpt: excerptText,
-      excerptTrans: readAbstractTranslation() || readExcerptTranslation(excerptText),
-    });
+    let payload;
+    try {
+      payload = await window.ElementPrintExtract.extract(holder, {
+        sourceUrl: location.href,
+        title: titleText,
+        pageTitle: titleText,
+        titleTrans: readTitleTranslation(article.title),
+        author: article.byline || "",
+        publishedTime: article.publishedTime || "",
+        excerpt: excerptText,
+        excerptTrans: readAbstractTranslation() || readExcerptTranslation(excerptText),
+        styleRoot: document,
+      });
+    } finally {
+      holder.remove();
+    }
     if (article.title && article.title.trim()) {
       payload.title = article.title.trim();
     }
+
+    payload.debug = {
+      source: "readability",
+      title: article.title || "",
+      byline: article.byline || "",
+      publishedTime: article.publishedTime || "",
+      excerpt: excerptText,
+      excerptFallback: Boolean(article.excerptFallback),
+      html: article.content || "",
+    };
 
     await window.ElementPrintExtract.savePayload(payload);
     toast("已提取", false);

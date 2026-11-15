@@ -2458,6 +2458,11 @@ function bindControls() {
   $("imgBtn").addEventListener("click", () => setImagesHidden(!hideImages));
 
   document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "d") {
+      e.preventDefault();
+      openReadabilityDebug();
+      return;
+    }
     if (trimming && e.key === "ArrowUp") {
       e.preventDefault();
       trimClimb();
@@ -2600,6 +2605,48 @@ ${sheetHtml}
 </body>
 </html>
 `;
+}
+
+function openReadabilityDebug() {
+  const debug = state.payload && state.payload.debug;
+  if (!debug || !debug.html) {
+    showToast("无 Readability 原始数据");
+    return;
+  }
+  const rows = [
+    ["标题", debug.title],
+    ["作者", debug.byline],
+    ["日期", debug.publishedTime],
+    ["摘要", debug.excerpt],
+    ["摘要兜底", debug.excerptFallback ? "是" : "否"],
+  ].filter(([, value]) => String(value || "").trim());
+  const metaHtml = rows
+    .map(([key, value]) => `<div><span>${esc(key)}</span>${esc(value)}</div>`)
+    .join("");
+  const doc = `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Readability 调试 · ${esc(debug.title || "Element Print")}</title>
+<style>
+  body { margin: 0; padding: 24px; font: 15px/1.75 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color: #16233a; background: #f5f7fa; }
+  .meta { max-width: 760px; margin: 0 auto 18px; padding: 12px 16px; border-radius: 10px; background: #fff; box-shadow: 0 2px 10px rgba(15,23,42,.08); }
+  .meta div { display: flex; gap: 10px; padding: 3px 0; }
+  .meta span { flex: 0 0 56px; color: #64748b; }
+  main { max-width: 760px; margin: 0 auto; padding: 22px 26px; border-radius: 12px; background: #fff; box-shadow: 0 2px 12px rgba(15,23,42,.08); }
+  main img { max-width: 100%; }
+</style>
+</head>
+<body>
+  <div class="meta">${metaHtml}</div>
+  <main>${debug.html}</main>
+</body>
+</html>`;
+  const blob = new Blob([doc], { type: "text/html;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, "_blank");
+  if (!win) showToast("调试弹窗被浏览器拦截");
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
 }
 
 async function exportHtml() {

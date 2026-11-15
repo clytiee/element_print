@@ -25,6 +25,7 @@
   const KEEP_ATTRS = new Set([
     "href", "src", "alt", "title", "colspan", "rowspan", "start", "reversed",
     "value", "datetime", "lang", "dir", "cite", "scope", "width", "height",
+    "data-ep-display",
   ]);
 
   const IMG_LIMIT = 24;
@@ -120,6 +121,30 @@
         root.removeAttribute(attr.name);
       }
     });
+  }
+
+  // 页面上被 CSS 改成 inline/inline-block 的 div 等元素，在克隆上保留原始显示方式
+  function markInlineDisplay(origRoot, cloneRoot, styleRoot) {
+    const walk = (orig, clone) => {
+      if (!orig || !clone) return;
+      if (orig.nodeType === Node.ELEMENT_NODE && clone.nodeType === Node.ELEMENT_NODE) {
+        if (!BLOCK_TAGS.has(clone.tagName)) return;
+        // 整页提取时 holder 是 Readability 重建的离屏容器；优先按 id 回原页面取计算样式
+        let source = orig;
+        if (styleRoot && orig.id) {
+          const matched = styleRoot.getElementById(orig.id);
+          if (matched) source = matched;
+        }
+        const display = getComputedStyle(source).display;
+        if (/^inline/.test(display)) {
+          clone.setAttribute("data-ep-display", display);
+        }
+      }
+      const origChildren = Array.from(orig.children);
+      const cloneChildren = Array.from(clone.children);
+      origChildren.forEach((child, index) => walk(child, cloneChildren[index]));
+    };
+    walk(origRoot, cloneRoot);
   }
 
   function beforeMarkText(el, root) {
@@ -745,6 +770,9 @@
 
   const DATE_MONTH =
     "Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?";
+  const DATE_WEEKDAY =
+    "Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday";
+  const DATE_ORDINAL = "\\d{1,2}(?:st|nd|rd|th)?";
 
   function extractDateText(text) {
     if (!text) return "";
@@ -755,6 +783,18 @@
     if (usNumeric) return usNumeric[0];
     const en = s.match(new RegExp("(?:" + DATE_MONTH + ")\\s+\\d{1,2},?\\s+\\d{4}", "i"));
     if (en) return en[0];
+    const weekdayMonthDay = s.match(
+      new RegExp(
+        "(?:" + DATE_WEEKDAY + ")\\s*,?\\s*(?:" + DATE_MONTH + ")\\s+" + DATE_ORDINAL +
+          "(?:,?\\s+\\d{4})?",
+        "i"
+      )
+    );
+    if (weekdayMonthDay) return weekdayMonthDay[0];
+    const monthDay = s.match(
+      new RegExp("(?:" + DATE_MONTH + ")\\s+" + DATE_ORDINAL, "i")
+    );
+    if (monthDay) return monthDay[0];
     const iso = s.match(/\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}[^\s]*)?\b/);
     return iso ? iso[0] : "";
   }
@@ -764,6 +804,15 @@
     let s = String(name).replace(/\s+/g, " ").trim();
     s = s.replace(/^\s*by\s+/i, "");
     s = s.replace(new RegExp("\\b(?:" + DATE_MONTH + ")\\s+\\d{1,2},?\\s+\\d{4}\\b", "gi"), "");
+    s = s.replace(
+      new RegExp(
+        "(?:" + DATE_WEEKDAY + ")\\s*,?\\s*(?:" + DATE_MONTH + ")\\s+" + DATE_ORDINAL +
+          "(?:,?\\s+\\d{4})?",
+        "gi"
+      ),
+      ""
+    );
+    s = s.replace(new RegExp("(?:" + DATE_MONTH + ")\\s+" + DATE_ORDINAL, "gi"), "");
     s = s.replace(/\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}[^\s]*)?\b/g, "");
     s = s.replace(/\s*[·,|]\s*$/, "").trim();
     return s;
@@ -885,6 +934,7 @@
     }
     const base = opts.sourceUrl || location.href;
     const clone = el.cloneNode(true);
+    markInlineDisplay(el, clone, opts.styleRoot || el);
 
     clone.querySelectorAll(DROP_SELECTOR).forEach((n) => n.remove());
     cleanUiChrome(clone);
