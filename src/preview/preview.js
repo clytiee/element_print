@@ -23,6 +23,127 @@ const payloadId = params.get("id") || "";
 const STORAGE_KEY = "ep:payload:" + payloadId;
 
 const $ = (id) => document.getElementById(id);
+const t = (key, substitutions) => chrome.i18n.getMessage(key, substitutions) || key;
+// 界面语言：用于隐藏只对某种语言有意义的设置项（公文版式、中文字体、百度翻译等）
+const UI_LANG = String(chrome.i18n.getUILanguage() || "").toLowerCase();
+const IS_EN_UI = UI_LANG.startsWith("en");
+
+function applyLocaleVisibility() {
+  const hideTag = IS_EN_UI ? "zh" : "en";
+  document.querySelectorAll("[data-locale-hide]").forEach((el) => {
+    if (el.dataset.localeHide === hideTag) el.hidden = true;
+  });
+  // 分段控件少一项时改两列，避免隐藏后还留空档
+  ["segTheme", "segPageFormat"].forEach((id) => {
+    const seg = $(id);
+    if (!seg) return;
+    const shown = Array.from(seg.querySelectorAll("button")).filter((b) => !b.hidden).length;
+    seg.classList.toggle("ep-seg--three", shown === 3);
+    seg.classList.toggle("ep-seg--two", shown === 2);
+  });
+  if (IS_EN_UI && state.settings) {
+    // 存量设置里可能还留着中文专属项，英文界面下回落到通用值
+    if (state.settings.theme === "gov") {
+      state.settings.theme = "paper";
+      Object.assign(state.settings, THEME_PRESETS.paper || {});
+    }
+    if (state.settings.engine === "baidu") state.settings.engine = "deepl";
+    if (!fontKeyVisible(state.settings.bodyFont)) state.settings.bodyFont = "times";
+    if (state.settings.titleFont !== "inherit" && !fontKeyVisible(state.settings.titleFont)) {
+      state.settings.titleFont = "inherit";
+    }
+    // 英文界面默认把内容翻成英文；用户手动选过则保留其选择
+    if (!state.settings.targetLangManual || !state.settings.targetLang) {
+      state.settings.targetLang = IS_EN_UI ? "EN" : "ZH";
+    }
+  } else if (state.settings && (!state.settings.targetLangManual || !state.settings.targetLang)) {
+    state.settings.targetLang = "ZH";
+  }
+}
+
+function applyStaticI18n() {
+  document.title = t("previewTitle");
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const msg = t(el.dataset.i18n);
+    el.textContent = msg;
+    // 提示条会被省略号截断，同步把全文写进 title 供悬停查看
+    if (el.id === "hintText") el.title = msg;
+  });
+  document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+    const msg = t(el.dataset.i18nTitle);
+    el.title = msg;
+    el.setAttribute("aria-label", msg);
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  const labels = {
+    editBtn: "edit",
+    trimBtn: "trim",
+    titleBtn: "title",
+    imgBtn: "imagesOn",
+    origBtn: "viewSource",
+    mixBtn: "viewMixed",
+    biBtn: "viewTranslation",
+  };
+  Object.entries(labels).forEach(([id, key]) => {
+    const el = $(id);
+    if (el) el.textContent = t(key);
+  });
+
+  const titleLabels = {
+    editBtn: "editTitle",
+    trimBtn: "trimTitle",
+    titleBtn: "titleTitle",
+    imgBtn: "imgOnTitle",
+    origBtn: "sourceViewTitle",
+    mixBtn: "mixedViewTitle",
+    biBtn: "biViewTitle",
+  };
+  Object.entries(titleLabels).forEach(([id, key]) => {
+    const el = $(id);
+    if (!el) return;
+    el.title = t(key);
+    el.setAttribute("aria-label", t(key));
+  });
+
+  const fmtTitleKeys = {
+    fontDown: "fontDownTitle",
+    fontUp: "fontUpTitle",
+    bold: "boldTitle",
+    italic: "italicTitle",
+    underline: "underlineTitle",
+    strikeThrough: "strikeTitle",
+    justifyLeft: "alignLeftTitle",
+    justifyCenter: "alignCenterTitle",
+    justifyRight: "alignRightTitle",
+    indent: "indentTitle",
+    h2: "h2Title",
+    h3: "h3Title",
+    quote: "quoteTitle",
+    ol: "olTitle",
+    ul: "ulTitle",
+    clearFormat: "clearFormatTitle",
+    replace: "replaceTitle",
+  };
+  document.querySelectorAll(".ep-fmt[data-cmd]").forEach((el) => {
+    const key = fmtTitleKeys[el.dataset.cmd];
+    if (!key) return;
+    el.title = t(key);
+    el.setAttribute("aria-label", t(key));
+  });
+
+  const placeholders = {
+    replaceFind: "replaceFindPlaceholder",
+    replaceRepl: "replaceReplPlaceholder",
+  };
+  Object.entries(placeholders).forEach(([id, key]) => {
+    const el = $(id);
+    if (el) el.placeholder = t(key);
+  });
+}
+
+applyStaticI18n();
 
 // 正文图片显示档位：只改预览/打印里的最大宽度，不动抽取下来的原图
 const IMG_SIZE_MAX = { small: "40%", mid: "65%", full: "100%" };
@@ -75,6 +196,7 @@ const state = {
 window.__epDebug = {
   get state() { return state; },
   get payload() { return state.payload; },
+  get locale() { return chrome.i18n.getUILanguage(); },
 };
 
 // 当前是否处于左右对照视图
@@ -111,8 +233,8 @@ function syncBiCreds() {
   $("baiduAppIdRow").hidden = !baidu;
   $("baiduKeyRow").hidden = !baidu;
   $("engineNote").textContent = baidu
-    ? "免费版约 5 万字符/月，QPS 约 1"
-    : "Key 以 :fx 结尾自动走免费端点";
+    ? t("engineNoteBaidu")
+    : t("engineNoteDeepl");
 }
 
 function engineReady(s) {
@@ -123,8 +245,8 @@ function engineReady(s) {
 
 function engineMissingText(s) {
   return s.engine === "baidu"
-    ? "翻译须先在右栏填百度 APP ID 和密钥"
-    : "翻译须先在右栏填 DeepL Auth Key";
+    ? t("missingBaidu")
+    : t("missingDeepl");
 }
 
 /* ---------- 工具 ---------- */
@@ -237,9 +359,9 @@ function showError(text) {
 function siteNameOf(url) {
   try {
     const host = new URL(url).hostname.replace(/^www\./, "");
-    return host || "网页";
+    return host || t("siteWebPage");
   } catch (e) {
-    return "网页";
+    return t("siteWebPage");
   }
 }
 
@@ -609,6 +731,7 @@ function syncControls() {
   $("bilingualOn").checked = Boolean(s.bilingual);
   $("deeplKey").value = s.deeplKey || "";
   $("biEngine").value = s.engine === "baidu" ? "baidu" : "deepl";
+  $("biTargetLang").value = s.targetLang === "ZH" ? "ZH" : "EN";
   $("baiduAppId").value = s.baiduAppId || "";
   $("baiduKey").value = s.baiduKey || "";
   syncBiCreds();
@@ -621,7 +744,9 @@ function syncControls() {
   $("vLineHeight").textContent = fixedLine ? s.lineHeightFixed + "pt" : s.lineHeight.toFixed(2) + "×";
   $("vParaBefore").textContent = s.paraBefore + "px";
   $("vParaAfter").textContent = s.paraAfter + "px";
-  $("vIndent").textContent = s.indent === 0 ? "无" : s.indent + " 字";
+  $("vIndent").textContent = s.indent === 0
+    ? t("indentNone")
+    : t("indentValue", [String(s.indent), t("indentUnit")]);
   $("vMarginTop").textContent = s.marginTop + "mm";
   $("vMarginRight").textContent = s.marginRight + "mm";
   $("vMarginBottom").textContent = s.marginBottom + "mm";
@@ -659,9 +784,9 @@ function syncControls() {
   const biNow = biActive() || serialActive();
   $("segColumns").classList.toggle("is-disabled", biNow || mobNow);
   $("columnsNote").textContent = biNow
-    ? "双语对照下固定单栏"
+    ? t("columnsLockedBi")
     : mobNow
-      ? "手机阅读固定单栏"
+      ? t("columnsLockedMobile")
       : "";
 
   // 单栏/固定单栏时，标题跨栏没有意义：禁用并取消勾选
@@ -842,8 +967,8 @@ function setEditing(on) {
   $("sheet").classList.toggle("is-editing", on);
   $("formatBar").hidden = !on;
   if (!on) closeReplacePanel();
-  setHint(on ? "可直接改字，格式用下方图标 · Esc 取消（不保存）" : baseHint());
-  $("editBtn").textContent = on ? "完成" : "编辑";
+  setHint(on ? t("editHint") : baseHint());
+  $("editBtn").textContent = on ? t("done") : t("edit");
   $("editBtn").classList.toggle("is-on", on);
   if (!on && document.activeElement && document.activeElement.blur) {
     document.activeElement.blur();
@@ -1204,7 +1329,7 @@ function runReplace() {
   const find = $("replaceFind").value;
   const repl = $("replaceRepl").value;
   if (!find) {
-    flashHint("查找文本不能为空");
+    flashHint(t("findEmpty"));
     return;
   }
   let count = 0;
@@ -1220,7 +1345,7 @@ function runReplace() {
   [$("title"), $("pageHead"), $("pageFoot")].forEach((r) => {
     count += replaceInNode(r, find, repl);
   });
-  flashHint(count ? `已替换 ${count} 处` : "未找到匹配");
+  flashHint(count ? t("replaceDone", [String(count)]) : t("replaceNone"));
   refreshWordCount();
   fit();
   closeReplacePanel();
@@ -1281,7 +1406,7 @@ const TRIM_BLOCKS = new Set([
   "SECTION", "ARTICLE", "HEADER", "FOOTER", "ADDRESS", "DL", "DT", "DD", "HR",
 ]);
 
-const HINT_TEXT = $("hintText").textContent;
+const HINT_TEXT = t("baseHint");
 let hintTimer = 0;
 
 // 重跑提示条底部那道蓝光（进页面一次，之后每次换文案再来一次）
@@ -1297,13 +1422,19 @@ function setHint(text) {
   const node = $("hintText");
   if (node.textContent === text) return;
   node.textContent = text;
+  // 窄栏里提示会被省略号截断，同时把全文写到 title，鼠标悬停能看到整句
+  node.title = text;
   restartHintSweep();
 }
 
-// 回到基线提示：翻译引擎凭据没填时显示缺什么，否则显示默认说明
+// 回到基线提示：页面自带逐段译文时说明「译文已放进右栏」，其次提示缺的 API Key，
+// 最后才是默认说明。页面自带译文不需要 API，所以那种情况下不再催填 Key
 function baseHint() {
+  if (hasPageTranslations()) return t("pageTransHint");
   const s = state.settings;
-  if (s && !engineReady(s) && biAllowed()) return engineMissingText(s);
+  if (s && !engineReady(s) && biAllowed()) {
+    return engineMissingText(s);
+  }
   return HINT_TEXT;
 }
 
@@ -1337,8 +1468,8 @@ function refreshWordCount() {
   // 中文只报字数（汉字本身就是字符，再报字符数意义不大）；西文报词数 + 字符数
   el.textContent =
     state.lang === "en"
-      ? total.toLocaleString() + " words · " + chars.toLocaleString() + " chars"
-      : "共 " + total.toLocaleString() + " 字";
+      ? t("wordCountEn", [total.toLocaleString(), chars.toLocaleString()])
+      : t("wordCountZh", [total.toLocaleString()]);
 }
 
 function scheduleWordCount() {
@@ -1454,8 +1585,8 @@ function setTrimming(on) {
   const root = biActive() ? $("bilingual") : $("body");
   $("body").classList.toggle("is-trimming", on);
   $("trimBtn").classList.toggle("is-on", on);
-  $("trimBtn").textContent = on ? "退出删减" : "删减";
-  setHint(on ? "点击要删除的块 · ↑ 选上级 / ↓ 回到指针 · Esc 退出删减" : baseHint());
+  $("trimBtn").textContent = on ? t("exitTrim") : t("trim");
+  setHint(on ? t("trimHint") : baseHint());
   if (on) {
     root.addEventListener("mousemove", onTrimMove);
     root.addEventListener("click", onTrimClick, true);
@@ -1526,8 +1657,8 @@ function setPickingTitle(on) {
   const root = biActive() ? $("bilingual") : $("body");
   $("body").classList.toggle("is-trimming", on);
   $("titleBtn").classList.toggle("is-on", on);
-  $("titleBtn").textContent = on ? "退出选取" : "标题";
-  setHint(on ? "点击要用作标题的块 · Esc 退出" : baseHint());
+  $("titleBtn").textContent = on ? t("exitTitle") : t("title");
+  setHint(on ? t("titleHint") : baseHint());
   if (on) {
     root.addEventListener("mousemove", onPickMove);
     root.addEventListener("click", onPickClick, true);
@@ -1546,8 +1677,8 @@ function setImagesHidden(on) {
   hideImages = on;
   $("sheet").classList.toggle("is-noimg", on);
   $("imgBtn").classList.toggle("is-on", on);
-  $("imgBtn").textContent = on ? "无图" : "有图";
-  $("imgBtn").title = on ? "当前隐藏图片：再点恢复显示图片" : "切换图片显示：无图时图片不参与排版与打印";
+  $("imgBtn").textContent = on ? t("imagesOff") : t("imagesOn");
+  $("imgBtn").title = on ? t("imagesOffTitle") : t("imagesOnTitle");
   fit();
 }
 
@@ -1696,7 +1827,10 @@ function refreshBiCacheSize() {
   const json = JSON.stringify(biCachePayload());
   const bytes = new TextEncoder().encode(json).length;
   const mb = bytes / (1024 * 1024);
-  el.textContent = "当前 " + biCache.size + " 段 · " + (mb < 0.1 ? "<0.1" : mb.toFixed(2)) + " MB";
+  el.textContent = t("cacheSize", [
+    String(biCache.size),
+    mb < 0.1 ? "<0.1" : mb.toFixed(2),
+  ]);
 }
 
 async function loadBiCache() {
@@ -1765,13 +1899,13 @@ async function lookUpTranslations(texts) {
       targetLang: s.targetLang || "ZH",
     });
   } catch (err) {
-    return { error: "和后台通信失败：" + String((err && err.message) || err) };
+    return { error: t("biCommFailedPrefix") + String((err && err.message) || err) };
   }
   // 返回 undefined：后台还是旧版本（没重载扩展），消息没人接
   if (resp === undefined) {
-    return { error: "后台没有响应，请在 chrome://extensions 里点「重新加载」后再试" };
+    return { error: t("biNoBackground") };
   }
-  if (!resp.ok) return { error: resp.error || "翻译失败" };
+  if (!resp.ok) return { error: resp.error || t("biFailed") };
 
   pending.forEach((key, i) => {
     const value = (resp.translations && resp.translations[i]) || "";
@@ -1791,7 +1925,18 @@ function biBadge(tgt, kind) {
   const badge = document.createElement("span");
   badge.className = "ep-bi__badge ep-bi__badge--" + kind;
   badge.textContent =
-    kind === "todo" ? "更改" : kind === "done" ? "已译" : kind === "page" ? "页面" : "缓存";
+    kind === "todo"
+      ? t("badgeTodo")
+      : kind === "done"
+        ? t("badgeDone")
+        : kind === "page"
+          ? t("badgePage")
+          : t("badgeCache");
+  // 悬停说明这个标签的含义：Page 表示译文原封不动来自网页本身
+  if (kind === "page") {
+    badge.title = t("badgePageTitle");
+    badge.setAttribute("aria-label", t("badgePageTitle"));
+  }
   tgt.appendChild(badge);
 }
 
@@ -1967,9 +2112,11 @@ function hasPageTranslations() {
   );
 }
 
-// 中文正文没有翻译意义：把入口按钮禁掉，避免误点白烧额度
+// 正文已经是目标语言时翻译没有意义：把入口按钮禁掉，避免误点白烧额度
 function biAllowed() {
-  return state.lang !== "zh" || hasPageTranslations();
+  if (hasPageTranslations()) return true; // 页面自带译文：与正文语言、目标语言都无关
+  const target = state.settings && state.settings.targetLang === "EN" ? "en" : "zh";
+  return !state.lang || state.lang !== target;
 }
 
 async function refreshBilingual(opts = {}) {
@@ -1981,7 +2128,7 @@ async function refreshBilingual(opts = {}) {
     box.innerHTML = "";
     state.biShown = false;
     if (state.view === "bi" || state.view === "serial") state.view = "source";
-    biStatus("中文正文不需要翻译");
+    biStatus(t("biNoNeed"));
     hideToast();
     syncBiButton();
     applySettings();
@@ -2024,14 +2171,14 @@ async function refreshBilingual(opts = {}) {
     error = engineMissingText(s);
   } else {
     const miss = texts.length - hit;
-    biStatus("翻译中…");
-    showToast(miss > 0 ? "正在翻译 " + miss + " 段…" : "正在翻译…");
+    biStatus(t("biTranslating"));
+    showToast(miss > 0 ? t("biTranslatingN", [String(miss)]) : t("biTranslating"));
     const res = await lookUpTranslations(texts);
     error = res.error;
     if (!error) {
       biDone = true;
       biSig = sig;
-      showToast(miss > 0 ? "已翻译 " + miss + " 段" : "译文已是最新", true);
+      showToast(miss > 0 ? t("biTranslatedN", [String(miss)]) : t("biUpToDate"), true);
       hideToast(1800);
     }
   }
@@ -2040,7 +2187,7 @@ async function refreshBilingual(opts = {}) {
     // 失败时保留对照层（左原文右空位），只在状态行写清楚原因：
     // 之前直接把整层收掉，看起来像「切回了原文」，反而看不出是翻译失败
     hideToast();
-    biStatus("翻译未成功：" + error, true);
+    biStatus(t("biFailedPrefix") + error, true);
     console.warn("[Element Print] 翻译未成功：", error);
     renderRows(rows);
     applySettings();
@@ -2074,13 +2221,22 @@ function langFitPreset(preset, lang) {
   };
 }
 
+// 英文界面没有中文字体可选：套用时把中文专属字体换成拉丁兜底，避免被判成「已修改」
+function localeFitFonts(fit) {
+  if (!IS_EN_UI) return fit;
+  const out = { ...fit };
+  if (!fontKeyVisible(out.bodyFont)) out.bodyFont = "times";
+  if (out.titleFont !== "inherit" && !fontKeyVisible(out.titleFont)) out.titleFont = "inherit";
+  return out;
+}
+
 function getBaseline() {
   const s = state.settings;
   if (isMobile(s)) {
-    return { ...DEFAULT_SETTINGS, ...MOBILE_DEFAULTS };
+    return localeFitFonts({ ...DEFAULT_SETTINGS, ...MOBILE_DEFAULTS });
   }
   const preset = langFitPreset(THEME_PRESETS[s.theme || "paper"], state.lang) || {};
-  const baseline = { ...DEFAULT_SETTINGS, ...preset };
+  const baseline = localeFitFonts({ ...DEFAULT_SETTINGS, ...preset });
   if (isEreader(s)) Object.assign(baseline, EREADER_DEFAULTS);
   return baseline;
 }
@@ -2097,16 +2253,24 @@ function syncResetBtn() {
     if (key === "columns" && colForced) return false;
     return !settingsEqual(key, s, baseline);
   });
-  const formatLabel = isEreader(s) ? "电纸书" : isMobile(s) ? "手机" : "A4纸";
+  const formatLabel = isEreader(s)
+    ? t("ereader")
+    : isMobile(s)
+      ? t("mobile")
+      : t("a4Paper");
   const themeName = themeLabel(baseline.theme || s.theme || "paper");
   btn.disabled = !dirty;
   btn.title = dirty
-    ? `重置版式：把当前「${themeName} · ${formatLabel}」恢复默认值`
-    : `当前就是「${themeName} · ${formatLabel}」的默认设置，没有可重置的改动`;
+    ? t("resetTitleActive", [themeName, formatLabel])
+    : t("resetTitleFlat", [themeName, formatLabel]);
 }
 
 function themeLabel(theme) {
-  return theme === "academic" ? "学术期刊" : theme === "gov" ? "公文" : "原版";
+  return theme === "academic"
+    ? t("academic")
+    : theme === "gov"
+      ? t("gov")
+      : t("paper");
 }
 
 function rememberCurrentProfile() {
@@ -2161,15 +2325,15 @@ function initRangeSteppers() {
     minus.type = "button";
     minus.className = "ep-slider__btn";
     minus.textContent = "−";
-    minus.title = "减小";
-    minus.setAttribute("aria-label", "减小");
+    minus.title = t("decrease");
+    minus.setAttribute("aria-label", t("decrease"));
 
     const plus = document.createElement("button");
     plus.type = "button";
     plus.className = "ep-slider__btn";
     plus.textContent = "+";
-    plus.title = "增大";
-    plus.setAttribute("aria-label", "增大");
+    plus.title = t("increase");
+    plus.setAttribute("aria-label", t("increase"));
 
     wrap.append(minus, input, plus);
 
@@ -2309,6 +2473,19 @@ function bindControls() {
     syncBiCreds();
     if (biActive() || serialActive()) refreshBilingual();
   });
+  $("biTargetLang").addEventListener("change", (e) => {
+    update({ targetLang: e.target.value === "ZH" ? "ZH" : "EN", targetLangManual: true });
+    biDone = false;
+    biSig = "";
+    if (biActive() || serialActive()) refreshBilingual({ send: true });
+  });
+
+  // 高级区折叠
+  $("advToggle").addEventListener("click", () => {
+    const open = $("advToggle").getAttribute("aria-expanded") === "true";
+    $("advToggle").setAttribute("aria-expanded", open ? "false" : "true");
+    $("advBody").hidden = open;
+  });
   $("translateBtn").addEventListener("click", () => {
     if (!biAllowed()) return; // 中文正文：按钮虽已置灰，再兜一层
     // 只翻「更改」标着的段落，其余用缓存
@@ -2386,7 +2563,7 @@ function bindControls() {
     }
   });
   $("exportBtn").addEventListener("click", () => {
-    exportHtml().catch((err) => showError("导出失败：" + ((err && err.message) || err)));
+    exportHtml().catch((err) => showError(t("exportFailedPrefix") + ((err && err.message) || err)));
   });
 
   $("editBtn").addEventListener("click", () => {
@@ -2488,7 +2665,7 @@ function bindControls() {
     } else if (editing) {
       e.preventDefault();
       // 有改动时先确认；确认「取消」等于不保存，按快照还原后退出
-      if (editChanged() && window.confirm("文章有改动，确认取消（不保存）吗？")) {
+      if (editChanged() && window.confirm(t("confirmDiscard"))) {
         restoreEditSnapshot();
       }
       setEditing(false);
@@ -2610,24 +2787,24 @@ ${sheetHtml}
 function openReadabilityDebug() {
   const debug = state.payload && state.payload.debug;
   if (!debug || !debug.html) {
-    showToast("无 Readability 原始数据");
+    showToast(t("noReadabilityData"));
     return;
   }
   const rows = [
-    ["标题", debug.title],
-    ["作者", debug.byline],
-    ["日期", debug.publishedTime],
-    ["摘要", debug.excerpt],
-    ["摘要兜底", debug.excerptFallback ? "是" : "否"],
+    [t("title"), debug.title],
+    [t("debugByline"), debug.byline],
+    [t("debugDate"), debug.publishedTime],
+    [t("debugExcerpt"), debug.excerpt],
+    [t("debugFallback"), debug.excerptFallback ? t("debugYes") : t("debugNo")],
   ].filter(([, value]) => String(value || "").trim());
   const metaHtml = rows
     .map(([key, value]) => `<div><span>${esc(key)}</span>${esc(value)}</div>`)
     .join("");
   const doc = `<!doctype html>
-<html lang="zh-CN">
+<html lang="${state.lang === "en" ? "en" : "zh-CN"}">
 <head>
 <meta charset="utf-8" />
-<title>Readability 调试 · ${esc(debug.title || "Element Print")}</title>
+<title>${esc(t("debugTitle"))} · ${esc(debug.title || "Element Print")}</title>
 <style>
   body { margin: 0; padding: 24px; font: 15px/1.75 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color: #16233a; background: #f5f7fa; }
   .meta { max-width: 760px; margin: 0 auto 18px; padding: 12px 16px; border-radius: 10px; background: #fff; box-shadow: 0 2px 10px rgba(15,23,42,.08); }
@@ -2645,7 +2822,7 @@ function openReadabilityDebug() {
   const blob = new Blob([doc], { type: "text/html;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const win = window.open(url, "_blank");
-  if (!win) showToast("调试弹窗被浏览器拦截");
+  if (!win) showToast(t("debugPopupBlocked"));
   setTimeout(() => URL.revokeObjectURL(url), 3000);
 }
 
@@ -2666,14 +2843,36 @@ async function exportHtml() {
 
 /* ---------- 启动 ---------- */
 
+const FONT_LABEL_KEYS = {
+  auto: "fontAuto",
+  song: "fontSong",
+  hei: "fontHei",
+  kai: "fontKai",
+  fangsong: "fontFangSong",
+  times: "fontTimes",
+  georgia: "fontGeorgia",
+  sans: "fontSans",
+};
+
+function fontLabel(key) {
+  return t(FONT_LABEL_KEYS[key] || "fontAuto");
+}
+
+const LATIN_FONT_KEYS = ["times", "georgia", "sans"];
+
+function fontKeyVisible(key) {
+  if (!IS_EN_UI) return true;
+  return LATIN_FONT_KEYS.includes(key);
+}
+
 // 字体下拉的选项直接由 FONT_PRESETS 生成，避免两处各写一份
 function fillFontSelects() {
-  const entries = Object.entries(FONT_PRESETS);
+  const entries = Object.entries(FONT_PRESETS).filter(([key]) => fontKeyVisible(key));
   const options = entries
-    .map(([key, preset]) => `<option value="${key}">${esc(preset.label)}</option>`)
+    .map(([key]) => `<option value="${key}">${esc(fontLabel(key))}</option>`)
     .join("");
   $("bodyFont").innerHTML = options;
-  $("titleFont").innerHTML = `<option value="inherit">跟随正文</option>` + options;
+  $("titleFont").innerHTML = `<option value="inherit">${esc(t("inheritBody"))}</option>` + options;
 }
 
 async function init() {
@@ -2683,13 +2882,14 @@ async function init() {
   state.settings = loaded;
   if (isEreader(state.settings)) applyEreaderDefaults();
   await loadBiCache(); // 上次留下的段落译文先灌进内存，命中就不必再打 API
+  applyLocaleVisibility();
   fillFontSelects();
   syncControls();
   bindControls();
   window.addEventListener("pagehide", flushSettings);
 
   if (!payloadId) {
-    showError("没有拿到要打印的内容，请回到页面重新选取元素。");
+    showError(t("payloadMissing"));
     return;
   }
 
@@ -2698,12 +2898,12 @@ async function init() {
     const got = await chrome.storage.local.get(STORAGE_KEY);
     payload = got[STORAGE_KEY] || null;
   } catch (err) {
-    showError("读取内容失败：" + ((err && err.message) || err));
+    showError(t("loadFailedPrefix") + ((err && err.message) || err));
     return;
   }
 
   if (!payload) {
-    showError("内容已失效（窗口刷新会清掉缓存），请回到页面重新选取一次。");
+    showError(t("payloadExpired"));
     return;
   }
 
@@ -2745,8 +2945,8 @@ async function init() {
   applySettings(); // 初始视图是在首次 applySettings 之后才确定，需同步一次容器显隐
   if (startBi || startSerial) refreshBilingual();
   syncBiButton();
-  if (startSerial) flashHint("手机阅读：已按原文/译文串行排列");
-  else if (startBi && hasPageTrans) flashHint("页面自带译文，已放进右栏对照");
+  if (startSerial) flashHint(t("serialHint"));
+  else if (hasPageTrans) setHint(t("pageTransHint")); // 常态提示，不做超时回落
   state.ready = true;
   restartHintSweep(); // 进页面先扫一遍
 }

@@ -537,6 +537,16 @@ body {
   grid-template-columns: repeat(3, 1fr);
 }
 
+/* 按语言隐藏一项后改两列 */
+.ep-seg--two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+/* 分段控件里的按钮被按语言隐藏时要真正让位，不能靠 UA 的 hidden 被 display 覆盖 */
+.ep-seg button[hidden] {
+  display: none;
+}
+
 /* 字重四档均分成四列 */
 .ep-seg--four {
   grid-template-columns: repeat(4, 1fr);
@@ -627,6 +637,42 @@ input[type="range"] {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* 高级区：默认折叠，只露一行标题 */
+.ep-adv {
+  padding-top: 10px;
+  border-top: 1px solid #e6e9ee;
+}
+
+.ep-adv__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #4c5561;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ep-adv__caret {
+  font-style: normal;
+  transition: transform 0.15s ease;
+}
+
+.ep-adv__toggle[aria-expanded="true"] .ep-adv__caret {
+  transform: rotate(90deg);
+}
+
+.ep-adv__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
 }
 
 .ep-check {

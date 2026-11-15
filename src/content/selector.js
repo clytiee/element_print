@@ -1,6 +1,7 @@
 // 选取模式：悬停描边 + 点击捕获 → 提取 → 打开预览窗口。
 
 (() => {
+  const t = window.ElementPrintI18n ? window.ElementPrintI18n.t : (k) => k;
   const FLAG = "__elementPrintPicker";
 
   // 再次点击工具栏图标 = 退出选取模式
@@ -38,10 +39,10 @@
     ui.bar = el("ep-pick-bar ep-pick-ui");
 
     const hint = el("ep-pick-hint", "span");
-    hint.textContent = "点击要打印的元素 · ↑ 选上级 / ↓ 回到指针 · Esc 退出";
+    hint.textContent = t("pickerHint");
     const exit = el("ep-pick-exit", "button");
     exit.type = "button";
-    exit.textContent = "退出";
+    exit.textContent = t("pickerExit");
     exit.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -196,7 +197,7 @@
     if (finished) return;
     finished = true;
     removePickUi();
-    showToast("正在提取内容…", true);
+    showToast(t("extracting"), true);
     try {
       const payload = await window.ElementPrintExtract.extract(node, {
         sourceUrl: location.href,
@@ -207,7 +208,7 @@
       teardown();
     } catch (err) {
       const msg = (err && err.message) || String(err);
-      showToast("提取失败：" + msg);
+      showToast(t("extractFailedPrefix") + msg);
       finished = false;
       teardown();
     }

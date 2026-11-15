@@ -277,8 +277,12 @@
   // 这类元素带 data-deeptranslate-translated / data-translated 之类的标记，
   // 抽正文时要把它们从原句里摘出来，单独作为译文交给预览页的右栏，
   // 否则原文列会中英夹在一起。
+  // 注意：DeepTranslate（Edge 版）在外层元素上写 bt-translate-status="translated"，
+  // 那个元素里原文和译文都有，不能当标记；真正装译文的是里面的 bt-copied-node-wrapper /
+  // bt-target-wrapper，只认这两个类。
   const TRANS_ATTR_RE = /^(data[-_](deep)?translat|data[-_]trans$)/i;
-  const TRANS_CLASS_RE = /(^|\s)(translated|translation|deep-trans|trans-text)\b/i;
+  const TRANS_CLASS_RE =
+    /(^|\s)(translated|translation|deep-trans|trans-text|bt-copied-node-wrapper|bt-target-wrapper|bt-target-block)\b/i;
 
   function isTransMarked(el) {
     for (const attr of el.attributes) {
@@ -710,15 +714,20 @@
     return (root.textContent || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
   }
 
+  // 正文里的第一个「纯段落」：只认不含块级子节点的块，否则会拿到外层的整篇容器，
+  // 一旦被当成首段，整篇正文会被误判成导语并从正文里摘走
   function firstTextBlock(root) {
     const candidates = root.querySelectorAll(
       "p, div, li, dd, dt, blockquote, h1, h2, h3, h4, h5, h6"
     );
+    let fallback = null;
     for (const node of candidates) {
       const text = (node.textContent || "").replace(/\s+/g, " ").trim();
-      if (text) return node;
+      if (!text) continue;
+      if (!fallback) fallback = node;
+      if (!hasBlockChild(node)) return node;
     }
-    return null;
+    return fallback;
   }
 
   // 学术页面常把摘要放在 .abstractSection / .abstractInFull / .hlFld-Abstract 里；
@@ -981,7 +990,12 @@
       // meta / og:description 常被站点截断并带省略号；若正文首段就是同一段导语，用完整首段补全
       const excerptFirst = firstTextBlock(clone);
       const excerptFirstText = excerptFirst ? normText(excerptFirst.textContent) : "";
-      if (excerptText.length >= 20 && excerptFirstText.length > excerptText.length) {
+      // 首段明显比导语长很多时，说明拿到的其实是整篇容器，不能当日志补全
+      if (
+        excerptText.length >= 20 &&
+        excerptFirstText.length > excerptText.length &&
+        excerptFirstText.length <= Math.max(excerptText.length * 3, excerptText.length + 400)
+      ) {
         let prefix = 0;
         const min = Math.min(excerptText.length, excerptFirstText.length);
         while (prefix < min && excerptText[prefix] === excerptFirstText[prefix]) prefix += 1;
@@ -1022,9 +1036,13 @@
     if (excerptText) {
       const excerptNode = abstractNode || firstTextBlock(clone);
       const excerptNodeText = excerptNode ? normText(excerptNode.textContent) : "";
+      // 节点比导语长太多，说明是整篇容器，不是导语段，不能删
+      const sizeOk =
+        excerptNodeText.length <= Math.max(excerptText.length * 3, excerptText.length + 400);
       const sameAsExcerpt =
-        excerptNodeText === excerptText ||
-        (excerptTruncated && excerptNodeText.startsWith(excerptText));
+        sizeOk &&
+        (excerptNodeText === excerptText ||
+          (excerptTruncated && excerptNodeText.startsWith(excerptText)));
       if (excerptNode && sameAsExcerpt) {
         excerptNode.remove();
         const mixedNode = mixedAbstractNode || firstTextBlock(mixedClone);

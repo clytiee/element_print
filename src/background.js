@@ -1,8 +1,9 @@
 // Service worker：工具栏按钮 / 右键菜单 → 注入选取器或自动提取；收到结果 → 打开预览窗口。
 
 const PICKER_CSS = ["src/content/selector.css"];
-const PICKER_JS = ["src/shared/extract.js", "src/content/selector.js"];
+const PICKER_JS = ["src/shared/i18n.js", "src/shared/extract.js", "src/content/selector.js"];
 const AUTO_JS = [
+  "src/shared/i18n.js",
   "src/shared/vendor/readability.js",
   "src/shared/extract.js",
   "src/content/auto.js",
@@ -25,7 +26,13 @@ async function setMode(mode) {
 }
 
 function modeTitle(mode) {
-  return mode === "auto" ? "√ 整页提取" : "整页提取（点击打开）";
+  const key = mode === "auto" ? "menuAutoChecked" : "menuAuto";
+  return chrome.i18n.getMessage(key) || key;
+}
+
+// 后台文案：Service Worker 里直接用 chrome.i18n，失败退回 key
+function bt(key, substitutions) {
+  return chrome.i18n.getMessage(key, substitutions) || key;
 }
 
 function isInternalUrl(url) {
@@ -126,7 +133,7 @@ async function translateTexts(msg) {
 
 async function translateDeepL({ texts, key, targetLang }) {
   const authKey = String(key || "").trim();
-  if (!authKey) return { ok: false, error: "未填 DeepL Auth Key" };
+  if (!authKey) return { ok: false, error: bt("missingDeepLKey") };
 
   // Key 以 :fx 结尾的是免费版，只能走 api-free；其余走付费端点。
   // 选错端点 DeepL 会回 403，所以这里不信任界面上的开关，直接按 Key 判定。
@@ -149,17 +156,17 @@ async function translateDeepL({ texts, key, targetLang }) {
         body: JSON.stringify({ text: batch, target_lang: lang }),
       });
     } catch (err) {
-      return { ok: false, error: "网络请求失败：" + String((err && err.message) || err) };
+      return { ok: false, error: bt("networkFailedPrefix") + String((err && err.message) || err) };
     }
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
       const hint =
         res.status === 403
-          ? "（Key 无效，或端点与 Key 类型不符：免费版 Key 以 :fx 结尾）"
+          ? bt("deepl403Hint")
           : res.status === 456
-            ? "（免费额度已用完）"
+            ? bt("deepl456Hint")
             : res.status === 429
-              ? "（请求太频繁，稍后再试）"
+              ? bt("deepl429Hint")
               : "";
       return { ok: false, error: `DeepL ${res.status}${hint} ${detail.slice(0, 160)}`.trim() };
     }
@@ -168,7 +175,7 @@ async function translateDeepL({ texts, key, targetLang }) {
     list.forEach((item) => translations.push(String((item && item.text) || "")));
   }
 
-  if (!translations.length) return { ok: false, error: "DeepL 没有返回译文" };
+  if (!translations.length) return { ok: false, error: bt("deeplNoResult") };
   return { ok: true, translations };
 }
 
@@ -180,20 +187,20 @@ function baiduLang(targetLang) {
   return t.toLowerCase();
 }
 
-// 百度错误码：把冷冰冰的数字换成人能看懂的一句
+// 百度错误码：把冷冰冰的数字换成人能看懂的一句（值存语言包 key）
 const BAIDU_ERRORS = {
-  52001: "请求超时，稍后再试",
-  52002: "百度系统错误，稍后再试",
-  52003: "未授权用户：核对 APP ID",
-  54000: "必填参数为空",
-  54001: "签名错误：核对密钥是否填错",
-  54003: "访问频率受限：免费版 QPS 约 1，稍后再试",
-  54004: "账户余额不足：本月免费字符已用完",
-  54005: "长文本请求频繁，稍后再试",
-  58000: "客户端 IP 非法：去开放平台配置 IP 白名单",
-  58001: "译文语言方向不支持",
-  58002: "服务当前已关闭",
-  90107: "认证未通过或未生效",
+  52001: "baidu52001",
+  52002: "baidu52002",
+  52003: "baidu52003",
+  54000: "baidu54000",
+  54001: "baidu54001",
+  54003: "baidu54003",
+  54004: "baidu54004",
+  54005: "baidu54005",
+  58000: "baidu58000",
+  58001: "baidu58001",
+  58002: "baidu58002",
+  90107: "baidu90107",
 };
 
 async function baiduRequest(q, appid, secret, targetLang) {
@@ -215,25 +222,26 @@ async function baiduRequest(q, appid, secret, targetLang) {
       body: body.toString(),
     });
   } catch (err) {
-    return { error: "网络请求失败：" + String((err && err.message) || err) };
+    return { error: bt("networkFailedPrefix") + String((err && err.message) || err) };
   }
   const data = await res.json().catch(() => null);
-  if (!data) return { error: `百度没有返回可解析的结果（HTTP ${res.status}）` };
+  if (!data) return { error: bt("baiduBadResponse", [String(res.status)]) };
   if (data.error_code) {
     const code = String(data.error_code);
-    const hint = BAIDU_ERRORS[code] || data.error_msg || "未知错误";
-    return { error: `百度 ${code}：${hint}`, code };
+    const hintKey = BAIDU_ERRORS[code];
+    const hint = (hintKey ? bt(hintKey) : "") || data.error_msg || bt("unknownError");
+    return { error: bt("baiduErrorWithCode", [code, hint]), code };
   }
   const list = data.trans_result || [];
-  if (!list.length) return { error: "百度没有返回译文" };
+  if (!list.length) return { error: bt("baiduNoResult") };
   return { list };
 }
 
 async function translateBaidu({ texts, appid, baiduKey, targetLang }) {
   const id = String(appid || "").trim();
   const secret = String(baiduKey || "").trim();
-  if (!id) return { ok: false, error: "未填百度 APP ID" };
-  if (!secret) return { ok: false, error: "未填百度密钥" };
+  if (!id) return { ok: false, error: bt("missingBaiduAppId") };
+  if (!secret) return { ok: false, error: bt("missingBaiduKey") };
 
   const translations = [];
   let i = 0;
@@ -275,7 +283,7 @@ async function translateBaidu({ texts, appid, baiduKey, targetLang }) {
     await sleep(BAIDU_QPS_GAP);
   }
 
-  if (!translations.length) return { ok: false, error: "百度没有返回译文" };
+  if (!translations.length) return { ok: false, error: bt("baiduNoResult") };
   return { ok: true, translations };
 }
 
@@ -357,7 +365,7 @@ function md5(input) {
 
 
 async function openPreview(id) {
-  if (!id) throw new Error("缺少 payload id");
+  if (!id) throw new Error(bt("missingPayloadId"));
   const url =
     chrome.runtime.getURL(PREVIEW_URL) + "?id=" + encodeURIComponent(id);
   // 桌面端用独立弹窗；手机浏览器（狐猴/Kiwi 等）没有多窗口 API，

@@ -82,7 +82,8 @@ export const DEFAULT_SETTINGS = {
   engine: "deepl", // 翻译引擎：deepl / baidu
   baiduAppId: "", // 百度翻译开放平台 APP ID
   baiduKey: "", // 百度翻译开放平台密钥
-  targetLang: "ZH", // 目标语言（DeepL 用大写码，百度用小写码，后台换算）
+  targetLang: "", // 目标语言；空表示未选过，首次按界面语言定（英文界面 EN，其余 ZH）
+  targetLangManual: false, // 用户是否手动选过目标语言；选过就不再按界面语言重置
   view: "source", // source（原文） | mixed（中英混排） | bi（翻译；手机下内部解析为串行）
   closeAfterPrint: false, // 打印对话框关闭后自动关闭预览页
 };
@@ -162,6 +163,7 @@ const SHARED_KEYS = [
   "baiduAppId",
   "baiduKey",
   "targetLang",
+  "targetLangManual",
   "pageFormat",
   "view",
   "closeAfterPrint",
@@ -312,6 +314,7 @@ function normalizeShared(raw, base) {
   if (typeof raw.targetLang === "string" && /^[A-Za-z-]{2,8}$/.test(raw.targetLang)) {
     base.targetLang = raw.targetLang.toUpperCase();
   }
+  if (typeof raw.targetLangManual === "boolean") base.targetLangManual = raw.targetLangManual;
 }
 
 function normalizeLayout(raw, base) {

@@ -1,6 +1,7 @@
 // 整页自动提取：Readability 先挑正文容器，结果再交给原有抽取管线清洗/拆译文/内嵌图片。
 
 (() => {
+  const t = window.ElementPrintI18n ? window.ElementPrintI18n.t : (k) => k;
   const FLAG = "__elementPrintAuto";
   if (window[FLAG]) return;
   window[FLAG] = true;
@@ -134,6 +135,13 @@
     "TABLE", "TBODY", "TD", "TFOOT", "TH", "THEAD", "TR", "UL",
   ]);
 
+  // 翻译插件标记译文节点的类名（Chrome 版 / Edge 版 DeepTranslate 等），
+  // Readability 要把这些类原样留着，后续才认得出译文
+  const TRANS_MARK_CLASSES = [
+    "translated", "translation", "deep-trans", "trans-text",
+    "bt-copied-node-wrapper", "bt-target-wrapper", "bt-target-block",
+  ];
+
   function elementSignature(el) {
     return {
       tag: el.tagName.toLowerCase(),
@@ -180,18 +188,22 @@
   }
 
   async function run() {
-    toast("正在自动识别正文…", true);
+    toast(t("detecting"), true);
 
     // Readability 会删脚本、改候选节点，先克隆文档，避免动到当前页面
     let article;
     try {
-      article = new window.Readability(document.cloneNode(true)).parse();
+      article = new window.Readability(document.cloneNode(true), {
+        // Readability 默认会清掉正文里所有 class；翻译插件正是靠 class 标记译文节点，
+        // 清掉就认不出译文了，所以把这些标记类加进保留白名单
+        classesToPreserve: TRANS_MARK_CLASSES,
+      }).parse();
     } catch (err) {
-      throw new Error((err && err.message) || "正文识别失败");
+      throw new Error((err && err.message) || t("articleDetectFailed"));
     }
 
     if (!article || !article.content || !(article.textContent || "").trim()) {
-      throw new Error("未能识别到正文，可改用手动选取");
+      throw new Error(t("articleDetectFailed"));
     }
 
     const holder = document.createElement("div");
@@ -236,7 +248,7 @@
     };
 
     await window.ElementPrintExtract.savePayload(payload);
-    toast("已提取", false);
+    toast(t("extracted"), false);
     setTimeout(() => {
       window[FLAG] = false;
     }, 500);
@@ -244,7 +256,7 @@
 
   run().catch((err) => {
     const msg = (err && err.message) || String(err);
-    toast("提取失败：" + msg, false);
+    toast(t("extractFailedPrefix") + msg, false);
     window[FLAG] = false;
   });
 })();

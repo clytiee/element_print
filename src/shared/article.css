@@ -649,6 +649,12 @@
   color: #4a6b52;
 }
 
+/* Page 标签带悬停说明，需要能被指针命中 */
+.ep-bi__badge--page {
+  pointer-events: auto;
+  cursor: help;
+}
+
 /* 原文改过、等点「翻译」的段落 */
 .ep-bi__badge--todo {
   background: rgba(251, 224, 223, 0.94);
