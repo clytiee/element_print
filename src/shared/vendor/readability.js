@@ -2782,10 +2782,12 @@ Readability.prototype = {
     // If we haven't found an excerpt in the article's metadata, use the article's
     // first paragraph as the excerpt. This is used for displaying a preview of
     // the article's content.
+    metadata.excerptFallback = false;
     if (!metadata.excerpt) {
       var paragraphs = articleContent.getElementsByTagName("p");
       if (paragraphs.length) {
         metadata.excerpt = paragraphs[0].textContent.trim();
+        metadata.excerptFallback = true;
       }
     }
 
@@ -2799,6 +2801,7 @@ Readability.prototype = {
       textContent,
       length: textContent.length,
       excerpt: metadata.excerpt,
+      excerptFallback: Boolean(metadata.excerptFallback),
       siteName: metadata.siteName || this._articleSiteName,
       publishedTime: metadata.publishedTime,
     };

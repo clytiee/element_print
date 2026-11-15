@@ -146,6 +146,8 @@
     holder.innerHTML = article.content;
 
     const titleText = article.title || document.title || "";
+    // Readability 在缺少 meta/JSON-LD 摘要时会用正文首段兜底；这类首段不作为摘要，避免和正文重复
+    const excerptText = article.excerptFallback ? "" : article.excerpt || "";
     const payload = await window.ElementPrintExtract.extract(holder, {
       sourceUrl: location.href,
       title: titleText,
@@ -153,8 +155,8 @@
       titleTrans: readTitleTranslation(article.title),
       author: article.byline || "",
       publishedTime: article.publishedTime || "",
-      excerpt: article.excerpt || "",
-      excerptTrans: readAbstractTranslation() || readExcerptTranslation(article.excerpt || ""),
+      excerpt: excerptText,
+      excerptTrans: readAbstractTranslation() || readExcerptTranslation(excerptText),
     });
     if (article.title && article.title.trim()) {
       payload.title = article.title.trim();
