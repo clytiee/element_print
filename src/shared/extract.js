@@ -526,7 +526,7 @@
         const dst = joinDst(
           marks.filter((m) => !m.closest("a")).map((m) => normText(m.textContent))
         );
-        if (src && dst && src !== dst) pairs.push({ src, dst });
+        if (src && dst && src !== dst) pairs.push({ src, dst, cite: true });
         return;
       }
 
@@ -638,9 +638,13 @@
       if (block) block.appendChild(el);
     });
 
-    // 上限只为防极端页面撑爆载荷：参考文献条目多的论文动辄几百条，
-    // 截断会把正文段落挡在额度外面（只剩文献短句有译文）
-    return pairs.slice(0, 2000);
+    // 配对条数上限仍按 2000 控制，但正文先占额度、参考文献只用剩下的：
+    // 文献条目多且先入表，按条数一刀切会把正文段落整批挤掉
+    const PAIR_LIMIT = 2000;
+    const bodyPairs = pairs.filter((pair) => !pair.cite).slice(0, PAIR_LIMIT);
+    const room = Math.max(0, PAIR_LIMIT - bodyPairs.length);
+    const citePairs = pairs.filter((pair) => pair.cite).slice(0, room);
+    return [...bodyPairs, ...citePairs].map((pair) => ({ src: pair.src, dst: pair.dst }));
   }
 
   function isEmptyNode(node) {
@@ -1181,8 +1185,27 @@
       const faceKey = `${family.toLowerCase()}|${weight}|${style}`;
       if (seen.has(faceKey)) continue;
       const pick = fontFaceSrc(rule);
-      if (!pick || pick.url.startsWith("data:")) continue;
+      if (!pick) continue;
+      // 站点常把字体直接 base64 内嵌在 CSS 里（data:font/woff2;base64,…），
+      // 预览页没有那份 CSS，这种也得原样搬过去，否则家族缺失会回退到别家字体
+      const inline = pick.url.startsWith("data:");
+      const faceSrc = inline ? pick.url : null;
+      const inlineBytes = inline ? Math.round((pick.url.length - pick.url.indexOf("base64,") - 7) * 0.75) : 0;
+      if (inline && inlineBytes > FONT_FILE_MAX) continue;
+      if (inline && total + inlineBytes > FONT_TOTAL_MAX) continue;
       try {
+        if (inline) {
+          total += inlineBytes;
+          seen.add(faceKey);
+          faces.push({
+            family,
+            weight,
+            style,
+            unicodeRange: rule.style.getPropertyValue("unicode-range") || "",
+            src: faceSrc,
+          });
+          continue;
+        }
         const url = new URL(pick.url, document.baseURI).href;
         const res = await fetch(url, { credentials: "omit", cache: "force-cache" });
         if (!res.ok) continue;

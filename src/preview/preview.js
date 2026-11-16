@@ -693,6 +693,23 @@ function injectPageFontFaces() {
 }
 
 // 正文字体栈：选了「自动」且正文是西文时，换成纯拉丁衬线，不挂中文兜底
+// 通用族（sans-serif 等）在中文系统上会落到带拉丁字形的中文字体（Noto Sans SC），
+// 英文因此显得不对劲；在通用族前面补一层西文字体兜底，中文仍由前面的 CJK 家族接住
+function latinFirstStack(stack) {
+  const s = String(stack || "").trim();
+  if (!s) return s;
+  return s.replace(/,\s*(sans-serif|serif|system-ui|monospace|ui-serif|ui-sans-serif)\s*$/i, (m, generic) => {
+    const key = generic.toLowerCase();
+    const latin =
+      key === "serif" || key === "ui-serif"
+        ? 'Georgia, "Times New Roman", "Liberation Serif"'
+        : key === "monospace"
+          ? 'Consolas, "Liberation Mono", "Courier New"'
+          : '"Segoe UI", Arial, "Helvetica Neue", Roboto, "Liberation Sans"';
+    return `, ${latin}, ${generic}`;
+  });
+}
+
 function bodyFontStack(key, lang) {
   const preset = FONT_PRESETS[key] || FONT_PRESETS.auto;
   // 「网页原字体」直接沿用抽取时记下的页面字体栈（含全部兜底项），取不到就回落自动
@@ -700,7 +717,7 @@ function bodyFontStack(key, lang) {
     const stack = state.payload && state.payload.pageFont && state.payload.pageFont.body
       ? state.payload.pageFont.body.stack
       : "";
-    if (stack) return stack;
+    if (stack) return latinFirstStack(stack);
     return FONT_PRESETS.auto.stack;
   }
   if (key === "auto" && lang === "en") {
@@ -715,7 +732,7 @@ function titleFontStack(s, lang) {
   if (s.titleFont === "page") {
     const pf = (state.payload && state.payload.pageFont) || {};
     const stack = (pf.title && pf.title.stack) || (pf.body && pf.body.stack) || "";
-    if (stack) return stack;
+    if (stack) return latinFirstStack(stack);
     return FONT_PRESETS.auto.stack;
   }
   return (FONT_PRESETS[s.titleFont] || FONT_PRESETS.auto).stack;
@@ -727,7 +744,7 @@ function pageHeadStack(tag) {
   if (s.bodyFont !== "page") return "";
   const pf = (state.payload && state.payload.pageFont) || {};
   const head = pf.heads && pf.heads[tag];
-  return (head && head.stack) || "";
+  return latinFirstStack((head && head.stack) || "");
 }
 
 // 引文块（blockquote）在原版的字体与节奏：字号、行距、上下留白都跟网页；
@@ -736,7 +753,7 @@ function pageQuoteStack() {
   const s = state.settings || {};
   if (s.bodyFont !== "page") return "";
   const pf = (state.payload && state.payload.pageFont) || {};
-  return (pf.quote && pf.quote.stack) || "";
+  return (pf.quote && pf.quote.stack) ? latinFirstStack(pf.quote.stack) : "";
 }
 
 // 各级标题在原版下的上下边距（取自网页对应标题节点）
