@@ -341,11 +341,111 @@ function detectLang(root) {
   return latin / (latin + cjk) > 0.65 ? "en" : "zh";
 }
 
+function probeBilingualSequence(root) {
+  // 只取“叶子文字块”，避免同一段文字被父子容器重复计入
+  const blocks = Array.from(root.querySelectorAll("p, li, blockquote, h1, h2, h3, h4, h5, h6, .ep-para")).filter(
+    (node) =>
+      !node.querySelector("p, li, blockquote, h1, h2, h3, h4, h5, h6, .ep-para") &&
+      (node.textContent || "").replace(/\s+/g, "").length >= 8
+  );
+  const seq = [];
+  const chars = { zh: 0, en: 0 };
+  blocks.forEach((node) => {
+    const text = (node.textContent || "").replace(/\s+/g, "");
+    const cjk = (text.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
+    const latin = (text.match(/[A-Za-z]/g) || []).length;
+    if (cjk + latin < 6) return;
+    const lang = cjk / (cjk + latin) > 0.65 ? "en" : "zh";
+    seq.push(lang);
+    chars[lang] += cjk + latin;
+  });
+  const probe = {
+    blocks: seq.length,
+    pairs: 0,
+    switchRate: 0,
+    runs: [],
+    runShort: 0,
+    shareZh: 0,
+    shareEn: 0,
+    blockShareZh: 0,
+    blockShareEn: 0,
+    parity: 0,
+    score: 0,
+    verdict: false,
+    sample: "",
+  };
+  if (!seq.length) return probe;
+
+  const runs = [];
+  seq.forEach((lang, i) => {
+    if (i === 0 || lang !== seq[i - 1]) runs.push(1);
+    else runs[runs.length - 1] += 1;
+    if (i > 0 && lang !== seq[i - 1]) probe.pairs += 1;
+  });
+  probe.runs = runs;
+  probe.switchRate = seq.length > 1 ? probe.pairs / (seq.length - 1) : 0;
+  probe.runShort = runs.filter((r) => r <= 3).length / runs.length;
+  // 字数份额只作参考：中文一个字信息量大，中英混排的字数天然偏向英文
+  const total = chars.zh + chars.en;
+  probe.shareZh = total ? chars.zh / total : 0;
+  probe.shareEn = total ? chars.en / total : 0;
+  // 块数份额才是判据：译文段与原文段数量应当接近
+  const zhBlocks = seq.filter((l) => l === "zh").length;
+  probe.blockShareZh = zhBlocks / seq.length;
+  probe.blockShareEn = 1 - probe.blockShareZh;
+  // 奇偶法只留观察值：开头多一个块就会把整条序列的相位挪一格，对插入/缺失太敏感
+  const parityOf = () => {
+    const groups = [[], []];
+    seq.forEach((lang, i) => groups[i % 2].push(lang));
+    let hit = 0;
+    groups.forEach((group) => {
+      if (!group.length) return;
+      const zh = group.filter((l) => l === "zh").length;
+      hit += Math.max(zh, group.length - zh);
+    });
+    return hit / seq.length;
+  };
+  probe.parity = parityOf();
+  const balance = Math.min(probe.blockShareZh, probe.blockShareEn) / Math.max(probe.blockShareZh, probe.blockShareEn, 0.0001);
+  probe.score = 0.45 * probe.switchRate + 0.35 * balance + 0.2 * probe.runShort;
+  probe.sample = seq.slice(0, 40).join(",");
+  // 判定：块数够、成对够、交替够密、两种语言块数相当，四条全满足才算双语混排
+  probe.verdict =
+    probe.blocks >= 8 &&
+    probe.pairs >= 6 &&
+    probe.switchRate >= 0.6 &&
+    probe.blockShareZh >= 0.3 &&
+    probe.blockShareZh <= 0.7;
+  return probe;
+}
+
 function setSheetLang(lang) {
-  const sheet = $("sheet");
-  sheet.dataset.lang = lang;
+  const sheet = $("sheet");  sheet.dataset.lang = lang;
   if (lang === "en") sheet.setAttribute("lang", "en");
   else sheet.setAttribute("lang", "zh-CN");
+}
+
+/* ---------- 双语混排提示条 ---------- */
+
+let biHintDismissed = false;
+
+// 只在判定成立、且还没进对照视图时提示；忽略后本次提取内不再出现
+function syncBiHint() {
+  const hint = $("biHint");
+  if (!hint) return;
+  const probe = state.biProbe;
+  const show =
+    Boolean(state.payload) &&
+    Boolean(probe && probe.verdict) &&
+    !biHintDismissed &&
+    !biActive() &&
+    !serialActive() &&
+    !mixedActive();
+  hint.hidden = !show;
+  if (!show) return;
+  $("biHintText").textContent = t("biHintText");
+  $("biHintGo").textContent = t("biHintGo");
+  $("biHintOff").textContent = t("biHintOff");
 }
 
 function showError(text) {
@@ -399,6 +499,11 @@ function render(payload) {
   seedPageTranslations(payload);
   state.lang = detectLang($("body"));
   setSheetLang(state.lang);
+  // 双语混排探测器：只做统计并打日志，不影响任何视图与版式，用来在真实站点上定阈值
+  state.biProbe = probeBilingualSequence($("body"));
+  if (state.biProbe.blocks >= 4) console.info("[ep:bi-probe]", state.biProbe);
+  biHintDismissed = false;
+  syncBiHint();
   // 语言判定后基线会随中英体例变化（缩进 / 段后 / 标题字体），
   // 需重算一遍虚线框与重置按钮，避免沿用默认 zh 基线的旧标记
   syncModifiedMarks();
@@ -678,6 +783,7 @@ function applySettings() {
   syncResetBtn();
   fit();
   scheduleWideTables();
+  syncBiHint();
 }
 
 /* ---------- 双栏时宽表格跨栏 ---------- */
@@ -1871,6 +1977,7 @@ function seedPageTranslations(payload) {
 }
 
 function lookupBi(row) {
+  if (row.pageText) return { key: biTextKey(row.text), text: row.pageText, page: true };
   const key = row.text ? biTextKey(row.text) : "";
   let text = key ? biCache.get(key) : "";
   let page = key ? biPageKeys.has(key) : false;
@@ -1908,6 +2015,118 @@ function collectBiRows() {
   };
   walk($("body"));
   return rows;
+}
+
+// 页面本身就把译文按段排在原文后面（微信、部分博客常见）：
+// 这里按文档顺序把「相邻但语言不同」的两块配成一段，后一块直接当译文用，不必打翻译 API
+function langOfText(text) {
+  const t = String(text || "").replace(/\s+/g, "");
+  const cjk = (t.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
+  const latin = (t.match(/[A-Za-z]/g) || []).length;
+  if (cjk + latin < 6) return "";
+  // 与正文语言判定同一口径：中文段落里夹几个英文术语不该被判成英文
+  return latin / (cjk + latin) > 0.65 ? "en" : "zh";
+}
+
+// 图注、来源说明这类块：只有一种语言、没有对应译文，不能拿去配对，
+// 否则会把「原文 → 译文」的节奏打断（“Fig. 1 涡虫”这种短句还会因为拉丁字母占比高被判成英文）
+function isCaptionRow(row) {
+  const node = row.node;
+  if (!node || !node.tagName) return false;
+  if (node.tagName === "FIGCAPTION") return true;
+  if (node.closest && node.closest("figure, figcaption")) return true;
+  const cls = typeof node.className === "string" ? node.className : "";
+  if (/caption|fig|photo|credit|img/i.test(cls)) return true;
+  const text = (row.text || "").trim();
+  return text.length < 160 && /^(图|圖|插图|附圖|附图|Figure|Fig\.|Photo|Source|Credit|来源|图片来源)/i.test(text);
+}
+
+function collectNativePairRows() {
+  const srcLang = state.lang === "zh" ? "zh" : "en";
+  // 先按语言把相邻同文块并成一组：一段原文被拆成两块、或译文分了两段，都算同一组
+  const groups = [];
+  collectBiRows().forEach((row) => {
+    if (row.wide) {
+      groups.push({ wide: true, row });
+      return;
+    }
+    if (isCaptionRow(row)) {
+      groups.push({ isolated: true, row });
+      return;
+    }
+    const lang = langOfText(row.text);
+    const last = groups[groups.length - 1];
+    if (!lang) {
+      // 太短或看不出语言的块（“（完）”“Notes:”之类）跟着上一组走，别把整条配对链切断
+      if (last && !last.wide && !last.isolated && last.lang) {
+        last.rows.push(row);
+        last.text += "\n" + row.text;
+      } else {
+        groups.push({ isolated: true, row });
+      }
+      return;
+    }
+    if (last && !last.wide && !last.isolated && last.lang === lang) {
+      last.rows.push(row);
+      last.text += "\n" + row.text;
+      return;
+    }
+    groups.push({ lang, rows: [row], text: row.text, quote: row.quote });
+  });
+
+  const rows = [];
+  const pushIsolated = (row) => {
+    rows.push({ node: row.node, nodes: [row], text: row.text, wide: true });
+  };
+  for (let i = 0; i < groups.length; i += 1) {
+    const g = groups[i];
+    if (g.wide) {
+      rows.push(g.row);
+      continue;
+    }
+    if (g.isolated) {
+      pushIsolated(g.row);
+      continue;
+    }
+    // 图注这类不参与配对的块可以夹在中间：跳过去继续找译文，图注仍按原位置单列
+    const skipped = [];
+    let j = i + 1;
+    while (j < groups.length && groups[j].isolated) {
+      skipped.push(groups[j].row);
+      j += 1;
+    }
+    const next = groups[j];
+    // 配对方向固定成「原文语言 → 另一种语言」，避免页面顺序反过来时把中文当原文
+    if (
+      g.lang === srcLang &&
+      next &&
+      !next.wide &&
+      !next.isolated &&
+      next.lang &&
+      next.lang !== g.lang
+    ) {
+      skipped.forEach(pushIsolated);
+      rows.push({
+        node: g.rows[0],
+        nodes: g.rows,
+        quote: g.quote,
+        text: g.text,
+        pageText: next.text,
+        pageNodes: next.rows,
+      });
+      i = j;
+    } else {
+      rows.push({ node: g.rows[0], nodes: g.rows, quote: g.quote, text: g.text });
+    }
+  }
+  return rows;
+}
+
+// 只在「探测判定成立、且页面没有抽取到内联译文」时走这套原生配对
+function nativePairMode() {
+  return Boolean(
+    state.biProbe && state.biProbe.verdict && !(state.payload && state.payload.pageTranslations && state.payload.pageTranslations.length)
+  );
 }
 
 // 段落级译文缓存：按段落文本发请求、按段落存，落盘到 chrome.storage.local。
@@ -2098,18 +2317,42 @@ function onBiResizerDown(e) {
 }
 
 function sourceClone(row) {
-  const clone = row.node.cloneNode(true);
+  // 一组可能有多个原始块（同语言的相邻段），一起搬进左栏
+  const nodes = row.nodes && row.nodes.length ? row.nodes : [row];
+  const build = (item) => item.node.cloneNode(true);
+  if (nodes.length > 1) {
+    const wrap = document.createElement(row.quote ? "blockquote" : "div");
+    wrap.className = "ep-bi__srcGroup";
+    nodes.forEach((item) => wrap.appendChild(build(item)));
+    wrap.__epRow = row;
+    return wrap;
+  }
+  const clone = build(nodes[0]);
   clone.__epRow = row;
   if (row.quote && row.quote !== row.node) {
-    const wrap = row.quote.cloneNode(false);
-    wrap.appendChild(clone);
-    return wrap;
+    const q = row.quote.cloneNode(false);
+    q.appendChild(clone);
+    return q;
   }
   return clone;
 }
 
-function targetTag(row) {
-  if (/^H[1-6]$/.test(row.node.tagName)) return row.node.tagName.toLowerCase();
+// 译文来自页面的多段时，按段拆开显示，而不是挤成一大坨
+function fillBiTarget(tgt, row, text) {
+  const nodes = row.pageNodes || [];
+  if (nodes.length > 1) {
+    nodes.forEach((item) => {
+      const p = document.createElement("div");
+      p.className = "ep-bi__para";
+      p.textContent = item.text;
+      tgt.appendChild(p);
+    });
+    return;
+  }
+  tgt.textContent = text;
+}
+
+function targetTag(row) {  if (/^H[1-6]$/.test(row.node.tagName)) return row.node.tagName.toLowerCase();
   if (row.quote) return "blockquote";
   return "div";
 }
@@ -2136,7 +2379,7 @@ function buildBilingual(rows) {
       const tgt = document.createElement(targetTag(row));
       tgt.className = "ep-bi__col ep-bi__tgt" + (heading ? " is-head" : "");
       if (text) {
-        tgt.textContent = text;
+        fillBiTarget(tgt, row, text);
         // 页面自带译文优先标注，其次是本次刚翻出来的、再是缓存命中
         biBadge(
           tgt,
@@ -2179,7 +2422,7 @@ function buildSerial(rows) {
       const tgt = document.createElement(targetTag(row));
       tgt.className = "ep-bi__col ep-bi__tgt" + (heading ? " is-head" : "");
       if (text) {
-        tgt.textContent = text;
+        fillBiTarget(tgt, row, text);
         biBadge(
           tgt,
           page ? "page" : biFresh.has(key) ? "done" : "cache"
@@ -2269,7 +2512,8 @@ async function refreshBilingual(opts = {}) {
     return;
   }
 
-  const rows = collectBiRows();
+  const native = nativePairMode();
+  const rows = native ? collectNativePairRows() : collectBiRows();
   const renderRows = biActive() ? buildBilingual : buildSerial;
   const sig = biSignatureOf(rows);
   biFresh.clear();
@@ -2278,7 +2522,8 @@ async function refreshBilingual(opts = {}) {
   const hit = texts.filter((t) => biCache.has(biTextKey(t)) || biPlain.has(t)).length;
   // 本篇一段译文都没有（首次进来）：自动翻一次，不必先点按钮
   // 页面自带译文时不自动发请求：没配上的段落等用户点「翻译」，别替人烧额度
-  const initial = !biDone && hit === 0 && biPageKeys.size === 0;
+  // 原生配对的段落译文就取自页面，同样不自动发请求
+  const initial = !biDone && hit === 0 && biPageKeys.size === 0 && !native;
   const wantSend = Boolean(opts.send) || initial;
 
   if (!wantSend) {
@@ -2636,6 +2881,15 @@ function bindControls() {
     refreshBilingual();
   });
   $("deeplKey").addEventListener("input", (e) => update({ deeplKey: e.target.value }));
+  // 双语提示条：确认就走既有的对照开关，忽略则本次提取内不再打扰
+  $("biHintGo").addEventListener("click", () => {
+    $("bilingualOn").checked = true;
+    $("bilingualOn").dispatchEvent(new Event("change"));
+  });
+  $("biHintOff").addEventListener("click", () => {
+    biHintDismissed = true;
+    syncBiHint();
+  });
   $("baiduAppId").addEventListener("input", (e) => update({ baiduAppId: e.target.value }));
   $("baiduKey").addEventListener("input", (e) => update({ baiduKey: e.target.value }));
   $("biEngine").addEventListener("change", (e) => {

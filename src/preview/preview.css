@@ -46,6 +46,61 @@ body {
   display: none;
 }
 
+/* 双语混排提示条：贴在视图顶部，不进纸张，也不参与打印 */
+.ep-biHint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 760px;
+  margin: 0 auto 10px;
+  padding: 7px 12px;
+  border: 1px solid #dfe6f1;
+  border-radius: 10px;
+  background: rgba(247, 250, 255, 0.96);
+  color: #35507a;
+  font-size: 13px;
+}
+
+.ep-biHint[hidden] {
+  display: none;
+}
+
+.ep-biHint__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ep-biHint__go,
+.ep-biHint__off {
+  flex: 0 0 auto;
+  padding: 4px 10px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ep-biHint__go {
+  border: 1px solid #b9cdf0;
+  background: #eef4ff;
+  color: #1f4f9c;
+}
+
+.ep-biHint__off {
+  border: 1px solid transparent;
+  background: none;
+  color: #6b7789;
+}
+
+.ep-biHint__go:hover {
+  background: #e2ecff;
+}
+
+.ep-biHint__off:hover {
+  background: #eceff4;
+  color: #3a4453;
+}
+
 .ep-toast__dot {
   width: 6px;
   height: 6px;

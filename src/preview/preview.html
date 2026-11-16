@@ -100,6 +100,12 @@
       <!-- 翻译进度提示：浮在工具栏右下方 -->
       <div class="ep-toast" id="translateToast" hidden><span class="ep-toast__dot"></span><span id="translateToastText"></span></div>
       <div class="ep-viewport" id="viewport">
+        <!-- 双语混排提示：只在探测判定成立、且当前不是对照视图时出现 -->
+        <div class="ep-biHint" id="biHint" hidden>
+          <span class="ep-biHint__text" id="biHintText"></span>
+          <button type="button" class="ep-biHint__go" id="biHintGo"></button>
+          <button type="button" class="ep-biHint__off" id="biHintOff"></button>
+        </div>
         <div class="ep-sheetWrap" id="sheetWrap">
             <div class="ep-sheet" id="sheet" data-theme="paper">
             <div class="ep-gutter ep-gutter--head" id="pageHead">
