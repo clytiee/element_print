@@ -598,6 +598,11 @@
 }
 
 /* 左栏一组原文由多个块拼成时，块之间照常保留各自段落间距（与网页节奏一致） */
+/* 但格子首块的段前要清掉：左右两栏从同一基线起排，否则原文比译文低一截 */
+.ep-bi__src > :first-child,
+.ep-bi__srcGroup > :first-child {
+  margin-top: 0;
+}
 /* 引文外框本身不再叠加外边距：引文的间距由里面的段落给（结构样式另有一组变量） */
 .ep-bi__src > blockquote,
 .ep-bi__srcGroup > blockquote {

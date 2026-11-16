@@ -374,16 +374,13 @@ function probeBilingualSequence(root) {
   const seq = [];
   const chars = { zh: 0, en: 0 };
   blocks.forEach((node) => {
-    // 一个段落里用 <br> 隔开的「英文 + 中文译文」（中国日报等双语栏目）按 <br> 切成多块统计
-    brSegments(node).forEach((raw) => {
-      const text = raw.replace(/\s+/g, "");
-      const cjk = (text.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
-      const latin = (text.match(/[A-Za-z]/g) || []).length;
-      if (cjk + latin < 6) return;
-      const lang = cjk / (cjk + latin) > 0.65 ? "en" : "zh";
-      seq.push(lang);
-      chars[lang] += cjk + latin;
-    });
+    const text = (node.textContent || "").replace(/\s+/g, "");
+    const cjk = (text.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
+    const latin = (text.match(/[A-Za-z]/g) || []).length;
+    if (cjk + latin < 6) return;
+    const lang = cjk / (cjk + latin) > 0.65 ? "en" : "zh";
+    seq.push(lang);
+    chars[lang] += cjk + latin;
   });
   const probe = {
     blocks: seq.length,
@@ -2159,61 +2156,6 @@ function collectBiRows() {
 
 // 页面本身就把译文按段排在原文后面（微信、部分博客常见）：
 // 这里按文档顺序把「相邻但语言不同」的两块配成一段，后一块直接当译文用，不必打翻译 API
-// 按 <br> 把一个块的文字切成多段（双语网页常把译文塞在同一段的 <br> 后面）
-function brSegments(node) {
-  const parts = [""];
-  const visit = (n) => {
-    Array.from(n.childNodes || []).forEach((child) => {
-      if (child.nodeType === 1 && child.tagName === "BR") {
-        parts.push("");
-        return;
-      }
-      if (child.nodeType === 3) {
-        parts[parts.length - 1] += child.nodeValue || "";
-        return;
-      }
-      if (child.nodeType === 1) visit(child);
-    });
-  };
-  visit(node);
-  const out = parts.map((s) => s.replace(/\s+/g, " ").trim()).filter(Boolean);
-  return out.length ? out : [""];
-}
-
-// 把一个含 <br> 的块拆成多个只属于自己的节点：左栏放原文那一截，右栏放译文那一截
-function splitBrRows(row) {
-  const node = row.node;
-  if (row.wide || !node || !node.querySelector || !node.querySelector("br")) return [row];
-  const runs = [];
-  let acc = "";
-  Array.from(node.childNodes).forEach((child) => {
-    if (child.nodeType === 1 && child.tagName === "BR") {
-      runs.push(acc);
-      acc = "";
-      return;
-    }
-    acc += child.nodeType === 3 ? esc(child.nodeValue || "") : child.outerHTML || "";
-  });
-  runs.push(acc);
-  const pieces = runs
-    .map((html) => html.trim())
-    .filter(Boolean)
-    .map((html) => {
-      const clone = node.cloneNode(false);
-      clone.innerHTML = html;
-      return { node: clone, text: (clone.textContent || "").replace(/\s+/g, " ").trim() };
-    })
-    .filter((item) => item.text);
-  if (pieces.length < 2) return [row];
-  return pieces.map((item) => ({
-    node: item.node,
-    text: item.text,
-    wide: false,
-    quote: row.quote,
-    split: true,
-  }));
-}
-
 function langOfText(text) {
   const t = String(text || "").replace(/\s+/g, "");
   const cjk = (t.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
@@ -2240,9 +2182,7 @@ function collectNativePairRows() {
   const srcLang = state.lang === "zh" ? "zh" : "en";
   // 先按语言把相邻同文块并成一组：一段原文被拆成两块、或译文分了两段，都算同一组
   const groups = [];
-  collectBiRows()
-    .flatMap(splitBrRows)
-    .forEach((row) => {
+  collectBiRows().forEach((row) => {
     if (row.wide) {
       groups.push({ wide: true, row });
       return;

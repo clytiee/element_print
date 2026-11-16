@@ -638,7 +638,9 @@
       if (block) block.appendChild(el);
     });
 
-    return pairs.slice(0, 400);
+    // 上限只为防极端页面撑爆载荷：参考文献条目多的论文动辄几百条，
+    // 截断会把正文段落挡在额度外面（只剩文献短句有译文）
+    return pairs.slice(0, 2000);
   }
 
   function isEmptyNode(node) {
