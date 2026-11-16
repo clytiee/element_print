@@ -677,6 +677,66 @@ function applySettings() {
 
   syncResetBtn();
   fit();
+  scheduleWideTables();
+}
+
+/* ---------- 双栏时宽表格跨栏 ---------- */
+
+let wideTableTimer = 0;
+
+// 表格的自然宽度要在栏外量：临时改成 max-content 并固定定位，量完立刻移除
+function naturalTableWidth(table) {
+  const probe = table.cloneNode(true);
+  probe.removeAttribute("data-ep-wide");
+  probe.style.cssText =
+    "position:fixed;left:-10000px;top:0;width:max-content;max-width:none;visibility:hidden;pointer-events:none";
+  $("sheet").appendChild(probe);
+  const width = Math.max(probe.scrollWidth, probe.offsetWidth);
+  probe.remove();
+  return width;
+}
+
+// column-span 只对多栏容器的直接子元素生效，所以标记最近的、直属于正文的那层容器
+function spanHostOf(table, body) {
+  let host = table;
+  while (host.parentElement && host.parentElement !== body) host = host.parentElement;
+  return host;
+}
+
+function markWideTables() {
+  const body = $("body");
+  const tables = Array.from(body.querySelectorAll("table"));
+  body.querySelectorAll("[data-ep-wide]").forEach((node) => node.removeAttribute("data-ep-wide"));
+  body.querySelectorAll("table[data-ep-fit]").forEach((node) => node.removeAttribute("data-ep-fit"));
+  if (!tables.length) return;
+  const s = state.settings;
+  const twoColumn = s.columns === 2 && !biActive() && !serialActive() && !isMobile(s);
+  if (!twoColumn || body.hidden) return;
+
+  const gap = parseFloat(getComputedStyle(body).columnGap) || 0;
+  const colWidth = (body.clientWidth - gap) / 2;
+  if (!(colWidth > 0)) return;
+  const threshold = colWidth * 1.12;
+
+  tables.forEach((table) => {
+    const natural = naturalTableWidth(table);
+    // 比单栏还宽：跨栏通排
+    if (natural > threshold) {
+      const host = spanHostOf(table, body);
+      // 该层容器里如果还夹着别的正文，跨栏会把那段文字也拉通排；此时只把表格本身标宽
+      const stray =
+        host === table ? 0 : (host.textContent || "").trim().length - (table.textContent || "").trim().length;
+      (stray > 20 ? table : host).setAttribute("data-ep-wide", "1");
+    }
+    // 连整页正文宽度都塞不下：改成固定列宽，否则表格会顶出纸边（打印看不出来是因为不会横向溢出）
+    if (natural > body.clientWidth * 1.02) table.setAttribute("data-ep-fit", "1");
+  });
+}
+
+function scheduleWideTables() {
+  clearTimeout(wideTableTimer);
+  // 多栏排版与字体度量要等一帧才稳定，量宽放到下一帧
+  wideTableTimer = setTimeout(() => requestAnimationFrame(markWideTables), 120);
 }
 
 function fieldOf(id) {
@@ -2785,9 +2845,17 @@ function bindControls() {
     }
   });
 
-  window.addEventListener("resize", fit);
+  window.addEventListener("resize", () => {
+    fit();
+    scheduleWideTables();
+  });
   if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(fit).catch(() => {});
+    document.fonts.ready
+      .then(() => {
+        fit();
+        scheduleWideTables();
+      })
+      .catch(() => {});
   }
 }
 

@@ -431,6 +431,23 @@
   border-bottom-color: #9aa0a8;
 }
 
+/* 双栏时自然宽度超过单栏的宽表格跨栏通排（预览时按实际宽度标记 data-ep-wide） */
+.ep-body [data-ep-wide] {
+  column-span: all;
+}
+
+/* 连整页宽度都装不下的表格：固定列宽并把长词拆开，避免顶出纸边 */
+.ep-body table[data-ep-fit] {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.ep-body table[data-ep-fit] th,
+.ep-body table[data-ep-fit] td {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 .ep-body pre {
   margin: var(--ep-para-before) 0 var(--ep-para-after);
   padding: 0.7em 0.8em;
