@@ -223,7 +223,7 @@
   }
 
   // Readability 的正文容器是离屏副本，读不到页面样式；在原文档上找对应节点取计算样式
-  function pageFontInfo(title) {
+  function pageFontInfo(title, samples) {
     const computed = (node) => {
       if (!node || node.nodeType !== Node.ELEMENT_NODE) return null;
       const cs = getComputedStyle(node);
@@ -258,14 +258,32 @@
         }
       }
     }
-    // 正文：优先正文容器里的段落，按「字数最多的字号/行距组合」定，退到整页第一个有字的段落
-    const containers = document.querySelectorAll(
-      "article p, main p, [class*=content] p, [class*=article] p, [class*=post] p"
-    );
-    const firstText =
-      Array.from(containers).find((n) => normText(n.textContent).length >= 12) ||
-      Array.from(document.querySelectorAll("p")).find((n) => normText(n.textContent).length >= 12);
-    const bodyNode = pickBodyParagraph(Array.from(containers), firstText);
+    // 正文：先用 Readability 抽出的真实正文段落回原页面找同文段落，找到就以它为准；
+    // 找不到再退到「正文容器里字数最多的字号组合」，最后退到整页第一个有字段落
+    let bodyNode = null;
+    if (samples && samples.length) {
+      const all = document.querySelectorAll("p, li, dd, dt, blockquote");
+      for (const sample of samples) {
+        const head = sample.slice(0, 40);
+        const match = Array.from(all).find((node) => {
+          const txt = normText(node.textContent);
+          return txt.length >= 30 && (txt.slice(0, 40) === head || txt.includes(head));
+        });
+        if (match) {
+          bodyNode = match;
+          break;
+        }
+      }
+    }
+    if (!bodyNode) {
+      const containers = document.querySelectorAll(
+        "article p, main p, [class*=content] p, [class*=article] p, [class*=post] p"
+      );
+      const firstText =
+        Array.from(containers).find((n) => normText(n.textContent).length >= 12) ||
+        Array.from(document.querySelectorAll("p")).find((n) => normText(n.textContent).length >= 12);
+      bodyNode = pickBodyParagraph(Array.from(containers), firstText);
+    }
     const body = computed(bodyNode);
     const titleFont = computed(titleNode);
     if (!body && !titleFont) return null;
@@ -300,6 +318,18 @@
     markHolderInlineDisplay(holder);
 
     const titleText = article.title || document.title || "";
+    // 从 Readability 正文里取几段做样本，回原页面按同文段落定位，取样正文的真实样式
+    const bodySamples = [];
+    try {
+      const parsed = new DOMParser().parseFromString(article.content || "", "text/html");
+      parsed.querySelectorAll("p, li, blockquote").forEach((node) => {
+        if (bodySamples.length >= 6) return;
+        const txt = normText(node.textContent);
+        if (txt.length >= 40) bodySamples.push(txt);
+      });
+    } catch (err) {
+      /* 解析失败就只用启发式 */
+    }
     // Readability 在缺少 meta/JSON-LD 摘要时会用正文首段兜底；这类首段不作为摘要，避免和正文重复
     const excerptText = article.excerptFallback ? "" : article.excerpt || "";
     let payload;
@@ -314,7 +344,7 @@
         excerpt: excerptText,
         excerptTrans: readAbstractTranslation() || readExcerptTranslation(excerptText),
         styleRoot: document,
-        pageFont: pageFontInfo(titleText),
+        pageFont: pageFontInfo(titleText, bodySamples),
       });
     } finally {
       holder.remove();

@@ -532,6 +532,35 @@ function buildPageRule(s) {
 
 /* ---------- 版式 ---------- */
 
+// 把抽取时内嵌的网页字体装进预览页：字体名只有在有 @font-face 的文档里才解析得出来
+function pageFontFaceCss() {
+  const faces = (state.payload && state.payload.pageFont && state.payload.pageFont.faces) || [];
+  if (!faces.length) return "";
+  return faces
+    .map((face) => {
+      const range = face.unicodeRange ? `unicode-range:${face.unicodeRange};` : "";
+      return `@font-face{font-family:${JSON.stringify(face.family)};src:url(${face.src}) format("${
+        face.src.includes("font/woff2") ? "woff2" : face.src.includes("font/woff") ? "woff" : "truetype"
+      }");font-weight:${face.weight || 400};font-style:${face.style || "normal"};${range}}`;
+    })
+    .join("\n");
+}
+
+function injectPageFontFaces() {
+  const css = pageFontFaceCss();
+  let style = document.getElementById("ep-page-fonts");
+  if (!css) {
+    if (style) style.textContent = "";
+    return;
+  }
+  if (!style) {
+    style = document.createElement("style");
+    style.id = "ep-page-fonts";
+    document.head.appendChild(style);
+  }
+  if (style.textContent !== css) style.textContent = css;
+}
+
 // 正文字体栈：选了「自动」且正文是西文时，换成纯拉丁衬线，不挂中文兜底
 function bodyFontStack(key, lang) {
   const preset = FONT_PRESETS[key] || FONT_PRESETS.auto;
@@ -623,6 +652,7 @@ function applySettings() {
   root.style.setProperty("--ep-split", (s.biSplit || 57) + "%");
   if (biResizer) biResizer.hidden = !biOn;
 
+  injectPageFontFaces();
   root.style.setProperty("--ep-body-font", bodyFontStack(s.bodyFont, state.lang));
   root.style.setProperty("--ep-body-weight", String(BODY_WEIGHTS[s.bodyWeight] || 400));
   root.style.setProperty("--ep-title-font", titleFontStack(s, state.lang));
@@ -2792,7 +2822,8 @@ async function buildExportHtml() {
       cssPaths.map((path) => fetch(chrome.runtime.getURL(path)).then((res) => res.text()))
     )
   ).join("\n");
-  const fontFaces = await inlineFontFaces();
+  // 摘要里的界面字 + 抽取时内嵌的网页字体，一并写进导出文档，存档也保真
+  const fontFaces = [await inlineFontFaces(), pageFontFaceCss()].filter(Boolean).join("\n");
   const er = isEreader(s);
   const mob = isMobile(s);
   const sizePage = er ? EREADER_PAGE : mob ? MOBILE_PAGE : null;

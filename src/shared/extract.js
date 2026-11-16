@@ -1017,6 +1017,162 @@
     return best ? best.node : fallback;
   }
 
+  // 网页自托管的 webfont：预览页是另一个文档，只带字体名渲染不出来，
+  // 所以把拉丁字体（woff2 优先）内嵌成 data: URL 一起带给预览页；中文大字体不内嵌
+  const FONT_FACE_LIMIT = 6;
+  const FONT_FILE_MAX = 400 * 1024;
+  const FONT_TOTAL_MAX = 2 * 1024 * 1024;
+  const GENERIC_FAMILIES = new Set([
+    "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui",
+    "ui-serif", "ui-sans-serif", "ui-monospace", "inherit", "initial", "unset",
+  ]);
+
+  function fontFamilies(stack) {
+    return String(stack || "")
+      .split(",")
+      .map((name) => name.trim().replace(/^["']|["']$/g, ""))
+      .filter((name) => name && !GENERIC_FAMILIES.has(name.toLowerCase()));
+  }
+
+  // unicode-range 覆盖不到大写 A 的，就是纯非拉丁子集，预览里给西文用不上
+  function coversLatin(unicodeRange) {
+    const text = String(unicodeRange || "").trim();
+    if (!text) return true; // 没声明范围时交给体积上限兜底
+    for (const part of text.split(",")) {
+      const m = part.trim().match(/u\+([0-9a-f]{1,6})(?:-([0-9a-f]{1,6}))?/i);
+      if (!m) continue;
+      const lo = parseInt(m[1], 16);
+      const hi = m[2] ? parseInt(m[2], 16) : lo;
+      if (lo <= 0x41 && hi >= 0x41) return true;
+    }
+    return false;
+  }
+
+  function fontFaceSrc(rule) {
+    const src = rule.style.getPropertyValue("src") || "";
+    const list = [];
+    const re = /url\(\s*(['"]?)([^'")]+)\1\s*\)(?:\s*format\(\s*["']?([^"')]+)["']?\s*\))?/gi;
+    let m;
+    while ((m = re.exec(src))) list.push({ url: m[2].trim(), format: (m[3] || "").toLowerCase() });
+    const rank = (format) => (format.includes("woff2") ? 0 : format.includes("woff") ? 1 : 2);
+    list.sort((a, b) => rank(a.format) - rank(b.format));
+    return list[0] || null;
+  }
+
+  function bytesToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
+  // 跨域样式表（Google Fonts、Typekit 等）读不到 rules，但把 CSS 文本取回来可以自己解析
+  function parseFontFaceRules(cssText) {
+    try {
+      const sheet = new CSSStyleSheet();
+      sheet.replaceSync(cssText);
+      return Array.from(sheet.cssRules || []).filter((rule) => rule.type === CSSRule.FONT_FACE_RULE);
+    } catch (err) {
+      return [];
+    }
+  }
+
+  async function remoteFontFaceRules() {
+    const links = Array.from(document.querySelectorAll('link[rel="stylesheet"][href]'));
+    const out = [];
+    let fetched = 0;
+    for (const link of links) {
+      if (fetched >= 8) break;
+      const href = link.href;
+      if (!href || href.startsWith("data:")) continue;
+      try {
+        if (new URL(href).origin === location.origin) continue; // 同源的上面已经读到了
+      } catch (err) {
+        continue;
+      }
+      try {
+        const res = await fetch(href, { credentials: "omit", cache: "force-cache" });
+        if (!res.ok) continue;
+        const text = await res.text();
+        fetched += 1;
+        if (text.length > 2 * 1024 * 1024 || !/@font-face/i.test(text)) continue;
+        out.push(...parseFontFaceRules(text));
+      } catch (err) {
+        /* 对方没开 CORS 就取不到，跳过 */
+      }
+    }
+    return out;
+  }
+
+  async function collectWebFonts(stacks) {
+    const wanted = new Set();
+    stacks.forEach((stack) => fontFamilies(stack).forEach((name) => wanted.add(name.toLowerCase())));
+    if (!wanted.size) return [];
+
+    const rules = [];
+    const visit = (list) => {
+      for (const rule of Array.from(list || [])) {
+        if (rule.type === CSSRule.FONT_FACE_RULE) rules.push(rule);
+        else if (rule.cssRules) visit(rule.cssRules);
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets || [])) {
+      // 跨域样式表读不到规则内容，稍后用 fetch 取 CSS 文本补上
+      try {
+        visit(sheet.cssRules);
+      } catch (err) {
+        /* 忽略：拿不到字体地址 */
+      }
+    }
+    rules.push(...(await remoteFontFaceRules()));
+
+    const faces = [];
+    const seen = new Set();
+    let total = 0;
+    for (const rule of rules) {
+      if (faces.length >= FONT_FACE_LIMIT) break;
+      const family = (rule.style.getPropertyValue("font-family") || "")
+        .trim()
+        .replace(/^["']|["']$/g, "");
+      if (!family || !wanted.has(family.toLowerCase())) continue;
+      if (!coversLatin(rule.style.getPropertyValue("unicode-range"))) continue;
+      const weight = rule.style.getPropertyValue("font-weight") || "400";
+      const style = rule.style.getPropertyValue("font-style") || "normal";
+      const faceKey = `${family.toLowerCase()}|${weight}|${style}`;
+      if (seen.has(faceKey)) continue;
+      const pick = fontFaceSrc(rule);
+      if (!pick || pick.url.startsWith("data:")) continue;
+      try {
+        const url = new URL(pick.url, document.baseURI).href;
+        const res = await fetch(url, { credentials: "omit", cache: "force-cache" });
+        if (!res.ok) continue;
+        const buf = await res.arrayBuffer();
+        if (buf.byteLength > FONT_FILE_MAX) continue;
+        if (total + buf.byteLength > FONT_TOTAL_MAX) break;
+        total += buf.byteLength;
+        seen.add(faceKey);
+        const mime = pick.format.includes("woff2")
+          ? "font/woff2"
+          : pick.format.includes("woff")
+            ? "font/woff"
+            : "application/octet-stream";
+        faces.push({
+          family,
+          weight,
+          style,
+          unicodeRange: rule.style.getPropertyValue("unicode-range") || "",
+          src: `data:${mime};base64,${bytesToBase64(buf)}`,
+        });
+      } catch (err) {
+        /* 单个字体取不到不影响整体 */
+      }
+    }
+    return faces;
+  }
+
   function readPageFont(el, title) {
     const fallback = Array.from(el.querySelectorAll("p, li, dd, dt, blockquote")).find(
       (n) => n.isConnected && normText(n.textContent)
@@ -1072,6 +1228,12 @@
 
     // 整页提取时正文容器是离屏副本，读不到页面样式，由 auto.js 事先算好传进来
     const pageFont = opts.pageFont || readPageFont(el, title);
+    if (pageFont && !pageFont.faces) {
+      pageFont.faces = await collectWebFonts([
+        pageFont.body && pageFont.body.stack,
+        pageFont.title && pageFont.title.stack,
+      ]);
+    }
 
     const imgStats = await inlineImages(clone);
 
