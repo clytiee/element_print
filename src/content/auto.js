@@ -223,7 +223,7 @@
   }
 
   // Readability 的正文容器是离屏副本，读不到页面样式；在原文档上找对应节点取计算样式
-  function pageFontInfo(title, samples) {
+  function pageFontInfo(title, samples, headTexts) {
     const computed = (node) => {
       if (!node || node.nodeType !== Node.ELEMENT_NODE) return null;
       const cs = getComputedStyle(node);
@@ -286,8 +286,91 @@
     }
     const body = computed(bodyNode);
     const titleFont = computed(titleNode);
+    // 各级标题的字体：拿 Readability 正文里的标题文字回原页面找同一个标题节点；
+    // 找不到就退到正文容器内文字最多的同级标题（避开导航、侧栏的小标题样式）
+    const heads = {};
+    ["h1", "h2", "h3", "h4", "h5", "h6"].forEach((tag) => {
+      const texts = ((headTexts && headTexts[tag]) || [])
+        .map((t) => normText(t).slice(0, 40))
+        .filter(Boolean);
+      const pool = Array.from(document.querySelectorAll(tag)).filter(
+        (n) => n.isConnected && normText(n.textContent)
+      );
+      let node = null;
+      if (texts.length) {
+        node =
+          pool.find((n) => {
+            const txt = normText(n.textContent);
+            return texts.some((w) => txt.slice(0, 40) === w || txt.includes(w));
+          }) || null;
+      }
+      if (!node) {
+        const inArticle = pool.filter(
+          (n) =>
+            n.closest("article, main, [class*=content], [class*=post], [class*=article]") &&
+            n !== titleNode
+        );
+        const use = inArticle.length ? inArticle : pool.filter((n) => n !== titleNode);
+        use.sort((a, b) => normText(b.textContent).length - normText(a.textContent).length);
+        node = use[0] || null;
+      }
+      const font = computed(node);
+      if (font) heads[tag] = font;
+    });
     if (!body && !titleFont) return null;
-    return { body, title: titleFont };
+    // 引文块：拿正文里的引文文字回原页面找同一个 blockquote，取它的字体
+    let quoteNode = null;
+    const quoteTexts = ((headTexts && headTexts.quote) || [])
+      .map((t) => normText(t).slice(0, 40))
+      .filter(Boolean);
+    const quotes = Array.from(document.querySelectorAll("blockquote")).filter(
+      (n) => n.isConnected && normText(n.textContent)
+    );
+    if (quoteTexts.length) {
+      quoteNode =
+        quotes.find((n) => {
+          const txt = normText(n.textContent);
+          return quoteTexts.some((w) => txt.slice(0, 40) === w || txt.includes(w));
+        }) || null;
+    }
+    if (!quoteNode && quotes.length) {
+      quotes.sort((a, b) => normText(b.textContent).length - normText(a.textContent).length);
+      quoteNode = quotes[0];
+    }
+    // 引文的字体通常写在块里那一段 p 上，blockquote 自身多半只是继承正文
+    const quotePara =
+      quoteNode &&
+      (Array.from(quoteNode.querySelectorAll("p")).find((n) => normText(n.textContent)) ||
+        quoteNode);
+    // 同时把框线、缩进、底色这些结构样式一起记下（只记字体会丢格式）
+    let quoteStyle = null;
+    if (quoteNode) {
+      const bs = getComputedStyle(quoteNode);
+      const ps = quotePara && quotePara !== quoteNode ? getComputedStyle(quotePara) : null;
+      const px = (v) => Math.round(parseFloat(v) || 0);
+      quoteStyle = {
+        mt: px(bs.marginTop),
+        mr: px(bs.marginRight),
+        mb: px(bs.marginBottom),
+        ml: px(bs.marginLeft),
+        pl: px(bs.paddingLeft),
+        pr: px(bs.paddingRight),
+        pt: px(bs.paddingTop),
+        pb: px(bs.paddingBottom),
+        borderW: px(bs.borderLeftWidth),
+        borderStyle: bs.borderLeftStyle,
+        borderColor: bs.borderLeftColor,
+        bg: bs.backgroundColor,
+        pbg: ps ? ps.backgroundColor : "",
+        ppl: ps ? px(ps.paddingLeft) : 0,
+        ppr: ps ? px(ps.paddingRight) : 0,
+        ppt: ps ? px(ps.paddingTop) : 0,
+        ppb: ps ? px(ps.paddingBottom) : 0,
+        pmt: ps ? px(ps.marginTop) : 0,
+        pmb: ps ? px(ps.marginBottom) : 0,
+      };
+    }
+    return { body, title: titleFont, heads, quote: computed(quotePara), quoteStyle };
   }
 
   async function run() {
@@ -320,12 +403,26 @@
     const titleText = article.title || document.title || "";
     // 从 Readability 正文里取几段做样本，回原页面按同文段落定位，取样正文的真实样式
     const bodySamples = [];
+    const headTexts = {};
     try {
       const parsed = new DOMParser().parseFromString(article.content || "", "text/html");
       parsed.querySelectorAll("p, li, blockquote").forEach((node) => {
         if (bodySamples.length >= 6) return;
         const txt = normText(node.textContent);
         if (txt.length >= 40) bodySamples.push(txt);
+      });
+      parsed.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach((node) => {
+        const tag = node.tagName.toLowerCase();
+        const txt = normText(node.textContent);
+        if (!txt) return;
+        headTexts[tag] = headTexts[tag] || [];
+        if (headTexts[tag].length < 4) headTexts[tag].push(txt);
+      });
+      parsed.querySelectorAll("blockquote").forEach((node) => {
+        const txt = normText(node.textContent);
+        if (!txt) return;
+        headTexts.quote = headTexts.quote || [];
+        if (headTexts.quote.length < 3) headTexts.quote.push(txt);
       });
     } catch (err) {
       /* 解析失败就只用启发式 */
@@ -344,7 +441,7 @@
         excerpt: excerptText,
         excerptTrans: readAbstractTranslation() || readExcerptTranslation(excerptText),
         styleRoot: document,
-        pageFont: pageFontInfo(titleText, bodySamples),
+        pageFont: pageFontInfo(titleText, bodySamples, headTexts),
       });
     } finally {
       holder.remove();

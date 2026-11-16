@@ -54,7 +54,7 @@ export const BODY_WEIGHTS = {
 
 export const DEFAULT_SETTINGS = {
   theme: "paper", // paper（原版报纸感） | academic（学术期刊）
-  columns: 1, // 1 | 2
+  columns: 2, // 1 | 2
   fontSize: 12, // pt
   titleSize: 22.8, // pt，标题字号独立设
   lineHeightMode: "ratio", // ratio（倍数） | fixed（固定磅值）
@@ -62,6 +62,7 @@ export const DEFAULT_SETTINGS = {
   lineHeightFixed: 26, // 固定磅值模式下的行距（pt）
   paraBefore: 0, // px
   paraAfter: 9, // px
+  headGapMode: "page", // 标题段前段后：page（取网页值/版式默认）| body（跟着正文的段前段后）
   indent: 0, // 首行缩进（字）
   bodyFont: "auto", // FONT_PRESETS 的 key
   bodyWeight: "normal", // BODY_WEIGHTS 的 key
@@ -72,7 +73,7 @@ export const DEFAULT_SETTINGS = {
   marginRight: 15,
   marginBottom: 15,
   marginLeft: 15,
-  showUrl: true,
+  showUrl: false,
   showTime: false,
   showHeader: true, // 页眉（Element Print / 摘自 域名）
   showFooter: true, // 页脚（品牌 + 页码）
@@ -140,6 +141,7 @@ export const LAYOUT_KEYS = [
   "lineHeightFixed",
   "paraBefore",
   "paraAfter",
+  "headGapMode",
   "indent",
   "bodyFont",
   "bodyWeight",
@@ -202,7 +204,7 @@ export function pickShared(settings) {
 export const THEME_PRESETS = {
   paper: {
     theme: "paper",
-    columns: 1,
+    columns: 2,
     fontSize: 12,
     titleSize: 22.8,
     lineHeightMode: "ratio",
@@ -222,7 +224,7 @@ export const THEME_PRESETS = {
     marginRight: 15,
     marginBottom: 15,
     marginLeft: 15,
-    showUrl: true,
+    showUrl: false,
     showTime: false,
     showHeader: true,
     showFooter: true,

@@ -318,6 +318,14 @@
 .ep-body h5,
 .ep-body h6 { font-size: 1.02em; }
 
+/* 原版：正文里的各级标题跟随网页自己的标题字体；其他版式变量为空时继承正文 */
+.ep-body h1 { font-family: var(--ep-h1-font, inherit); }
+.ep-body h2 { font-family: var(--ep-h2-font, inherit); }
+.ep-body h3 { font-family: var(--ep-h3-font, inherit); }
+.ep-body h4 { font-family: var(--ep-h4-font, inherit); }
+.ep-body h5 { font-family: var(--ep-h5-font, inherit); }
+.ep-body h6 { font-family: var(--ep-h6-font, inherit); }
+
 /* 正文用半粗/粗体时，原来的加粗文字靠下划线和正文拉开层级 */
 .ep-sheet[data-body-weight="semibold"] .ep-body b,
 .ep-sheet[data-body-weight="semibold"] .ep-body strong,
@@ -401,7 +409,35 @@
   border-left: 2px solid #d5d8dd;
   color: #3c3c3c;
   font-style: normal;
+  font-family: var(--ep-quote-font, inherit);
+  font-size: var(--ep-quote-size, 1em);
+  line-height: var(--ep-quote-lh, inherit);
   text-indent: 0;
+}
+
+/* 原版：标题的上下边距也照网页来（网页常给标题留更宽的段前距） */
+.ep-sheet[data-head-page="1"] .ep-body h1 { margin: var(--ep-h1-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h1-mb, 0.45em); }
+.ep-sheet[data-head-page="1"] .ep-body h2 { margin: var(--ep-h2-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h2-mb, 0.45em); }
+.ep-sheet[data-head-page="1"] .ep-body h3 { margin: var(--ep-h3-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h3-mb, 0.45em); }
+.ep-sheet[data-head-page="1"] .ep-body h4 { margin: var(--ep-h4-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h4-mb, 0.45em); }
+.ep-sheet[data-head-page="1"] .ep-body h5 { margin: var(--ep-h5-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h5-mb, 0.45em); }
+.ep-sheet[data-head-page="1"] .ep-body h6 { margin: var(--ep-h6-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h6-mb, 0.45em); }
+
+/* 原版：引文的结构样式也跟网页——左框线、缩进、底色、段落内边距都按抓下来的值 */
+.ep-sheet[data-quote-page="1"] .ep-body blockquote {
+  margin: var(--ep-quote-mt, 0) var(--ep-quote-mr, 0) var(--ep-quote-mb, 0) var(--ep-quote-ml, 0);
+  padding: var(--ep-quote-pad, 0);
+  border-left: var(--ep-quote-border, 0);
+  background: var(--ep-quote-bg, transparent);
+  color: inherit;
+}
+
+.ep-sheet[data-quote-page="1"] .ep-body blockquote p,
+.ep-sheet[data-quote-page="1"] .ep-body blockquote .ep-para {
+  padding: var(--ep-quote-ppad, 0);
+  background: var(--ep-quote-pbg, transparent);
+  margin: var(--ep-quote-pmt, 0) 0 var(--ep-quote-pmb, 0);
+  color: inherit;
 }
 
 .ep-body blockquote p,
@@ -561,8 +597,10 @@
   margin-top: 0.45em;
 }
 
-/* 左栏一组原文由多个块拼成时，块之间不重复叠加段距 */
-.ep-bi__srcGroup > * {
+/* 左栏一组原文由多个块拼成时，块之间照常保留各自段落间距（与网页节奏一致） */
+/* 引文外框本身不再叠加外边距：引文的间距由里面的段落给（结构样式另有一组变量） */
+.ep-bi__src > blockquote,
+.ep-bi__srcGroup > blockquote {
   margin: 0;
 }
 
@@ -576,11 +614,6 @@
   margin: 0.25em 0 0;
 }
 
-/* 原文格沿用正文排版，但格子之间不再重复叠加段间距 */
-.ep-bi__src > * {
-  margin: 0;
-}
-
 /* 译文格中的引文与原文引文保持同款缩进、左边线 */
 .ep-bi__tgt:is(blockquote) {
   margin: 0;
@@ -589,8 +622,10 @@
   color: #3c3c3c;
 }
 
+/* 对照行之间不再额外叠加间距：相邻两行的距离由格子里的段落自己带
+   （原版取网页的上下边距，其它版式取右栏的段前段后），多算一次会明显偏松 */
 .ep-bi__row + .ep-bi__row {
-  margin-top: var(--ep-para-after);
+  margin-top: 0;
 }
 
 /* 双语对照：栏间拖拽柄，只作用于左右两列宽度 */

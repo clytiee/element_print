@@ -260,8 +260,31 @@ function fmtTime(ts) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+const MONTH_EN = ["January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"];
+
+// 页面给的时间常常是 ISO（2025-05-10T18:58:58+00:00），显示成「2025年5月10日」这种常见写法；
+// 本来就是人话的日期原样保留，时间部分只有非零点才带上
 function formatPubDate(value) {
-  return String(value || "").trim();
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const m = raw.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/
+  );
+  if (!m) return raw;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const hh = m[4] ? Number(m[4]) : 0;
+  const mm = m[5] ? Number(m[5]) : 0;
+  if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return raw;
+  const time = hh || mm ? `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}` : "";
+  if (state && state.lang === "en") {
+    const date = `${MONTH_EN[mo - 1]} ${d}, ${y}`;
+    return time ? `${date}, ${time}` : date;
+  }
+  const date = `${y}年${mo}月${d}日`;
+  return time ? `${date} ${time}` : date;
 }
 
 function esc(text) {
@@ -351,13 +374,16 @@ function probeBilingualSequence(root) {
   const seq = [];
   const chars = { zh: 0, en: 0 };
   blocks.forEach((node) => {
-    const text = (node.textContent || "").replace(/\s+/g, "");
-    const cjk = (text.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
-    const latin = (text.match(/[A-Za-z]/g) || []).length;
-    if (cjk + latin < 6) return;
-    const lang = cjk / (cjk + latin) > 0.65 ? "en" : "zh";
-    seq.push(lang);
-    chars[lang] += cjk + latin;
+    // 一个段落里用 <br> 隔开的「英文 + 中文译文」（中国日报等双语栏目）按 <br> 切成多块统计
+    brSegments(node).forEach((raw) => {
+      const text = raw.replace(/\s+/g, "");
+      const cjk = (text.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
+      const latin = (text.match(/[A-Za-z]/g) || []).length;
+      if (cjk + latin < 6) return;
+      const lang = cjk / (cjk + latin) > 0.65 ? "en" : "zh";
+      seq.push(lang);
+      chars[lang] += cjk + latin;
+    });
   });
   const probe = {
     blocks: seq.length,
@@ -420,7 +446,8 @@ function probeBilingualSequence(root) {
 }
 
 function setSheetLang(lang) {
-  const sheet = $("sheet");  sheet.dataset.lang = lang;
+  const sheet = $("sheet");
+  sheet.dataset.lang = lang;
   if (lang === "en") sheet.setAttribute("lang", "en");
   else sheet.setAttribute("lang", "zh-CN");
 }
@@ -483,8 +510,10 @@ function syncExcerptTrans() {
 
 function updateDocumentTitle() {
   const base = state.payload && state.payload.title ? state.payload.title : "Element Print";
+  // 打印成 PDF 时文件名取自文档标题，双语对照要能一眼分辨
+  const bi = biActive() || serialActive() ? " - bilingual" : "";
   const suffix = isEreader(state.settings) ? " - e-ink" : "";
-  document.title = `${base}${suffix} · Element Print`;
+  document.title = `${base}${bi}${suffix} · Element Print`;
 }
 
 function render(payload) {
@@ -695,6 +724,95 @@ function titleFontStack(s, lang) {
   return (FONT_PRESETS[s.titleFont] || FONT_PRESETS.auto).stack;
 }
 
+// 原版时正文里各级标题的字体：取网页对应标题节点的字体栈，没有就继承正文
+function pageHeadStack(tag) {
+  const s = state.settings || {};
+  if (s.bodyFont !== "page") return "";
+  const pf = (state.payload && state.payload.pageFont) || {};
+  const head = pf.heads && pf.heads[tag];
+  return (head && head.stack) || "";
+}
+
+// 引文块（blockquote）在原版的字体与节奏：字号、行距、上下留白都跟网页；
+// 网页的引文通常没有两侧缩进和竖线，这两样在原版下也去掉
+function pageQuoteStack() {
+  const s = state.settings || {};
+  if (s.bodyFont !== "page") return "";
+  const pf = (state.payload && state.payload.pageFont) || {};
+  return (pf.quote && pf.quote.stack) || "";
+}
+
+// 各级标题在原版下的上下边距（取自网页对应标题节点）
+function pageHeadGap(tag) {
+  const s = state.settings || {};
+  if (s.bodyFont !== "page") return null;
+  const pf = (state.payload && state.payload.pageFont) || {};
+  const head = pf.heads && pf.heads[tag];
+  if (!head) return null;
+  return { mt: head.paraBefore || 0, mb: head.paraAfter || 0 };
+}
+
+// 标题的段前段后：默认取网页的（原版）或版式默认，一旦用户动过右栏的段前段后，
+// 标题就跟着正文走，重置版式再回到网页值
+function headGapValue(tag) {
+  const s = state.settings || {};
+  if (s.headGapMode === "body") return { mt: s.paraBefore, mb: s.paraAfter };
+  return pageHeadGap(tag);
+}
+
+function pageQuoteData() {
+  const s = state.settings || {};
+  if (s.bodyFont !== "page") return null;
+  const pf = (state.payload && state.payload.pageFont) || {};
+  return pf.quote || null;
+}
+
+// 引文的框线、缩进、底色（网页上的块结构与段落结构样式）
+function pageQuoteStyle() {
+  const s = state.settings || {};
+  if (s.bodyFont !== "page") return null;
+  const pf = (state.payload && state.payload.pageFont) || {};
+  return pf.quoteStyle || null;
+}
+
+function quoteBoxVars(data, style) {
+  if (!data) {
+    return [
+      ["--ep-quote-size", "1em"],
+      ["--ep-quote-lh", "inherit"],
+      ["--ep-quote-mt", "0"],
+      ["--ep-quote-mb", "0"],
+      ["--ep-quote-mr", "0"],
+      ["--ep-quote-ml", "0"],
+      ["--ep-quote-pad", "0"],
+      ["--ep-quote-border", "0"],
+      ["--ep-quote-bg", "transparent"],
+      ["--ep-quote-pbg", "transparent"],
+      ["--ep-quote-ppad", "0"],
+    ];
+  }
+  const st = style || {};
+  const border =
+    st.borderW && st.borderStyle && st.borderStyle !== "none"
+      ? `${st.borderW}px ${st.borderStyle} ${st.borderColor || "currentColor"}`
+      : "0";
+  return [
+    ["--ep-quote-size", data.sizePt ? data.sizePt + "pt" : "1em"],
+    ["--ep-quote-lh", data.lineRatio ? String(data.lineRatio) : "inherit"],
+    ["--ep-quote-mt", (style ? st.mt || 0 : data.paraBefore || 0) + "px"],
+    ["--ep-quote-mb", (style ? st.mb || 0 : data.paraAfter || 0) + "px"],
+    ["--ep-quote-mr", (st.mr || 0) + "px"],
+    ["--ep-quote-ml", (st.ml || 0) + "px"],
+    ["--ep-quote-pad", `${st.pt || 0}px ${st.pr || 0}px ${st.pb || 0}px ${st.pl || 0}px`],
+    ["--ep-quote-border", border],
+    ["--ep-quote-bg", st.bg || "transparent"],
+    ["--ep-quote-pbg", st.pbg || "transparent"],
+    ["--ep-quote-ppad", `${st.ppt || 0}px ${st.ppr || 0}px ${st.ppb || 0}px ${st.ppl || 0}px`],
+    ["--ep-quote-pmt", (st.pmt || 0) + "px"],
+    ["--ep-quote-pmb", (st.pmb || 0) + "px"],
+  ];
+}
+
 function applySettings() {
   const s = state.settings;
   const root = document.documentElement;
@@ -761,6 +879,28 @@ function applySettings() {
   root.style.setProperty("--ep-body-font", bodyFontStack(s.bodyFont, state.lang));
   root.style.setProperty("--ep-body-weight", String(BODY_WEIGHTS[s.bodyWeight] || 400));
   root.style.setProperty("--ep-title-font", titleFontStack(s, state.lang));
+  // 原版：正文里各级标题也用回网页自己的字体（面板里没单独选标题字体时）
+  let headGapAny = false;
+  ["h1", "h2", "h3", "h4", "h5", "h6"].forEach((tag) => {
+    root.style.setProperty(`--ep-${tag}-font`, pageHeadStack(tag) || "inherit");
+    const gap = headGapValue(tag);
+    if (gap) {
+      headGapAny = true;
+      root.style.setProperty(`--ep-${tag}-mt`, gap.mt + "px");
+      root.style.setProperty(`--ep-${tag}-mb`, gap.mb + "px");
+    } else {
+      root.style.removeProperty(`--ep-${tag}-mt`);
+      root.style.removeProperty(`--ep-${tag}-mb`);
+    }
+  });
+  $("sheet").dataset.headPage = headGapAny ? "1" : "0";
+  root.style.setProperty("--ep-quote-font", pageQuoteStack() || "inherit");
+  const quoteData = pageQuoteData();
+  const quoteStyle = pageQuoteStyle();
+  $("sheet").dataset.quotePage = quoteData && quoteStyle ? "1" : "0";
+  quoteBoxVars(quoteData, quoteStyle).forEach(([name, value]) => {
+    root.style.setProperty(name, value);
+  });
   // 文字纯黑：默认的近黑 #16181c 在彩打/彩色 PDF 里会转成 CMY 混色而显灰，
   // 用黑色颜料墨时改成纯黑更实
   root.style.setProperty("--ep-ink", s.inkBlack ? "#000" : "#16181c");
@@ -2019,6 +2159,61 @@ function collectBiRows() {
 
 // 页面本身就把译文按段排在原文后面（微信、部分博客常见）：
 // 这里按文档顺序把「相邻但语言不同」的两块配成一段，后一块直接当译文用，不必打翻译 API
+// 按 <br> 把一个块的文字切成多段（双语网页常把译文塞在同一段的 <br> 后面）
+function brSegments(node) {
+  const parts = [""];
+  const visit = (n) => {
+    Array.from(n.childNodes || []).forEach((child) => {
+      if (child.nodeType === 1 && child.tagName === "BR") {
+        parts.push("");
+        return;
+      }
+      if (child.nodeType === 3) {
+        parts[parts.length - 1] += child.nodeValue || "";
+        return;
+      }
+      if (child.nodeType === 1) visit(child);
+    });
+  };
+  visit(node);
+  const out = parts.map((s) => s.replace(/\s+/g, " ").trim()).filter(Boolean);
+  return out.length ? out : [""];
+}
+
+// 把一个含 <br> 的块拆成多个只属于自己的节点：左栏放原文那一截，右栏放译文那一截
+function splitBrRows(row) {
+  const node = row.node;
+  if (row.wide || !node || !node.querySelector || !node.querySelector("br")) return [row];
+  const runs = [];
+  let acc = "";
+  Array.from(node.childNodes).forEach((child) => {
+    if (child.nodeType === 1 && child.tagName === "BR") {
+      runs.push(acc);
+      acc = "";
+      return;
+    }
+    acc += child.nodeType === 3 ? esc(child.nodeValue || "") : child.outerHTML || "";
+  });
+  runs.push(acc);
+  const pieces = runs
+    .map((html) => html.trim())
+    .filter(Boolean)
+    .map((html) => {
+      const clone = node.cloneNode(false);
+      clone.innerHTML = html;
+      return { node: clone, text: (clone.textContent || "").replace(/\s+/g, " ").trim() };
+    })
+    .filter((item) => item.text);
+  if (pieces.length < 2) return [row];
+  return pieces.map((item) => ({
+    node: item.node,
+    text: item.text,
+    wide: false,
+    quote: row.quote,
+    split: true,
+  }));
+}
+
 function langOfText(text) {
   const t = String(text || "").replace(/\s+/g, "");
   const cjk = (t.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
@@ -2045,7 +2240,9 @@ function collectNativePairRows() {
   const srcLang = state.lang === "zh" ? "zh" : "en";
   // 先按语言把相邻同文块并成一组：一段原文被拆成两块、或译文分了两段，都算同一组
   const groups = [];
-  collectBiRows().forEach((row) => {
+  collectBiRows()
+    .flatMap(splitBrRows)
+    .forEach((row) => {
     if (row.wide) {
       groups.push({ wide: true, row });
       return;
@@ -2570,6 +2767,8 @@ async function refreshBilingual(opts = {}) {
 /* ---------- 交互 ---------- */
 
 function update(patch) {
+  // 动过段前段后，标题的段前段后也跟着正文一起变
+  if ("paraBefore" in patch || "paraAfter" in patch) patch.headGapMode = "body";
   state.settings = { ...state.settings, ...patch };
   rememberCurrentProfile();
   syncControls();
@@ -2685,11 +2884,14 @@ function loadThemeProfile(theme, pageFormat, reset = false) {
       ? { ...mobileBase, ...pickShared(state.settings), theme, pageFormat }
       : { ...state.settings, ...mobileBase, ...saved, theme, pageFormat };
     state.settings.columns = 1;
+    if (reset) state.settings.headGapMode = "page";
     return true;
   }
   if (reset) {
     const shared = pickShared(state.settings);
     state.settings = { ...DEFAULT_SETTINGS, ...preset, ...shared, theme, pageFormat };
+    // 重置后标题的段前段后回到网页取值（而不是继续跟着正文）
+    state.settings.headGapMode = "page";
   } else {
     state.settings = { ...state.settings, ...preset, ...saved, theme, pageFormat };
   }
@@ -3162,6 +3364,17 @@ async function buildExportHtml() {
     `--ep-body-font:${bodyFontStack(s.bodyFont, state.lang)}`,
     `--ep-body-weight:${BODY_WEIGHTS[s.bodyWeight] || 400}`,
     `--ep-title-font:${titleFontStack(s, state.lang)}`,
+    ...["h1", "h2", "h3", "h4", "h5", "h6"].map(
+      (tag) => `--ep-${tag}-font:${pageHeadStack(tag) || "inherit"}`
+    ),
+    ...["h1", "h2", "h3", "h4", "h5", "h6"].flatMap((tag) => {
+      const gap = headGapValue(tag);
+      return gap
+        ? [`--ep-${tag}-mt:${gap.mt}px`, `--ep-${tag}-mb:${gap.mb}px`]
+        : [];
+    }),
+    `--ep-quote-font:${pageQuoteStack() || "inherit"}`,
+    ...quoteBoxVars(pageQuoteData(), pageQuoteStyle()).map(([name, value]) => `${name}:${value}`),
     `--ep-ink:${s.inkBlack ? "#000" : "#16181c"}`,
     `--ep-page-w:${sizePage ? sizePage.w : "210mm"}`,
     `--ep-page-h:${sizePage ? sizePage.h : "297mm"}`,
@@ -3270,8 +3483,9 @@ async function exportHtml() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
+  const bi = biActive() || serialActive() ? "-bilingual" : "";
   const suffix = isEreader(state.settings) ? "-e-ink" : "";
-  a.download = safeFileName(state.payload.title) + suffix + ".html";
+  a.download = safeFileName(state.payload.title) + bi + suffix + ".html";
   document.body.appendChild(a);
   a.click();
   a.remove();

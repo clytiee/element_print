@@ -1019,7 +1019,7 @@
 
   // 网页自托管的 webfont：预览页是另一个文档，只带字体名渲染不出来，
   // 所以把拉丁字体（woff2 优先）内嵌成 data: URL 一起带给预览页；中文大字体不内嵌
-  const FONT_FACE_LIMIT = 6;
+  const FONT_FACE_LIMIT = 30;
   const FONT_FILE_MAX = 400 * 1024;
   const FONT_TOTAL_MAX = 2 * 1024 * 1024;
   const GENERIC_FAMILIES = new Set([
@@ -1071,9 +1071,13 @@
 
   // 跨域样式表（Google Fonts、Typekit 等）读不到 rules，但把 CSS 文本取回来可以自己解析
   function parseFontFaceRules(cssText) {
+    // 构造样式表不接受 @import / @charset，而 Google Fonts、Typekit 的 CSS 常以它们开头
+    const cleaned = String(cssText || "")
+      .replace(/@charset\s+[^;]+;/gi, "")
+      .replace(/@import\s+(?:url\([^)]*\)|"[^"]*"|'[^']*')[^;]*;/gi, "");
     try {
       const sheet = new CSSStyleSheet();
-      sheet.replaceSync(cssText);
+      sheet.replaceSync(cleaned);
       return Array.from(sheet.cssRules || []).filter((rule) => rule.type === CSSRule.FONT_FACE_RULE);
     } catch (err) {
       return [];
@@ -1129,18 +1133,49 @@
     }
     rules.push(...(await remoteFontFaceRules()));
 
-    const faces = [];
-    const seen = new Set();
-    let total = 0;
-    for (const rule of rules) {
-      if (faces.length >= FONT_FACE_LIMIT) break;
+    // 正文字体家族优先、正体优先、400 字重优先：内嵌名额有限时，
+    // 先保证正文能拿到它真正的常规字重，而不是标题的粗体把名额占掉
+    const famRank = new Map();
+    stacks.forEach((stack, i) => {
+      fontFamilies(stack).forEach((name) => {
+        const key = name.toLowerCase();
+        if (!famRank.has(key)) famRank.set(key, i);
+      });
+    });
+    const weightRank = (w) => {
+      const n = parseFloat(String(w).trim()) || 400;
+      return Math.abs(n - 400);
+    };
+    const candidates = [];
+    rules.forEach((rule) => {
       const family = (rule.style.getPropertyValue("font-family") || "")
         .trim()
         .replace(/^["']|["']$/g, "");
-      if (!family || !wanted.has(family.toLowerCase())) continue;
-      if (!coversLatin(rule.style.getPropertyValue("unicode-range"))) continue;
-      const weight = rule.style.getPropertyValue("font-weight") || "400";
-      const style = rule.style.getPropertyValue("font-style") || "normal";
+      if (!family || !wanted.has(family.toLowerCase())) return;
+      if (!coversLatin(rule.style.getPropertyValue("unicode-range"))) return;
+      candidates.push({
+        rule,
+        family,
+        weight: rule.style.getPropertyValue("font-weight") || "400",
+        style: rule.style.getPropertyValue("font-style") || "normal",
+      });
+    });
+    candidates.sort((a, b) => {
+      const fa = famRank.get(a.family.toLowerCase()) ?? 99;
+      const fb = famRank.get(b.family.toLowerCase()) ?? 99;
+      if (fa !== fb) return fa - fb;
+      const sa = a.style === "normal" ? 0 : 1;
+      const sb = b.style === "normal" ? 0 : 1;
+      if (sa !== sb) return sa - sb;
+      return weightRank(a.weight) - weightRank(b.weight);
+    });
+
+    const faces = [];
+    const seen = new Set();
+    let total = 0;
+    for (const candidate of candidates) {
+      if (faces.length >= FONT_FACE_LIMIT) break;
+      const { rule, family, weight, style } = candidate;
       const faceKey = `${family.toLowerCase()}|${weight}|${style}`;
       if (seen.has(faceKey)) continue;
       const pick = fontFaceSrc(rule);
@@ -1151,7 +1186,7 @@
         if (!res.ok) continue;
         const buf = await res.arrayBuffer();
         if (buf.byteLength > FONT_FILE_MAX) continue;
-        if (total + buf.byteLength > FONT_TOTAL_MAX) break;
+        if (total + buf.byteLength > FONT_TOTAL_MAX) continue;
         total += buf.byteLength;
         seen.add(faceKey);
         const mime = pick.format.includes("woff2")
@@ -1183,8 +1218,60 @@
       : pickBodyParagraph(Array.from(el.querySelectorAll("p, li, dd, dt, blockquote")), fallback) || el;
     const body = computedFont(bodyNode);
     const titleFont = computedFont(findTitleNode(title));
+    // 各级标题的字体也记下来，原版就能让 h1/h2 用回网页自己的字体。
+    // 同一级可能有多个节点（导航、侧栏里的短标题样式不一样），取文字最多的那个当代表
+    const heads = {};
+    ["h1", "h2", "h3", "h4", "h5", "h6"].forEach((tag) => {
+      const nodes = Array.from(el.querySelectorAll(tag)).filter(
+        (n) => n.isConnected && normText(n.textContent)
+      );
+      if (!nodes.length) return;
+      nodes.sort((a, b) => normText(b.textContent).length - normText(a.textContent).length);
+      const font = computedFont(nodes[0]);
+      if (font) heads[tag] = font;
+    });
     if (!body && !titleFont) return null;
-    return { body, title: titleFont };
+    // 引文块的字体往往写在里面的段落上，而不是 blockquote 本身：优先取块内第一段
+    const quoteNodes = Array.from(el.querySelectorAll("blockquote")).filter(
+      (n) => n.isConnected && normText(n.textContent)
+    );
+    quoteNodes.sort((a, b) => normText(b.textContent).length - normText(a.textContent).length);
+    const quoteNode = quoteNodes.length
+      ? Array.from(quoteNodes[0].querySelectorAll("p")).find((n) => normText(n.textContent)) ||
+        quoteNodes[0]
+      : null;
+    const quote = quoteNode ? computedFont(quoteNode) : null;
+    // 引文的框线、缩进、底色都写在 CSS 里，只记字体会丢格式，这里把结构样式一并复制
+    let quoteStyle = null;
+    if (quoteNodes.length) {
+      const block = quoteNodes[0];
+      const para = quoteNode && quoteNode !== block ? quoteNode : null;
+      const bs = getComputedStyle(block);
+      const ps = para ? getComputedStyle(para) : null;
+      const px = (v) => Math.round(parseFloat(v) || 0);
+      quoteStyle = {
+        mt: px(bs.marginTop),
+        mr: px(bs.marginRight),
+        mb: px(bs.marginBottom),
+        ml: px(bs.marginLeft),
+        pl: px(bs.paddingLeft),
+        pr: px(bs.paddingRight),
+        pt: px(bs.paddingTop),
+        pb: px(bs.paddingBottom),
+        borderW: px(bs.borderLeftWidth),
+        borderStyle: bs.borderLeftStyle,
+        borderColor: bs.borderLeftColor,
+        bg: bs.backgroundColor,
+        pbg: ps ? ps.backgroundColor : "",
+        ppl: ps ? px(ps.paddingLeft) : 0,
+        ppr: ps ? px(ps.paddingRight) : 0,
+        ppt: ps ? px(ps.paddingTop) : 0,
+        ppb: ps ? px(ps.paddingBottom) : 0,
+        pmt: ps ? px(ps.marginTop) : 0,
+        pmb: ps ? px(ps.marginBottom) : 0,
+      };
+    }
+    return { body, title: titleFont, heads, quote, quoteStyle };
   }
 
   async function extract(el, opts = {}) {
@@ -1232,6 +1319,10 @@
       pageFont.faces = await collectWebFonts([
         pageFont.body && pageFont.body.stack,
         pageFont.title && pageFont.title.stack,
+        ...["h1", "h2", "h3", "h4", "h5", "h6"].map(
+          (tag) => pageFont.heads && pageFont.heads[tag] && pageFont.heads[tag].stack
+        ),
+        pageFont.quote && pageFont.quote.stack,
       ]);
     }
 
