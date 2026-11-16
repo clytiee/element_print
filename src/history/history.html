@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>History · Element Print</title>
+    <link rel="stylesheet" href="history.css" />
+  </head>
+  <body>
+    <header class="ep-hist__head">
+      <h1 id="title" data-i18n="historyTitle">历史记录</h1>
+      <div class="ep-hist__tools">
+        <input id="search" type="search" autocomplete="off" />
+        <span id="siteTag" class="ep-hist__site" hidden>
+          <span id="siteTagText"></span>
+          <button id="siteTagClear" type="button" aria-label="×">×</button>
+        </span>
+        <button id="btnExport" type="button" data-i18n="historyExport">导出 HTML</button>
+        <button id="btnDelete" type="button" data-i18n="historyDeleteSelected">删除所选</button>
+        <button id="btnClear" type="button" data-i18n="historyClearAll">清空历史</button>
+      </div>
+      <div class="ep-hist__stat">
+        <label class="ep-hist__check"><input id="selectPage" type="checkbox" /><span data-i18n="historySelectPage">全选本页</span></label>
+        <span id="selectedCount"></span>
+      </div>
+    </header>
+
+    <main id="list" class="ep-hist__list"></main>
+
+    <footer class="ep-hist__foot">
+      <button id="btnPrev" type="button" data-i18n="historyPrev">上一页</button>
+      <span id="pageInfo"></span>
+      <button id="btnNext" type="button" data-i18n="historyNext">下一页</button>
+    </footer>
+
+    <script src="../shared/icons.js"></script>
+    <script src="history.js"></script>
+  </body>
+</html>

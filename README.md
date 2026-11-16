@@ -55,14 +55,19 @@ src/
     selector.css       浮层样式（insertCSS 注入，不受页面 CSP 影响）
     auto.js            整页自动提取：Readability 结果接回抽取管线
   shared/
-    extract.js         富文本抽取：去噪、链接绝对化、图片内嵌、首行提标题
+    extract.js         富文本抽取：去噪、链接绝对化、图片内嵌、首行提取标题
     article.css        版面与排版（预览页与导出文件共用同一份）
     settings.js        版式默认值与 chrome.storage.local 持久化
+    icons.js           界面图标注册表（Lucide，ISC；只摘录用到的几何数据）
     vendor/            第三方库：Mozilla Readability（Apache-2.0，见目录内 LICENSE）
   preview/
     preview.html       预览 + 设置面板
     preview.css        预览外壳（画布、面板、打印时只留纸张）
     preview.js         渲染、版式联动、打印、导出
+  history/
+    history.html       历史记录页（图标右键菜单进入）
+    history.css        列表 / 分组 / 分页样式
+    history.js         搜索、同站筛选、分页、多选删除、导出 HTML
 ```
 
 ## 许可
@@ -70,6 +75,8 @@ src/
 本项目采用 **PolyForm Noncommercial 1.0.0**：个人学习、研究、自用、修改与分发均免费；**任何商业用途（含在公司内部使用、打包进付费产品、以收费或引流方式提供）都需要事先获得授权**。全文见仓库根目录 [LICENSE](LICENSE)。
 
 名称「Element Print」与图标为项目标识，不随代码许可一并授权，请勿在派生版本中沿用而造成混淆。
+
+界面图标取自 [Lucide](https://lucide.dev)（ISC 许可），只把用到的图形摘录进 `src/shared/icons.js`，不引入打包器或在线依赖。后续新增图标请沿用同一套：24×24 视框、描边随 `currentColor`、从 lucide-static 的 SVG 原样摘录路径数据。
 
 ## 已知取舍
 

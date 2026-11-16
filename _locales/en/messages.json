@@ -1,8 +1,8 @@
 {
   "extName": { "message": "Element Print" },
   "previewTitle": { "message": "Element Print · Print preview" },
-  "extDesc": { "message": "Extract web articles and clippings, arrange them for print, bilingual reading, e-reader or mobile, then save as PDF or HTML." },
-  "actionTitle": { "message": "Element Print · Select element" },
+  "extDesc": { "message": "Off the glowing screen — turn web pages into something you enjoy reading, on paper or on e-ink." },
+  "actionTitle": { "message": "Element Print · Pick an element, or right-click the icon to extract the whole article" },
 
   "panelTitle": { "message": "Layout settings" },
   "resetLayout": { "message": "Reset layout" },
@@ -235,5 +235,26 @@
   "detecting": { "message": "Recognizing main article…" },
   "extracted": { "message": "Extracted" },
   "extractFailedPrefix": { "message": "Extraction failed: " },
-  "articleDetectFailed": { "message": "Could not recognize the main article; try manual selection" }
+  "articleDetectFailed": { "message": "Could not recognize the main article; try manual selection" },
+  "menuHistory": { "message": "History" },
+  "historyTitle": { "message": "History" },
+  "historySearch": { "message": "Search title or URL…" },
+  "historySelectPage": { "message": "Select all on this page" },
+  "historySelected": { "message": "$1 selected" },
+  "historyOpenTip": { "message": "Click to open the original page" },
+  "historyDelete": { "message": "Delete now" },
+  "historyDeleteSelected": { "message": "Delete selected" },
+  "historyExport": { "message": "Export HTML" },
+  "historyClearAll": { "message": "Clear history" },
+  "historySiteFilter": { "message": "Same site" },
+  "historySiteTag": { "message": "Site: $1" },
+  "historyPrev": { "message": "Previous" },
+  "historyNext": { "message": "Next" },
+  "historyPageInfo": { "message": "Page $1 / $2 · $3 items" },
+  "historyEmpty": { "message": "No records yet — pages you extract are listed here automatically" },
+  "historyNoMatch": { "message": "No matching records" },
+  "historyConfirmClear": { "message": "Clear all history? The saved content behind each record will be deleted too." },
+  "historyConfirmDelete": { "message": "Delete the $1 selected records?" },
+  "dateToday": { "message": "Today" },
+  "dateYesterday": { "message": "Yesterday" }
 }

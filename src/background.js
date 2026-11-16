@@ -9,8 +9,10 @@ const AUTO_JS = [
   "src/content/auto.js",
 ];
 const PREVIEW_URL = "src/preview/preview.html";
+const HISTORY_URL = "src/history/history.html";
 const MODE_KEY = "ep:extract-mode";
 const AUTO_MENU_ID = "ep-auto";
+const HISTORY_MENU_ID = "ep-history";
 
 async function getMode() {
   try {
@@ -64,7 +66,8 @@ chrome.action.onClicked.addListener(async (tab) => {
   return injectManual(tab);
 });
 
-chrome.runtime.onInstalled.addListener(async () => {
+// 图标右键菜单：提取模式开关 + 历史记录
+async function buildMenus() {
   await chrome.contextMenus.removeAll();
   const mode = await getMode();
   chrome.contextMenus.create({
@@ -72,9 +75,22 @@ chrome.runtime.onInstalled.addListener(async () => {
     title: modeTitle(mode),
     contexts: ["action"],
   });
+  chrome.contextMenus.create({
+    id: HISTORY_MENU_ID,
+    title: bt("menuHistory"),
+    contexts: ["action"],
+  });
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  buildMenus().catch(() => {});
 });
 
 chrome.contextMenus.onClicked.addListener(async (info) => {
+  if (info.menuItemId === HISTORY_MENU_ID) {
+    await chrome.tabs.create({ url: chrome.runtime.getURL(HISTORY_URL), active: true });
+    return;
+  }
   if (info.menuItemId !== AUTO_MENU_ID) return;
   const current = await getMode();
   const next = current === "auto" ? "manual" : "auto";
@@ -83,10 +99,8 @@ chrome.contextMenus.onClicked.addListener(async (info) => {
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  const mode = await getMode();
-  await chrome.contextMenus
-    .update(AUTO_MENU_ID, { title: modeTitle(mode) })
-    .catch(() => {});
+  // 浏览器启动时把菜单按当前状态重建，顺带补上可能缺失的历史记录项
+  await buildMenus().catch(() => {});
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {

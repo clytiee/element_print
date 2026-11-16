@@ -1341,9 +1341,37 @@
     };
   }
 
+  // 历史索引：只存标题/网址/时间与载荷 id，正文仍在 ep:payload:<id> 里
+  const HISTORY_KEY = "ep:history";
+  const HISTORY_LIMIT = 1000;
+
+  async function recordHistory(id, payload) {
+    try {
+      const got = await chrome.storage.local.get(HISTORY_KEY);
+      const list = Array.isArray(got[HISTORY_KEY]) ? got[HISTORY_KEY] : [];
+      const rest = list.filter((rec) => rec && rec.id !== id);
+      rest.unshift({
+        id,
+        title: String(payload.title || payload.pageTitle || "").slice(0, 300),
+        url: String(payload.sourceUrl || "").slice(0, 2000),
+        at: Number(payload.createdAt) || Date.now(),
+      });
+      const kept = rest.slice(0, HISTORY_LIMIT);
+      const dropped = rest.slice(HISTORY_LIMIT);
+      await chrome.storage.local.set({ [HISTORY_KEY]: kept });
+      // 超出上限的最旧记录，连它对应的载荷一起删，存储不会只增不减
+      if (dropped.length) {
+        await chrome.storage.local.remove(dropped.map((rec) => "ep:payload:" + rec.id));
+      }
+    } catch (err) {
+      /* 历史写入失败不影响本次提取 */
+    }
+  }
+
   async function savePayload(payload) {
     const id = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     await chrome.storage.local.set({ ["ep:payload:" + id]: payload });
+    await recordHistory(id, payload);
     const res = await chrome.runtime.sendMessage({ type: "ep:openPreview", id });
     if (res && res.ok === false) throw new Error(res.error || "打开预览窗口失败");
     return id;
