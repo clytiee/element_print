@@ -983,11 +983,48 @@
     return null;
   }
 
+  // 段落候选里可能有导语、图片说明、推广语；按「字数最多的字号/行距组合」定正文样式
+  const PAGE_SKIP_CLASS_RE =
+    /(newsletter|subscribe|signup|caption|credit|byline|promo|advert|sponsor|related|comment|share|footer|breadcrumb|cookie|consent|toolbar|nav)/i;
+  const PAGE_BODY_MIN_CHARS = 40;
+
+  function looksLikeBodyParagraph(node) {
+    if (!node || !node.isConnected) return false;
+    if (normText(node.textContent).length < PAGE_BODY_MIN_CHARS) return false;
+    let walker = node.parentElement;
+    for (let i = 0; walker && i < 3; i += 1) {
+      if (/^(FIGCAPTION|FOOTER|ASIDE|NAV)$/.test(walker.tagName)) return false;
+      if (PAGE_SKIP_CLASS_RE.test(String(walker.className || ""))) return false;
+      walker = walker.parentElement;
+    }
+    return true;
+  }
+
+  function pickBodyParagraph(list, fallback) {
+    const groups = new Map();
+    for (const node of list) {
+      if (!looksLikeBodyParagraph(node)) continue;
+      const cs = getComputedStyle(node);
+      const key = `${cs.fontSize}|${cs.lineHeight}|${cs.marginTop}|${cs.marginBottom}`;
+      const hit = groups.get(key) || { node, chars: 0 };
+      hit.chars += normText(node.textContent).length;
+      groups.set(key, hit);
+    }
+    let best = null;
+    for (const hit of groups.values()) {
+      if (!best || hit.chars > best.chars) best = hit;
+    }
+    return best ? best.node : fallback;
+  }
+
   function readPageFont(el, title) {
-    const bodyNode =
-      Array.from(el.querySelectorAll("p, li, dd, dt, blockquote")).find(
-        (n) => n.isConnected && normText(n.textContent)
-      ) || el;
+    const fallback = Array.from(el.querySelectorAll("p, li, dd, dt, blockquote")).find(
+      (n) => n.isConnected && normText(n.textContent)
+    );
+    // 用户直接选中的就是一个段落时，以它本身为准
+    const bodyNode = /^(P|LI|DD|DT|BLOCKQUOTE)$/.test(el.tagName)
+      ? el
+      : pickBodyParagraph(Array.from(el.querySelectorAll("p, li, dd, dt, blockquote")), fallback) || el;
     const body = computedFont(bodyNode);
     const titleFont = computedFont(findTitleNode(title));
     if (!body && !titleFont) return null;

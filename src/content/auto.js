@@ -187,6 +187,41 @@
     });
   }
 
+  // 有些页面把推广语、图片说明、作者署名也写成 <p>，且排在正文前面。
+  // 所以不取「第一个段落」，而是取候选段落里出现字数最多的那一种字号/行距组合
+  const SKIP_CLASS_RE =
+    /(newsletter|subscribe|signup|caption|credit|byline|promo|advert|sponsor|related|comment|share|footer|breadcrumb|cookie|consent|toolbar|nav)/i;
+  const BODY_MIN_CHARS = 40;
+
+  function looksLikeBodyParagraph(node) {
+    if (!node || !node.isConnected) return false;
+    if (normText(node.textContent).length < BODY_MIN_CHARS) return false;
+    let walker = node.parentElement;
+    for (let i = 0; walker && i < 3; i += 1) {
+      if (/^(FIGCAPTION|FOOTER|ASIDE|NAV)$/.test(walker.tagName)) return false;
+      if (SKIP_CLASS_RE.test(String(walker.className || ""))) return false;
+      walker = walker.parentElement;
+    }
+    return true;
+  }
+
+  function pickBodyParagraph(list, fallback) {
+    const groups = new Map();
+    for (const node of list) {
+      if (!looksLikeBodyParagraph(node)) continue;
+      const cs = getComputedStyle(node);
+      const key = `${cs.fontSize}|${cs.lineHeight}|${cs.marginTop}|${cs.marginBottom}`;
+      const hit = groups.get(key) || { node, chars: 0 };
+      hit.chars += normText(node.textContent).length;
+      groups.set(key, hit);
+    }
+    let best = null;
+    for (const hit of groups.values()) {
+      if (!best || hit.chars > best.chars) best = hit;
+    }
+    return best ? best.node : fallback;
+  }
+
   // Readability 的正文容器是离屏副本，读不到页面样式；在原文档上找对应节点取计算样式
   function pageFontInfo(title) {
     const computed = (node) => {
@@ -223,13 +258,14 @@
         }
       }
     }
-    // 正文：优先正文容器里的第一段，退到整页第一个有字的段落
+    // 正文：优先正文容器里的段落，按「字数最多的字号/行距组合」定，退到整页第一个有字的段落
     const containers = document.querySelectorAll(
       "article p, main p, [class*=content] p, [class*=article] p, [class*=post] p"
     );
-    const bodyNode =
+    const firstText =
       Array.from(containers).find((n) => normText(n.textContent).length >= 12) ||
       Array.from(document.querySelectorAll("p")).find((n) => normText(n.textContent).length >= 12);
+    const bodyNode = pickBodyParagraph(Array.from(containers), firstText);
     const body = computed(bodyNode);
     const titleFont = computed(titleNode);
     if (!body && !titleFont) return null;
