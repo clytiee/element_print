@@ -945,6 +945,55 @@
    * @param {Element} el 命中的元素
    * @param {{sourceUrl?:string, pageTitle?:string}} opts
    */
+  // 记录原页面的字体与段落节奏：字体栈原样保留（含全部兜底项），这样同一台机器上
+  // 浏览器命中的字体与网页当时一致；字号、行距倍数、段前段后（px）一并记下
+  function computedFont(node) {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE || !node.isConnected) return null;
+    const cs = getComputedStyle(node);
+    const stack = (cs && cs.fontFamily ? cs.fontFamily : "").trim();
+    if (!stack) return null;
+    const sizePx = parseFloat(cs.fontSize) || 0;
+    const linePx = parseFloat(cs.lineHeight) || 0;
+    const lineRatio = sizePx && linePx ? Math.round((linePx / sizePx) * 100) / 100 : 0;
+    const paraBefore = Math.round(parseFloat(cs.marginTop) || 0);
+    const paraAfter = Math.round(parseFloat(cs.marginBottom) || 0);
+    return {
+      stack,
+      sizePx,
+      sizePt: sizePx ? Math.round(sizePx * 0.75 * 10) / 10 : 0,
+      lineRatio,
+      paraBefore,
+      paraAfter,
+    };
+  }
+
+  // 在原页面按标题文本回找标题节点（Readability 与手动选取都适用）
+  function findTitleNode(title) {
+    const wanted = normText(title);
+    if (!wanted) return null;
+    const list = document.querySelectorAll(
+      "h1, h2, h3, [class*=title], [class*=headline], [class*=hed], [class*=heading]"
+    );
+    for (const node of list) {
+      const txt = normText(node.textContent);
+      if (!txt) continue;
+      if (txt === wanted) return node;
+      if (wanted.length >= 8 && txt.includes(wanted)) return node;
+    }
+    return null;
+  }
+
+  function readPageFont(el, title) {
+    const bodyNode =
+      Array.from(el.querySelectorAll("p, li, dd, dt, blockquote")).find(
+        (n) => n.isConnected && normText(n.textContent)
+      ) || el;
+    const body = computedFont(bodyNode);
+    const titleFont = computedFont(findTitleNode(title));
+    if (!body && !titleFont) return null;
+    return { body, title: titleFont };
+  }
+
   async function extract(el, opts = {}) {
     if (!el || el.nodeType !== Node.ELEMENT_NODE) {
       throw new Error("没有拿到可提取的元素");
@@ -983,6 +1032,9 @@
     const matchedTitleTrans =
       (pageTranslations.find((pair) => pair.src === title) || {}).dst || "";
     const titleTrans = normText(opts.titleTrans || matchedTitleTrans);
+
+    // 整页提取时正文容器是离屏副本，读不到页面样式，由 auto.js 事先算好传进来
+    const pageFont = opts.pageFont || readPageFont(el, title);
 
     const imgStats = await inlineImages(clone);
 
@@ -1086,6 +1138,7 @@
       createdAt: Date.now(),
       bytes: html.length,
       imagesExternal: imgStats ? imgStats.external : 0,
+      pageFont: pageFont || null,
     };
   }
 

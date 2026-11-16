@@ -35,6 +35,7 @@
   "weightSemibold": { "message": "Semibold" },
   "weightBold": { "message": "Bold" },
   "titleFont": { "message": "Title font" },
+  "fontPage": { "message": "Original page font (follow the extracted page)" },
   "fontAuto": { "message": "Auto (Chinese Song · Latin Times)" },
   "fontSong": { "message": "Song serif" },
   "fontHei": { "message": "Hei sans" },
@@ -77,6 +78,8 @@
   "footerNote": { "message": "A4 page number; e-reader shows quote only" },
   "showQuote": { "message": "Footer quote" },
   "quoteNote": { "message": "A random quote from the local collection" },
+  "inkBlack": { "message": "Solid black text" },
+  "inkBlackNote": { "message": "Best for pigment-ink printing" },
   "closeAfterPrint": { "message": "Close after printing" },
   "closeAfterPrintNote": { "message": "Close the preview after the print dialog closes" },
 

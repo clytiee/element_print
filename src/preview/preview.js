@@ -535,6 +535,14 @@ function buildPageRule(s) {
 // 正文字体栈：选了「自动」且正文是西文时，换成纯拉丁衬线，不挂中文兜底
 function bodyFontStack(key, lang) {
   const preset = FONT_PRESETS[key] || FONT_PRESETS.auto;
+  // 「网页原字体」直接沿用抽取时记下的页面字体栈（含全部兜底项），取不到就回落自动
+  if (key === "page") {
+    const stack = state.payload && state.payload.pageFont && state.payload.pageFont.body
+      ? state.payload.pageFont.body.stack
+      : "";
+    if (stack) return stack;
+    return FONT_PRESETS.auto.stack;
+  }
   if (key === "auto" && lang === "en") {
     return '"Times New Roman", Georgia, "Liberation Serif", serif';
   }
@@ -544,6 +552,12 @@ function bodyFontStack(key, lang) {
 // 标题字体：「继承（跟随正文）」时直接复用正文栈
 function titleFontStack(s, lang) {
   if (!s.titleFont || s.titleFont === "inherit") return bodyFontStack(s.bodyFont, lang);
+  if (s.titleFont === "page") {
+    const pf = (state.payload && state.payload.pageFont) || {};
+    const stack = (pf.title && pf.title.stack) || (pf.body && pf.body.stack) || "";
+    if (stack) return stack;
+    return FONT_PRESETS.auto.stack;
+  }
   return (FONT_PRESETS[s.titleFont] || FONT_PRESETS.auto).stack;
 }
 
@@ -612,6 +626,9 @@ function applySettings() {
   root.style.setProperty("--ep-body-font", bodyFontStack(s.bodyFont, state.lang));
   root.style.setProperty("--ep-body-weight", String(BODY_WEIGHTS[s.bodyWeight] || 400));
   root.style.setProperty("--ep-title-font", titleFontStack(s, state.lang));
+  // 文字纯黑：默认的近黑 #16181c 在彩打/彩色 PDF 里会转成 CMY 混色而显灰，
+  // 用黑色颜料墨时改成纯黑更实
+  root.style.setProperty("--ep-ink", s.inkBlack ? "#000" : "#16181c");
 
   $("pageHead").hidden = er || mob || s.showHeader === false;
   // 电纸书固定打开页脚，只显示格言；手机版隐藏重复页脚，格言移到文末；A4 页脚受开关控制并显示页码
@@ -704,12 +721,27 @@ function syncControls() {
   $("fontSize").value = String(s.fontSize);
   $("titleSize").value = String(s.titleSize);
 
-  // 行距滑块在两种模式间换量程、步长与单位
+  // 行距滑块在两种模式间换量程、步长与单位；值先夹进量程并取有效数，
+  // 否则滑块残留旧值会让方向键一按就跳回最小值
   const lh = $("lineHeight");
-  lh.min = fixedLine ? "10" : "1.2";
-  lh.max = fixedLine ? "40" : "2.4";
+  const lhMin = fixedLine ? 10 : 1.2;
+  const lhMax = fixedLine ? 40 : 2.4;
+  const lhRaw = fixedLine ? s.lineHeightFixed : s.lineHeight;
+  // 固定档取不到有效磅值时，按「倍数 × 字号」回算，而不是掉到最小值 10pt
+  const lhFallback = fixedLine
+    ? Math.round(Number(s.lineHeight) * Number(s.fontSize) * 2) / 2
+    : Number(lhRaw);
+  const lhNum = Number(lhRaw);
+  const lhPick = Number.isFinite(lhNum)
+    ? lhNum
+    : Number.isFinite(lhFallback)
+      ? lhFallback
+      : lhMin;
+  const lhValue = Math.min(lhMax, Math.max(lhMin, lhPick));
+  lh.min = String(lhMin);
+  lh.max = String(lhMax);
   lh.step = fixedLine ? "0.5" : "0.05";
-  lh.value = String(fixedLine ? s.lineHeightFixed : s.lineHeight);
+  lh.value = String(lhValue);
 
   $("paraBefore").value = String(s.paraBefore);
   $("paraAfter").value = String(s.paraAfter);
@@ -726,6 +758,7 @@ function syncControls() {
   $("showHeader").checked = s.showHeader !== false;
   $("showFooter").checked = s.showFooter !== false;
   $("showQuote").checked = s.showQuote !== false;
+  $("inkBlack").checked = Boolean(s.inkBlack);
   $("closeAfterPrint").checked = Boolean(s.closeAfterPrint);
 
   $("bilingualOn").checked = Boolean(s.bilingual);
@@ -2238,6 +2271,11 @@ function getBaseline() {
   const preset = langFitPreset(THEME_PRESETS[s.theme || "paper"], state.lang) || {};
   const baseline = localeFitFonts({ ...DEFAULT_SETTINGS, ...preset });
   if (isEreader(s)) Object.assign(baseline, EREADER_DEFAULTS);
+  // 原版用「跟随网页」时，字号/行距/段前段后 的基准就是网页值，重置后不该再标成已修改
+  if ((s.theme || "paper") === "paper" && s.bodyFont === "page") {
+    const vals = pageLayoutValues();
+    if (vals) Object.assign(baseline, vals);
+  }
   return baseline;
 }
 
@@ -2278,6 +2316,28 @@ function rememberCurrentProfile() {
   state.profiles[key] = pickLayout(state.settings);
 }
 
+// 原版跟随网页的字号与段落节奏：把抽取时记下的网页值换算成设置项（含夹取范围）。
+// 切版式/重置时写进设置；判「已修改」时也以它为准，否则重置后会立刻被标成已修改
+function pageLayoutValues() {
+  const pf = (state.payload && state.payload.pageFont) || {};
+  if (!pf.body && !pf.title) return null;
+  const clamp = (v, min, max) => Math.min(max, Math.max(min, Math.round(v * 10) / 10));
+  const out = {};
+  const body = pf.body || {};
+  if (body.sizePt) out.fontSize = clamp(body.sizePt, 8, 18);
+  if (body.lineRatio) {
+    out.lineHeightMode = "ratio";
+    out.lineHeight = clamp(body.lineRatio, 1.2, 2.4);
+    // 固定磅值档的基准也换算好，切换到固定行距后同样不算「已修改」
+    const fs = Number(out.fontSize) || clamp(body.sizePt || 12, 8, 18);
+    out.lineHeightFixed = Math.min(40, Math.max(10, Math.round(out.lineHeight * fs * 2) / 2));
+  }
+  if (Number.isFinite(body.paraBefore)) out.paraBefore = clamp(body.paraBefore, 0, 24);
+  if (Number.isFinite(body.paraAfter)) out.paraAfter = clamp(body.paraAfter, 0, 24);
+  if (pf.title && pf.title.sizePt) out.titleSize = clamp(pf.title.sizePt, 12, 40);
+  return out;
+}
+
 function loadThemeProfile(theme, pageFormat, reset = false) {
   const isMob = pageFormat === "mobile";
   const preset = isMob
@@ -2300,6 +2360,12 @@ function loadThemeProfile(theme, pageFormat, reset = false) {
   }
   if (pageFormat === "ereader" && Object.keys(saved).length === 0) {
     Object.assign(state.settings, EREADER_DEFAULTS);
+  }
+  // 原版跟随网页的字号与段落节奏：仅在采用推荐值（切版式或重置）时把网页值写进设置，
+  // 之后拖动滑块仍是用户自己的值，不会被再次覆盖
+  if (theme === "paper" && state.settings.bodyFont === "page" && (reset || !Object.keys(saved).length)) {
+    const vals = pageLayoutValues();
+    if (vals) Object.assign(state.settings, vals);
   }
   return true;
 }
@@ -2337,14 +2403,17 @@ function initRangeSteppers() {
 
     wrap.append(minus, input, plus);
 
-    const step = Number(input.step) || 1;
-    const min = Number(input.min);
-    const max = Number(input.max);
     const stepInput = (dir) => {
+      // 量程与步长要在按下时现读：行距滑块会在倍数/固定磅值之间换量程
+      const step = Number(input.step) || 1;
+      const min = Number(input.min);
+      const max = Number(input.max);
       const cur = Number(input.value);
-      let next = Number((cur + dir * step).toFixed(2));
+      // 先按量程夹一次当前值，避免残留旧值导致 next 反而落回最小值
+      const base = Math.min(max, Math.max(min, Number.isFinite(cur) ? cur : min));
+      let next = Number((base + dir * step).toFixed(2));
       next = Math.min(max, Math.max(min, next));
-      if (next === cur) return;
+      if (Number.isFinite(cur) && next === cur) return;
       input.value = String(next);
       input.dispatchEvent(new Event("input", { bubbles: true }));
     };
@@ -2404,8 +2473,21 @@ function bindControls() {
 
   $("segLineMode").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-value]");
-    if (!btn || btn.dataset.value === state.settings.lineHeightMode) return;
-    update({ lineHeightMode: btn.dataset.value });
+    const s = state.settings;
+    if (!btn || btn.dataset.value === s.lineHeightMode) return;
+    // 两种模式的数值互算，输入缺失时回落到另一档的有效值，避免算出 NaN 掉到量程端点
+    const ratio = Number.isFinite(Number(s.lineHeight)) ? Number(s.lineHeight) : 1.75;
+    const fontSize = Number.isFinite(Number(s.fontSize)) ? Number(s.fontSize) : 12;
+    if (btn.dataset.value === "fixed") {
+      // 切到固定磅值：按当前倍数换算成磅，避免沿用一个与该字号无关的旧磅值
+      const pt = Math.min(40, Math.max(10, Math.round(ratio * fontSize * 2) / 2));
+      update({ lineHeightMode: "fixed", lineHeightFixed: pt });
+    } else {
+      const fixedRaw = Number(s.lineHeightFixed);
+      const fixedPt = Number.isFinite(fixedRaw) ? fixedRaw : ratio * fontSize;
+      const val = Math.min(2.4, Math.max(1.2, Math.round((fixedPt / fontSize) * 20) / 20));
+      update({ lineHeightMode: "ratio", lineHeight: val });
+    }
   });
 
   $("fontSize").addEventListener("input", (e) => update({ fontSize: Number(e.target.value) }));
@@ -2447,6 +2529,7 @@ function bindControls() {
   $("showHeader").addEventListener("change", (e) => update({ showHeader: e.target.checked }));
   $("showFooter").addEventListener("change", (e) => update({ showFooter: e.target.checked }));
   $("showQuote").addEventListener("change", (e) => update({ showQuote: e.target.checked }));
+  $("inkBlack").addEventListener("change", (e) => update({ inkBlack: e.target.checked }));
   $("closeAfterPrint").addEventListener("change", (e) => update({ closeAfterPrint: e.target.checked }));
 
   // 双语对照：开时先退出编辑/删减（改的是原文 #body，对照层只是只读副本）
@@ -2726,6 +2809,7 @@ async function buildExportHtml() {
     `--ep-body-font:${bodyFontStack(s.bodyFont, state.lang)}`,
     `--ep-body-weight:${BODY_WEIGHTS[s.bodyWeight] || 400}`,
     `--ep-title-font:${titleFontStack(s, state.lang)}`,
+    `--ep-ink:${s.inkBlack ? "#000" : "#16181c"}`,
     `--ep-page-w:${sizePage ? sizePage.w : "210mm"}`,
     `--ep-page-h:${sizePage ? sizePage.h : "297mm"}`,
     `--ep-mt:${mob ? MOBILE_PAGE.mt : s.marginTop}mm`,
@@ -2844,6 +2928,7 @@ async function exportHtml() {
 /* ---------- 启动 ---------- */
 
 const FONT_LABEL_KEYS = {
+  page: "fontPage",
   auto: "fontAuto",
   song: "fontSong",
   hei: "fontHei",
@@ -2861,6 +2946,8 @@ function fontLabel(key) {
 const LATIN_FONT_KEYS = ["times", "georgia", "sans"];
 
 function fontKeyVisible(key) {
+  // 「网页原字体」两种界面都保留：它跟随当前页面，不受界面语言限制
+  if (key === "page") return true;
   if (!IS_EN_UI) return true;
   return LATIN_FONT_KEYS.includes(key);
 }

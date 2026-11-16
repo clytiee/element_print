@@ -3,6 +3,11 @@
 // 正文字体 / 标题字体预设：库里只存 key，渲染时换成 font-family 栈。
 // 所有栈都按「先拉丁、后中文」排列，混排时西文与汉字各自命中合适的字体。
 export const FONT_PRESETS = {
+  // 网页原字体：渲染时用抽取阶段记下的原页面 font-family 栈，取不到就回落 auto
+  page: {
+    label: "网页原字体（跟随被提取页面）",
+    stack: null,
+  },
   auto: {
     label: "自动（中文宋体 · 西文 Times）",
     stack:
@@ -72,6 +77,7 @@ export const DEFAULT_SETTINGS = {
   showHeader: true, // 页眉（Element Print / 摘自 域名）
   showFooter: true, // 页脚（品牌 + 页码）
   showQuote: true, // 页脚左下角随机显示一句名言
+  inkBlack: false, // 文字用纯黑（深色 #16181c 换成 #000），适合颜料墨打印
   pageFormat: "a4", // a4 | ereader（10.3″ 4:3 电纸书）| mobile（手机竖屏）
   bilingual: false, // 双语对照：左原文 / 右译文（逐段对齐）
   biSplit: 57, // 原文列宽（%），中西文宽度差明显，默认原文略宽
@@ -167,6 +173,7 @@ const SHARED_KEYS = [
   "pageFormat",
   "view",
   "closeAfterPrint",
+  "inkBlack",
 ];
 
 export function profileKey(theme, pageFormat) {
@@ -204,9 +211,10 @@ export const THEME_PRESETS = {
     paraBefore: 0,
     paraAfter: 9,
     indent: 0,
-    bodyFont: "auto",
+    // 「原版」的直觉是和原网页一致，所以字体默认跟随被提取页面
+    bodyFont: "page",
     bodyWeight: "normal",
-    titleFont: "inherit",
+    titleFont: "page",
     spanHead: false,
     allowBreak: true,
     biSplit: 57,
@@ -302,6 +310,7 @@ function normalizeShared(raw, base) {
   else base.view = "source";
   if (typeof raw.bilingual === "boolean") base.bilingual = raw.bilingual;
   if (typeof raw.closeAfterPrint === "boolean") base.closeAfterPrint = raw.closeAfterPrint;
+  if (typeof raw.inkBlack === "boolean") base.inkBlack = raw.inkBlack;
   base.biCacheMax = clamp(raw.biCacheMax, 100, 20000, base.biCacheMax);
   if (raw.imgSize === "small" || raw.imgSize === "mid" || raw.imgSize === "full") {
     base.imgSize = raw.imgSize;

@@ -187,6 +187,55 @@
     });
   }
 
+  // Readability 的正文容器是离屏副本，读不到页面样式；在原文档上找对应节点取计算样式
+  function pageFontInfo(title) {
+    const computed = (node) => {
+      if (!node || node.nodeType !== Node.ELEMENT_NODE) return null;
+      const cs = getComputedStyle(node);
+      const stack = (cs && cs.fontFamily ? cs.fontFamily : "").trim();
+      if (!stack) return null;
+      const sizePx = parseFloat(cs.fontSize) || 0;
+      const linePx = parseFloat(cs.lineHeight) || 0;
+      const lineRatio = sizePx && linePx ? Math.round((linePx / sizePx) * 100) / 100 : 0;
+      const paraBefore = Math.round(parseFloat(cs.marginTop) || 0);
+      const paraAfter = Math.round(parseFloat(cs.marginBottom) || 0);
+      return {
+        stack,
+        sizePx,
+        sizePt: sizePx ? Math.round(sizePx * 0.75 * 10) / 10 : 0,
+        lineRatio,
+        paraBefore,
+        paraAfter,
+      };
+    };
+    const wanted = normText(title);
+    let titleNode = null;
+    if (wanted) {
+      const list = document.querySelectorAll(
+        "h1, h2, h3, [class*=title], [class*=headline], [class*=hed], [class*=heading]"
+      );
+      for (const node of list) {
+        const txt = normText(node.textContent);
+        if (!txt) continue;
+        if (txt === wanted || (wanted.length >= 8 && txt.includes(wanted))) {
+          titleNode = node;
+          break;
+        }
+      }
+    }
+    // 正文：优先正文容器里的第一段，退到整页第一个有字的段落
+    const containers = document.querySelectorAll(
+      "article p, main p, [class*=content] p, [class*=article] p, [class*=post] p"
+    );
+    const bodyNode =
+      Array.from(containers).find((n) => normText(n.textContent).length >= 12) ||
+      Array.from(document.querySelectorAll("p")).find((n) => normText(n.textContent).length >= 12);
+    const body = computed(bodyNode);
+    const titleFont = computed(titleNode);
+    if (!body && !titleFont) return null;
+    return { body, title: titleFont };
+  }
+
   async function run() {
     toast(t("detecting"), true);
 
@@ -229,6 +278,7 @@
         excerpt: excerptText,
         excerptTrans: readAbstractTranslation() || readExcerptTranslation(excerptText),
         styleRoot: document,
+        pageFont: pageFontInfo(titleText),
       });
     } finally {
       holder.remove();

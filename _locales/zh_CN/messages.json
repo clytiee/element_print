@@ -35,6 +35,7 @@
   "weightSemibold": { "message": "半粗" },
   "weightBold": { "message": "粗体" },
   "titleFont": { "message": "标题字体" },
+  "fontPage": { "message": "网页原字体（跟随被提取页面）" },
   "fontAuto": { "message": "自动（中文宋体 · 西文 Times）" },
   "fontSong": { "message": "宋体（思源宋 / 宋体）" },
   "fontHei": { "message": "黑体（思源黑 / 雅黑）" },
@@ -77,6 +78,8 @@
   "footerNote": { "message": "A4 右下页码，电纸书只格言" },
   "showQuote": { "message": "页脚名言" },
   "quoteNote": { "message": "随机一句，取自本地名句库" },
+  "inkBlack": { "message": "文字纯黑" },
+  "inkBlackNote": { "message": "适合黑色颜料墨打印" },
   "closeAfterPrint": { "message": "打印后自动关闭" },
   "closeAfterPrintNote": { "message": "打印后关闭预览页" },
 
