@@ -28,9 +28,9 @@
     "data-ep-display",
   ]);
 
-  const IMG_LIMIT = 24;
-  const IMG_MAX_BYTES = 1.6 * 1024 * 1024;
-  const IMG_TOTAL_CHARS = 9 * 1024 * 1024;
+  const IMG_LIMIT = 40;
+  const IMG_MAX_BYTES = 4 * 1024 * 1024;
+  const IMG_TOTAL_CHARS = 24 * 1024 * 1024;
 
   function absUrl(raw, base) {
     if (!raw) return raw;
@@ -682,9 +682,11 @@
     ]);
   }
 
-  // 图片尽力转成 base64 内嵌；取不到就保留绝对 URL（预览时可能裂图，但不丢占位）
+  // 图片尽力转成 base64 内嵌；取不到就保留绝对 URL（预览时可能裂图，但不丢占位）。
+  // 返回仍未内嵌的图片数，用于提示「存档里这些图还是外链」
   async function inlineImages(root) {
-    const imgs = Array.from(root.querySelectorAll("img")).slice(0, IMG_LIMIT);
+    const all = Array.from(root.querySelectorAll("img"));
+    const imgs = all.slice(0, IMG_LIMIT);
     let total = 0;
     await Promise.all(
       imgs.map(async (img) => {
@@ -708,6 +710,12 @@
         }
       })
     );
+    let external = 0;
+    for (const img of all) {
+      const src = img.getAttribute("src") || "";
+      if (src && !/^data:/i.test(src)) external += 1;
+    }
+    return { total: all.length, external };
   }
 
   function toPlainText(root) {
@@ -976,7 +984,7 @@
       (pageTranslations.find((pair) => pair.src === title) || {}).dst || "";
     const titleTrans = normText(opts.titleTrans || matchedTitleTrans);
 
-    await inlineImages(clone);
+    const imgStats = await inlineImages(clone);
 
     const pageMeta = readPageMeta();
     const visibleDate = extractDateText(opts.author) || readVisibleDate();
@@ -1077,6 +1085,7 @@
       tag: el.tagName.toLowerCase(),
       createdAt: Date.now(),
       bytes: html.length,
+      imagesExternal: imgStats ? imgStats.external : 0,
     };
   }
 

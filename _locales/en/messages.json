@@ -201,6 +201,10 @@
   "columnsLockedMobile": { "message": "Single column for mobile reading" },
   "wordCountEn": { "message": "$1 words · $2 chars" },
   "wordCountZh": { "message": "$1 characters" },
+  "imagesExternalHint": {
+    "message": "$1 image(s) could not be embedded and stay as links; they will break once the original page is gone",
+    "description": "Warns that some images still point to the original URL instead of being embedded in the archive"
+  },
   "biCommFailedPrefix": { "message": "Failed to reach the background: " },
   "biNoBackground": { "message": "No response from the background. Open chrome://extensions, click Reload, and try again." },
   "biFailed": { "message": "Translation failed" },

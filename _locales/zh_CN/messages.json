@@ -201,6 +201,10 @@
   "columnsLockedMobile": { "message": "手机阅读固定单栏" },
   "wordCountEn": { "message": "$1 词 · $2 字符" },
   "wordCountZh": { "message": "共 $1 字" },
+  "imagesExternalHint": {
+    "message": "有 $1 张图片没能内嵌，存档里仍是外链；原网址失效后这些图会丢失",
+    "description": "提示若干张图片仍指向原始网址，未被写入存档"
+  },
   "biCommFailedPrefix": { "message": "和后台通信失败：" },
   "biNoBackground": { "message": "后台没有响应，请在 chrome://extensions 里点「重新加载」后再试" },
   "biFailed": { "message": "翻译失败" },

@@ -2947,6 +2947,10 @@ async function init() {
   syncBiButton();
   if (startSerial) flashHint(t("serialHint"));
   else if (hasPageTrans) setHint(t("pageTransHint")); // 常态提示，不做超时回落
+  // 存档提醒：超限或取不到的图片仍是外链，网址失效后这些图就没了
+  if (payload.imagesExternal > 0) {
+    flashHint(t("imagesExternalHint", [String(payload.imagesExternal)]));
+  }
   state.ready = true;
   restartHintSweep(); // 进页面先扫一遍
 }
