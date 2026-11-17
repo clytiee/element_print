@@ -981,17 +981,46 @@
   }
 
   // 在原页面按标题文本回找标题节点（Readability 与手动选取都适用）
+  // 优先真正的标题标签，其次才看 class 里带 title/heading 的容器：
+  // 容器的字号往往比标题本身大得多（或干脆写在外层），取错会把标题字号放大
+  function titleRank(node) {
+    if (node.tagName === "H1") return 0;
+    if (node.tagName === "H2") return 1;
+    if (node.tagName === "H3") return 2;
+    return 3;
+  }
+
   function findTitleNode(title) {
     const wanted = normText(title);
     if (!wanted) return null;
-    const list = document.querySelectorAll(
-      "h1, h2, h3, [class*=title], [class*=headline], [class*=hed], [class*=heading]"
+    const list = Array.from(
+      document.querySelectorAll(
+        "h1, h2, h3, [class*=title], [class*=headline], [class*=hed], [class*=heading]"
+      )
     );
-    for (const node of list) {
+    const exact = list.filter((node) => normText(node.textContent) === wanted);
+    if (exact.length) {
+      // 同档里取最内层（子孙元素最少的那个），避免把整个标题区当成标题
+      exact.sort((a, b) => {
+        const r = titleRank(a) - titleRank(b);
+        if (r) return r;
+        return a.querySelectorAll("*").length - b.querySelectorAll("*").length;
+      });
+      return exact[0];
+    }
+    // 标题带站点名后缀时只能靠包含匹配，同样先看标题标签，且不允许明显长于标题
+    const loose = list.filter((node) => {
       const txt = normText(node.textContent);
-      if (!txt) continue;
-      if (txt === wanted) return node;
-      if (wanted.length >= 8 && txt.includes(wanted)) return node;
+      if (!txt || !txt.includes(wanted)) return false;
+      return titleRank(node) < 3 || txt.length <= wanted.length + 20;
+    });
+    if (loose.length) {
+      loose.sort((a, b) => {
+        const r = titleRank(a) - titleRank(b);
+        if (r) return r;
+        return normText(a.textContent).length - normText(b.textContent).length;
+      });
+      return loose[0];
     }
     return null;
   }

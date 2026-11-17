@@ -2995,7 +2995,7 @@ function pageLayoutValues() {
 
   // 大标题
   const title = pf.title || {};
-  if (title.sizePt) out.titleSize = clamp(title.sizePt, 12, 40);
+  if (title.sizePt) out.titleSize = clamp(title.sizePt, 12, 64);
   if (Number.isFinite(title.lineRatio)) {
     out.titleLineMode = "ratio";
     out.titleLine = clamp(title.lineRatio, 1.2, 2.4);
@@ -3007,7 +3007,7 @@ function pageLayoutValues() {
 
   // 一级标题（网页的 h1）
   const h1 = (pf.heads && pf.heads.h1) || {};
-  if (h1.sizePt) out.h1Size = clamp(h1.sizePt, 8, 40);
+  if (h1.sizePt) out.h1Size = clamp(h1.sizePt, 8, 48);
   if (Number.isFinite(h1.lineRatio)) {
     out.h1LineMode = "ratio";
     out.h1Line = clamp(h1.lineRatio, 1.2, 2.4);

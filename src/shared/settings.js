@@ -426,7 +426,7 @@ function normalizeLayout(raw, base) {
   base.indent = clamp(raw.indent, 0, 4, base.indent);
 
   // 标题 / 一级标题的排印
-  base.titleSize = clamp(raw.titleSize, 12, 40, base.titleSize);
+  base.titleSize = clamp(raw.titleSize, 12, 64, base.titleSize);
   base.titleMt = clamp(raw.titleMt, 0, 40, base.titleMt);
   base.titleMb = clamp(raw.titleMb, 0, 40, base.titleMb);
   if (raw.titleLineMode === "fixed") base.titleLineMode = "fixed";
@@ -435,7 +435,7 @@ function normalizeLayout(raw, base) {
   base.titleLineFixed = clamp(raw.titleLineFixed, 10, 60, base.titleLineFixed);
   if (BODY_WEIGHTS[raw.titleWeight]) base.titleWeight = raw.titleWeight;
 
-  base.h1Size = clamp(raw.h1Size, 8, 40, base.h1Size);
+  base.h1Size = clamp(raw.h1Size, 8, 48, base.h1Size);
   base.h1Mt = clamp(raw.h1Mt, 0, 40, base.h1Mt);
   base.h1Mb = clamp(raw.h1Mb, 0, 40, base.h1Mb);
   if (raw.h1LineMode === "fixed") base.h1LineMode = "fixed";
