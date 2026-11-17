@@ -963,6 +963,9 @@
     const lineRatio = sizePx && linePx ? Math.round((linePx / sizePx) * 100) / 100 : 0;
     const paraBefore = Math.round(parseFloat(cs.marginTop) || 0);
     const paraAfter = Math.round(parseFloat(cs.marginBottom) || 0);
+    // 标题居左/居中写在网页的 text-align 上，原版要让标题和它下面的译文都跟着走
+    const rawAlign = String(cs.textAlign || "").trim().toLowerCase();
+    const align = rawAlign && rawAlign !== "start" ? rawAlign : "";
     return {
       stack,
       sizePx,
@@ -970,6 +973,7 @@
       lineRatio,
       paraBefore,
       paraAfter,
+      align,
     };
   }
 

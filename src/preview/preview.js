@@ -726,6 +726,14 @@ function bodyFontStack(key, lang) {
   return preset.stack;
 }
 
+// 原版时标题的左右对齐：网页标题居中就居中、居左就居左，标题译文跟随
+function pageTitleAlign() {
+  const s = state.settings || {};
+  if (s.bodyFont !== "page") return "";
+  const pf = (state.payload && state.payload.pageFont) || {};
+  return (pf.title && pf.title.align) || (pf.body && pf.body.align) || "";
+}
+
 // 标题字体：「继承（跟随正文）」时直接复用正文栈
 function titleFontStack(s, lang) {
   if (!s.titleFont || s.titleFont === "inherit") return bodyFontStack(s.bodyFont, lang);
@@ -893,6 +901,10 @@ function applySettings() {
   root.style.setProperty("--ep-body-font", bodyFontStack(s.bodyFont, state.lang));
   root.style.setProperty("--ep-body-weight", String(BODY_WEIGHTS[s.bodyWeight] || 400));
   root.style.setProperty("--ep-title-font", titleFontStack(s, state.lang));
+  // 原版：标题的左右对齐也照网页，标题译文跟在它后面
+  const titleAlign = pageTitleAlign();
+  if (titleAlign) root.style.setProperty("--ep-title-align", titleAlign);
+  else root.style.removeProperty("--ep-title-align");
   // 原版：正文里各级标题也用回网页自己的字体（面板里没单独选标题字体时）
   let headGapAny = false;
   ["h1", "h2", "h3", "h4", "h5", "h6"].forEach((tag) => {
@@ -3321,6 +3333,7 @@ async function buildExportHtml() {
     `--ep-body-font:${bodyFontStack(s.bodyFont, state.lang)}`,
     `--ep-body-weight:${BODY_WEIGHTS[s.bodyWeight] || 400}`,
     `--ep-title-font:${titleFontStack(s, state.lang)}`,
+    ...(pageTitleAlign() ? [`--ep-title-align:${pageTitleAlign()}`] : []),
     ...["h1", "h2", "h3", "h4", "h5", "h6"].map(
       (tag) => `--ep-${tag}-font:${pageHeadStack(tag) || "inherit"}`
     ),

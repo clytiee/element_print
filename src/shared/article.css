@@ -180,6 +180,7 @@
   line-height: 1.22;
   letter-spacing: 0.02em;
   word-break: break-word;
+  text-align: var(--ep-title-align, left);
 }
 
 /* 标题译文：贴在英文标题下面，用比标题小两号的同一字形，不抢标题的分量 */
@@ -192,7 +193,7 @@
   letter-spacing: 0.04em;
   color: var(--ep-sub);
   word-break: break-word;
-  text-align: center;
+  text-align: inherit;
 }
 
 /* 导语/摘要：标题下的斜体副题 */

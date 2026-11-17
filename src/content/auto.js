@@ -234,6 +234,7 @@
       const lineRatio = sizePx && linePx ? Math.round((linePx / sizePx) * 100) / 100 : 0;
       const paraBefore = Math.round(parseFloat(cs.marginTop) || 0);
       const paraAfter = Math.round(parseFloat(cs.marginBottom) || 0);
+      const rawAlign = String(cs.textAlign || "").trim().toLowerCase();
       return {
         stack,
         sizePx,
@@ -241,6 +242,7 @@
         lineRatio,
         paraBefore,
         paraAfter,
+        align: rawAlign && rawAlign !== "start" ? rawAlign : "",
       };
     };
     const wanted = normText(title);
