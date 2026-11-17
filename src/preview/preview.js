@@ -2677,6 +2677,31 @@ function fillBiTarget(tgt, row, text) {
   tgt.textContent = text;
 }
 
+// 对照行由 flex 容器排布，行与行之间的外边距不会像普通段落那样合并；
+// 所以把每个原文块自己的段前段后挪到整行上：行距 = max(上一行的段后, 本行的段前)，
+// 与网页里相邻块的自然表现一致，标题那种「上下各 32px」也不会算成 64
+function takeRowSpacing(line, srcCol, carry) {
+  // 一组同语言相邻块会被包进 ep-bi__srcGroup，真正的块在它里面
+  const group = srcCol.querySelector(".ep-bi__srcGroup");
+  const blocks = Array.from((group || srcCol).children);
+  if (!blocks.length) return carry;
+  let mt = 0;
+  let mb = 0;
+  blocks.forEach((el, i) => {
+    const cs = getComputedStyle(el);
+    if (i === 0) {
+      mt = parseFloat(cs.marginTop) || 0;
+      el.style.marginTop = "0px";
+    }
+    if (i === blocks.length - 1) {
+      mb = parseFloat(cs.marginBottom) || 0;
+      el.style.marginBottom = "0px";
+    }
+  });
+  line.style.marginTop = Math.max(carry, mt) + "px";
+  return mb;
+}
+
 function targetTag(row) {  if (/^H[1-6]$/.test(row.node.tagName)) return row.node.tagName.toLowerCase();
   if (row.quote) return "blockquote";
   return "div";
@@ -2687,6 +2712,7 @@ function buildBilingual(rows) {
   box.innerHTML = "";
   ensureBiResizer();
   biPending = 0;
+  let carry = 0;
   rows.forEach((row) => {
     const line = document.createElement("div");
     line.className = "ep-bi__row" + (row.wide ? " is-wide" : "");
@@ -2719,6 +2745,7 @@ function buildBilingual(rows) {
       line.appendChild(tgt);
     }
     box.appendChild(line);
+    carry = takeRowSpacing(line, src, carry);
   });
   box.hidden = false;
   syncBiButton();
@@ -2731,6 +2758,7 @@ function buildSerial(rows) {
   const box = $("serial");
   box.innerHTML = "";
   biPending = 0;
+  let carry = 0;
   rows.forEach((row) => {
     const line = document.createElement("div");
     line.className = "ep-bi__row is-serial" + (row.wide ? " is-wide" : "");
@@ -2760,6 +2788,7 @@ function buildSerial(rows) {
       line.appendChild(tgt);
     }
     box.appendChild(line);
+    carry = takeRowSpacing(line, src, carry);
   });
   box.hidden = false;
   syncBiButton();

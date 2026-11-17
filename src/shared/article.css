@@ -617,6 +617,18 @@
   margin: 0;
 }
 
+/* 译文格子里的标题不带上、下外边距：这段空白由左栏原文的段落间距给，
+   原文是 h3 时它自己的段前段后仍照原样保留，不会算两遍 */
+.ep-sheet .ep-body .ep-bi__row .ep-bi__tgt:is(h1, h2, h3, h4, h5, h6) {
+  margin: 0;
+}
+.ep-sheet .ep-body .ep-bi__row .ep-bi__tgt > :first-child {
+  margin-top: 0;
+}
+.ep-sheet .ep-body .ep-bi__row.is-serial .ep-bi__tgt:not(:is(h1, h2, h3, h4, h5, h6)) {
+  margin-top: 0.35em;
+}
+
 /* 混排视图：整句译文另起一行，短语译文留在句内并用淡色区分 */
 #mixed .ep-mixed-trans,
 #mixed .ep-mixed-trans--block {
