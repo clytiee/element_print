@@ -37,9 +37,7 @@
   text-indent: 0;
 }
 
-/* 三级以内小标题多为黑体、与正文同宽、不缩进 */
-.ep-sheet[data-theme="academic"] .ep-body h1,
-.ep-sheet[data-theme="academic"] .ep-body h2,
+/* 一级、二级标题的字体、字号、边距由右栏「一级标题」页签统管，这里只管三级以内的小标题 */
 .ep-sheet[data-theme="academic"] .ep-body h3,
 .ep-sheet[data-theme="academic"] .ep-body h4,
 .ep-sheet[data-theme="academic"] .ep-body h5,

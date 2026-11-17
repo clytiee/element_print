@@ -173,11 +173,11 @@
 }
 
 .ep-title {
-  margin: 0;
+  margin: var(--ep-title-mt, 0px) 0 var(--ep-title-mb, 0px);
   font-family: var(--ep-title-font);
   font-size: var(--ep-title-size);
-  font-weight: 700;
-  line-height: 1.22;
+  font-weight: var(--ep-title-weight, 700);
+  line-height: var(--ep-title-line, 1.22);
   letter-spacing: 0.02em;
   word-break: break-word;
   text-align: var(--ep-title-align, left);
@@ -312,12 +312,20 @@
   page-break-after: avoid;
 }
 
-.ep-body h1 { font-size: 1.45em; }
-.ep-body h2 { font-size: 1.28em; }
+.ep-body h1 { font-size: var(--ep-h1-size, 1.45em); }
+.ep-body h2 { font-size: calc(var(--ep-h1-size, 1.45em) * 0.9); }
 .ep-body h3 { font-size: 1.14em; }
 .ep-body h4,
 .ep-body h5,
 .ep-body h6 { font-size: 1.02em; }
+
+/* 一级标题的排印由右栏「一级标题」页签统管，h2 跟着 h1 走 */
+.ep-body h1,
+.ep-body h2 {
+  font-weight: var(--ep-h1-weight, 700);
+  line-height: var(--ep-h1-line, 1.35);
+  margin: var(--ep-h1-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h1-mb, 0.45em);
+}
 
 /* 原版：正文里的各级标题跟随网页自己的标题字体；其他版式变量为空时继承正文 */
 .ep-body h1 { font-family: var(--ep-h1-font, inherit); }
@@ -417,8 +425,6 @@
 }
 
 /* 原版：标题的上下边距也照网页来（网页常给标题留更宽的段前距） */
-.ep-sheet[data-head-page="1"] .ep-body h1 { margin: var(--ep-h1-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h1-mb, 0.45em); }
-.ep-sheet[data-head-page="1"] .ep-body h2 { margin: var(--ep-h2-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h2-mb, 0.45em); }
 .ep-sheet[data-head-page="1"] .ep-body h3 { margin: var(--ep-h3-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h3-mb, 0.45em); }
 .ep-sheet[data-head-page="1"] .ep-body h4 { margin: var(--ep-h4-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h4-mb, 0.45em); }
 .ep-sheet[data-head-page="1"] .ep-body h5 { margin: var(--ep-h5-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h5-mb, 0.45em); }
@@ -525,7 +531,7 @@
 .ep-sheet.is-span-head .ep-body h1,
 .ep-sheet.is-span-head .ep-body h2 {
   column-span: all;
-  margin: calc(var(--ep-para-before) + 0.7em) 0 0.85em;
+  margin: var(--ep-h1-mt, calc(var(--ep-para-before) + 0.7em)) 0 var(--ep-h1-mb, 0.85em);
 }
 
 /* 双语对照时原文层让位给对照层：显式隐藏，不依赖浏览器默认的 [hidden] */

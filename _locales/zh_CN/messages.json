@@ -259,5 +259,11 @@
   "historyConfirmClear": { "message": "确定清空全部历史记录？关联的已存内容也会一并删除。" },
   "historyConfirmDelete": { "message": "确定删除选中的 $1 条记录？" },
   "dateToday": { "message": "今天" },
-  "dateYesterday": { "message": "昨天" }
+  "dateYesterday": { "message": "昨天" },
+  "font": { "message": "字体" },
+  "size": { "message": "字号" },
+  "tabTitle": { "message": "标题" },
+  "tabHead": { "message": "一级标题" },
+  "tabBody": { "message": "正文" },
+  "h1Note": { "message": "正文里的一级标题，双栏时可跨栏；h2 跟随同一套设置。" }
 }

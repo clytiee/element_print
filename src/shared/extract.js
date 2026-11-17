@@ -966,6 +966,8 @@
     // 标题居左/居中写在网页的 text-align 上，原版要让标题和它下面的译文都跟着走
     const rawAlign = String(cs.textAlign || "").trim().toLowerCase();
     const align = rawAlign && rawAlign !== "start" ? rawAlign : "";
+    // 字重数值化成 100–900，供原版恢复标题/正文的粗细
+    const weight = Math.round(parseFloat(cs.fontWeight) || 400);
     return {
       stack,
       sizePx,
@@ -974,6 +976,7 @@
       paraBefore,
       paraAfter,
       align,
+      weight,
     };
   }
 

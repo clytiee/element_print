@@ -243,6 +243,7 @@
         paraBefore,
         paraAfter,
         align: rawAlign && rawAlign !== "start" ? rawAlign : "",
+        weight: Math.round(parseFloat(cs.fontWeight) || 400),
       };
     };
     const wanted = normText(title);

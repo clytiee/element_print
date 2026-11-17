@@ -57,6 +57,22 @@ export const DEFAULT_SETTINGS = {
   columns: 2, // 1 | 2
   fontSize: 12, // pt
   titleSize: 22.8, // pt，标题字号独立设
+  // 大标题自身的排印（右栏「标题」页签）
+  titleWeight: "bold", // BODY_WEIGHTS 的 key
+  titleLineMode: "ratio", // ratio | fixed
+  titleLine: 1.22, // 倍数
+  titleLineFixed: 27, // pt
+  titleMt: 0, // px
+  titleMb: 0, // px
+  // 正文一级标题（h1，双栏时可跨栏的那级；h2 跟着一起走）
+  h1Font: "inherit", // inherit | page | FONT_PRESETS 的 key
+  h1Size: 16, // pt
+  h1Weight: "bold",
+  h1LineMode: "ratio",
+  h1Line: 1.35,
+  h1LineFixed: 21,
+  h1Mt: 8,
+  h1Mb: 5,
   lineHeightMode: "ratio", // ratio（倍数） | fixed（固定磅值）
   lineHeight: 1.75, // 倍数模式下的行高倍数
   lineHeightFixed: 26, // 固定磅值模式下的行距（pt）
@@ -113,6 +129,20 @@ export const MOBILE_DEFAULTS = {
   columns: 1,
   fontSize: 10,
   titleSize: 13,
+  titleWeight: "bold",
+  titleLineMode: "ratio",
+  titleLine: 1.2,
+  titleLineFixed: 16,
+  titleMt: 0,
+  titleMb: 2,
+  h1Font: "inherit",
+  h1Size: 13,
+  h1Weight: "bold",
+  h1LineMode: "ratio",
+  h1Line: 1.35,
+  h1LineFixed: 18,
+  h1Mt: 7,
+  h1Mb: 4,
   lineHeightMode: "ratio",
   lineHeight: 1.35,
   paraAfter: 6,
@@ -136,6 +166,20 @@ export const LAYOUT_KEYS = [
   "columns",
   "fontSize",
   "titleSize",
+  "titleWeight",
+  "titleLineMode",
+  "titleLine",
+  "titleLineFixed",
+  "titleMt",
+  "titleMb",
+  "h1Font",
+  "h1Size",
+  "h1Weight",
+  "h1LineMode",
+  "h1Line",
+  "h1LineFixed",
+  "h1Mt",
+  "h1Mb",
   "lineHeightMode",
   "lineHeight",
   "lineHeightFixed",
@@ -207,6 +251,20 @@ export const THEME_PRESETS = {
     columns: 2,
     fontSize: 12,
     titleSize: 22.8,
+    titleWeight: "bold",
+    titleLineMode: "ratio",
+    titleLine: 1.22,
+    titleLineFixed: 27,
+    titleMt: 0,
+    titleMb: 0,
+    h1Font: "page",
+    h1Size: 16,
+    h1Weight: "bold",
+    h1LineMode: "ratio",
+    h1Line: 1.35,
+    h1LineFixed: 21,
+    h1Mt: 8,
+    h1Mb: 5,
     lineHeightMode: "ratio",
     lineHeight: 1.75,
     lineHeightFixed: 26,
@@ -235,6 +293,20 @@ export const THEME_PRESETS = {
     columns: 2,
     fontSize: 10.5,
     titleSize: 18.4,
+    titleWeight: "bold",
+    titleLineMode: "ratio",
+    titleLine: 1.22,
+    titleLineFixed: 21.7,
+    titleMt: 0,
+    titleMb: 0,
+    h1Font: "hei",
+    h1Size: 11.5,
+    h1Weight: "bold",
+    h1LineMode: "ratio",
+    h1Line: 1.35,
+    h1LineFixed: 15.5,
+    h1Mt: 8,
+    h1Mb: 2,
     lineHeightMode: "ratio",
     lineHeight: 1.55,
     lineHeightFixed: 15.5,
@@ -263,6 +335,20 @@ export const THEME_PRESETS = {
     columns: 1,
     fontSize: 16, // 三号
     titleSize: 22, // 二号
+    titleWeight: "normal",
+    titleLineMode: "fixed",
+    titleLine: 1.8,
+    titleLineFixed: 32,
+    titleMt: 10,
+    titleMb: 8,
+    h1Font: "hei",
+    h1Size: 16,
+    h1Weight: "normal",
+    h1LineMode: "fixed",
+    h1Line: 1.75,
+    h1LineFixed: 28,
+    h1Mt: 0,
+    h1Mb: 0,
     lineHeightMode: "fixed",
     lineHeight: 1.75,
     lineHeightFixed: 28,
@@ -333,12 +419,33 @@ function normalizeLayout(raw, base) {
   if (raw.lineHeightMode === "fixed") base.lineHeightMode = "fixed";
 
   base.fontSize = clamp(raw.fontSize, 9, 20, base.fontSize);
-  base.titleSize = clamp(raw.titleSize, 12, 40, base.titleSize);
   base.lineHeight = clamp(raw.lineHeight, 1.2, 2.4, base.lineHeight);
   base.lineHeightFixed = clamp(raw.lineHeightFixed, 10, 40, base.lineHeightFixed);
   base.paraBefore = clamp(raw.paraBefore, 0, 40, base.paraBefore);
   base.paraAfter = clamp(raw.paraAfter, 0, 48, base.paraAfter);
   base.indent = clamp(raw.indent, 0, 4, base.indent);
+
+  // 标题 / 一级标题的排印
+  base.titleSize = clamp(raw.titleSize, 12, 40, base.titleSize);
+  base.titleMt = clamp(raw.titleMt, 0, 40, base.titleMt);
+  base.titleMb = clamp(raw.titleMb, 0, 40, base.titleMb);
+  if (raw.titleLineMode === "fixed") base.titleLineMode = "fixed";
+  if (raw.titleLineMode === "ratio") base.titleLineMode = "ratio";
+  base.titleLine = clamp(raw.titleLine, 1, 2.4, base.titleLine);
+  base.titleLineFixed = clamp(raw.titleLineFixed, 10, 60, base.titleLineFixed);
+  if (BODY_WEIGHTS[raw.titleWeight]) base.titleWeight = raw.titleWeight;
+
+  base.h1Size = clamp(raw.h1Size, 8, 40, base.h1Size);
+  base.h1Mt = clamp(raw.h1Mt, 0, 40, base.h1Mt);
+  base.h1Mb = clamp(raw.h1Mb, 0, 40, base.h1Mb);
+  if (raw.h1LineMode === "fixed") base.h1LineMode = "fixed";
+  if (raw.h1LineMode === "ratio") base.h1LineMode = "ratio";
+  base.h1Line = clamp(raw.h1Line, 1, 2.4, base.h1Line);
+  base.h1LineFixed = clamp(raw.h1LineFixed, 10, 60, base.h1LineFixed);
+  if (BODY_WEIGHTS[raw.h1Weight]) base.h1Weight = raw.h1Weight;
+  if (raw.h1Font === "inherit" || raw.h1Font === "page" || FONT_PRESETS[raw.h1Font]) {
+    base.h1Font = raw.h1Font;
+  }
 
   // 旧版只有一个统一 margin，迁移成四边相同
   const legacy = clamp(raw.margin, 3, 40, base.marginTop);

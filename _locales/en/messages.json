@@ -259,5 +259,11 @@
   "historyConfirmClear": { "message": "Clear all history? The saved content behind each record will be deleted too." },
   "historyConfirmDelete": { "message": "Delete the $1 selected records?" },
   "dateToday": { "message": "Today" },
-  "dateYesterday": { "message": "Yesterday" }
+  "dateYesterday": { "message": "Yesterday" },
+  "font": { "message": "Font" },
+  "size": { "message": "Size" },
+  "tabTitle": { "message": "Title" },
+  "tabHead": { "message": "H1" },
+  "tabBody": { "message": "Body" },
+  "h1Note": { "message": "H1 inside the article body; H2 follows the same settings. Spans both columns when two-column." }
 }

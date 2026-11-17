@@ -746,6 +746,13 @@ function titleFontStack(s, lang) {
   return (FONT_PRESETS[s.titleFont] || FONT_PRESETS.auto).stack;
 }
 
+// 一级标题字体：「跟随网页」取网页 h1 的字体栈，「继承」复用正文栈
+function h1FontStack(s, lang) {
+  if (!s.h1Font || s.h1Font === "inherit") return "";
+  if (s.h1Font === "page") return pageHeadStack("h1");
+  return (FONT_PRESETS[s.h1Font] || FONT_PRESETS.auto).stack;
+}
+
 // 原版时正文里各级标题的字体：取网页对应标题节点的字体栈，没有就继承正文
 function pageHeadStack(tag) {
   const s = state.settings || {};
@@ -903,13 +910,37 @@ function applySettings() {
   root.style.setProperty("--ep-body-font", bodyFontStack(s.bodyFont, state.lang));
   root.style.setProperty("--ep-body-weight", String(BODY_WEIGHTS[s.bodyWeight] || 400));
   root.style.setProperty("--ep-title-font", titleFontStack(s, state.lang));
+  // 大标题的排印由右栏「标题」页签统管
+  root.style.setProperty("--ep-title-weight", String(BODY_WEIGHTS[s.titleWeight] || 700));
+  root.style.setProperty(
+    "--ep-title-line",
+    s.titleLineMode === "fixed" ? s.titleLineFixed + "pt" : String(s.titleLine)
+  );
+  root.style.setProperty("--ep-title-mt", s.titleMt + "px");
+  root.style.setProperty("--ep-title-mb", s.titleMb + "px");
   // 原版：标题的左右对齐也照网页，标题译文跟在它后面
   const titleAlign = pageTitleAlign();
   if (titleAlign) root.style.setProperty("--ep-title-align", titleAlign);
   else root.style.removeProperty("--ep-title-align");
-  // 原版：正文里各级标题也用回网页自己的字体（面板里没单独选标题字体时）
-  let headGapAny = false;
-  ["h1", "h2", "h3", "h4", "h5", "h6"].forEach((tag) => {
+
+  // 一级标题（h1，h2 跟随）：字体、字号、字重、行高、段前段后都来自「一级标题」页签
+  const h1Stack = h1FontStack(s, state.lang);
+  // 跟随网页时 h2 取网页自己的字体，否则与一级标题同栈
+  const h2Stack = s.h1Font === "page" ? pageHeadStack("h2") : h1Stack;
+  root.style.setProperty("--ep-h1-font", h1Stack || "inherit");
+  root.style.setProperty("--ep-h2-font", h2Stack || "inherit");
+  root.style.setProperty("--ep-h1-size", s.h1Size + "pt");
+  root.style.setProperty("--ep-h1-weight", String(BODY_WEIGHTS[s.h1Weight] || 700));
+  root.style.setProperty(
+    "--ep-h1-line",
+    s.h1LineMode === "fixed" ? s.h1LineFixed + "pt" : String(s.h1Line)
+  );
+  root.style.setProperty("--ep-h1-mt", s.h1Mt + "px");
+  root.style.setProperty("--ep-h1-mb", s.h1Mb + "px");
+
+  // 原版：其余各级标题仍跟随网页自己的字体与段前段后
+  let headGapAny = true;
+  ["h3", "h4", "h5", "h6"].forEach((tag) => {
     root.style.setProperty(`--ep-${tag}-font`, pageHeadStack(tag) || "inherit");
     const gap = headGapValue(tag);
     if (gap) {
@@ -1025,6 +1056,16 @@ const MODIFIED_TARGETS = {
   titleFont: () => fieldOf("titleFont"),
   fontSize: () => fieldOf("fontSize"),
   titleSize: () => fieldOf("titleSize"),
+  titleWeight: () => fieldOf("segTitleWeight"),
+  titleLine: () => fieldOf("titleLine"),
+  titleMt: () => fieldOf("titleMt"),
+  titleMb: () => fieldOf("titleMb"),
+  h1Font: () => fieldOf("h1Font"),
+  h1Size: () => fieldOf("h1Size"),
+  h1Weight: () => fieldOf("segH1Weight"),
+  h1Line: () => fieldOf("h1Line"),
+  h1Mt: () => fieldOf("h1Mt"),
+  h1Mb: () => fieldOf("h1Mb"),
   lineHeightMode: () => fieldOf("segLineMode"),
   lineHeight: () => fieldOf("lineHeight"),
   paraBefore: () => fieldOf("paraBefore"),
@@ -1051,6 +1092,14 @@ function settingsEqual(key, s, baseline) {
     const fixed = s.lineHeightMode === "fixed";
     actual = fixed ? s.lineHeightFixed : s.lineHeight;
     expected = fixed ? baseline.lineHeightFixed : baseline.lineHeight;
+  } else if (key === "titleLine") {
+    const fixed = s.titleLineMode === "fixed";
+    actual = fixed ? s.titleLineFixed : s.titleLine;
+    expected = fixed ? baseline.titleLineFixed : baseline.titleLine;
+  } else if (key === "h1Line") {
+    const fixed = s.h1LineMode === "fixed";
+    actual = fixed ? s.h1LineFixed : s.h1Line;
+    expected = fixed ? baseline.h1LineFixed : baseline.h1Line;
   } else if (key === "titleFont") {
     actual = titleFontStack(s, state.lang);
     expected = titleFontStack({ titleFont: expected, bodyFont: baseline.bodyFont }, state.lang);
@@ -1098,40 +1147,53 @@ function syncColumnLock() {
 
 function syncControls() {
   const s = state.settings;
-  const fixedLine = s.lineHeightMode === "fixed";
 
   $("bodyFont").value = s.bodyFont || "auto";
-  Array.from($("segBodyWeight").querySelectorAll("button")).forEach((btn) => {
-    btn.classList.toggle("is-active", btn.dataset.value === (BODY_WEIGHTS[s.bodyWeight] ? s.bodyWeight : "normal"));
-  });
   $("titleFont").value = s.titleFont || "inherit";
+  $("h1Font").value = s.h1Font || "inherit";
+  syncWeightSeg("segBodyWeight", "bodyWeight");
+  syncWeightSeg("segTitleWeight", "titleWeight");
+  syncWeightSeg("segH1Weight", "h1Weight");
   $("fontSize").value = String(s.fontSize);
   $("titleSize").value = String(s.titleSize);
+  $("h1Size").value = String(s.h1Size);
 
-  // 行距滑块在两种模式间换量程、步长与单位；值先夹进量程并取有效数，
-  // 否则滑块残留旧值会让方向键一按就跳回最小值
-  const lh = $("lineHeight");
-  const lhMin = fixedLine ? 10 : 1.2;
-  const lhMax = fixedLine ? 40 : 2.4;
-  const lhRaw = fixedLine ? s.lineHeightFixed : s.lineHeight;
-  // 固定档取不到有效磅值时，按「倍数 × 字号」回算，而不是掉到最小值 10pt
-  const lhFallback = fixedLine
-    ? Math.round(Number(s.lineHeight) * Number(s.fontSize) * 2) / 2
-    : Number(lhRaw);
-  const lhNum = Number(lhRaw);
-  const lhPick = Number.isFinite(lhNum)
-    ? lhNum
-    : Number.isFinite(lhFallback)
-      ? lhFallback
-      : lhMin;
-  const lhValue = Math.min(lhMax, Math.max(lhMin, lhPick));
-  lh.min = String(lhMin);
-  lh.max = String(lhMax);
-  lh.step = fixedLine ? "0.5" : "0.05";
-  lh.value = String(lhValue);
+  // 三套行距控件同一种算法：模式切换时换量程、步长与单位
+  const bodyLine = syncLineControl({
+    modeKey: "lineHeightMode",
+    rangeId: "lineHeight",
+    ratioKey: "lineHeight",
+    fixedKey: "lineHeightFixed",
+    sizeKey: "fontSize",
+  });
+  const titleLine = syncLineControl({
+    modeKey: "titleLineMode",
+    rangeId: "titleLine",
+    ratioKey: "titleLine",
+    fixedKey: "titleLineFixed",
+    sizeKey: "titleSize",
+  });
+  const headLine = syncLineControl({
+    modeKey: "h1LineMode",
+    rangeId: "h1Line",
+    ratioKey: "h1Line",
+    fixedKey: "h1LineFixed",
+    sizeKey: "h1Size",
+  });
+  [[ "segLineMode", "lineHeightMode" ], [ "segTitleLineMode", "titleLineMode" ], [ "segH1LineMode", "h1LineMode" ]].forEach(
+    ([segId, key]) => {
+      Array.from($(segId).querySelectorAll("button")).forEach((btn) => {
+        btn.classList.toggle("is-active", btn.dataset.value === (s[key] || "ratio"));
+      });
+    }
+  );
 
   $("paraBefore").value = String(s.paraBefore);
   $("paraAfter").value = String(s.paraAfter);
+  $("titleMt").value = String(s.titleMt);
+  $("titleMb").value = String(s.titleMb);
+  $("h1Mt").value = String(s.h1Mt);
+  $("h1Mb").value = String(s.h1Mb);
   $("indent").value = String(s.indent);
   $("marginTop").value = String(s.marginTop);
   $("marginRight").value = String(s.marginRight);
@@ -1161,9 +1223,16 @@ function syncControls() {
 
   $("vFontSize").textContent = s.fontSize + "pt";
   $("vTitleSize").textContent = s.titleSize + "pt";
-  $("vLineHeight").textContent = fixedLine ? s.lineHeightFixed + "pt" : s.lineHeight.toFixed(2) + "×";
+  $("vH1Size").textContent = s.h1Size + "pt";
+  $("vLineHeight").textContent = bodyLine.fixed ? s.lineHeightFixed + "pt" : s.lineHeight.toFixed(2) + "×";
+  $("vTitleLine").textContent = titleLine.fixed ? s.titleLineFixed + "pt" : s.titleLine.toFixed(2) + "×";
+  $("vH1Line").textContent = headLine.fixed ? s.h1LineFixed + "pt" : s.h1Line.toFixed(2) + "×";
   $("vParaBefore").textContent = s.paraBefore + "px";
   $("vParaAfter").textContent = s.paraAfter + "px";
+  $("vTitleMt").textContent = s.titleMt + "px";
+  $("vTitleMb").textContent = s.titleMb + "px";
+  $("vH1Mt").textContent = s.h1Mt + "px";
+  $("vH1Mb").textContent = s.h1Mb + "px";
   $("vIndent").textContent = s.indent === 0
     ? t("indentNone")
     : t("indentValue", [String(s.indent), t("indentUnit")]);
@@ -1223,6 +1292,84 @@ function syncControls() {
   });
 
   syncModifiedMarks();
+}
+
+// 字重四档的分段控件按 settings 里的 key 高亮
+function syncWeightSeg(segId, key) {
+  const s = state.settings;
+  const cur = BODY_WEIGHTS[s[key]] ? s[key] : "normal";
+  Array.from($(segId).querySelectorAll("button")).forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.value === cur);
+  });
+}
+
+// 行距控件：倍数 / 固定磅值两档共用一根滑杆，量程与步长随之切换。
+// 值先夹进量程并取有效数，否则残留旧值会让方向键一按就跳回最小值
+function syncLineControl(cfg) {
+  const s = state.settings;
+  const fixed = s[cfg.modeKey] === "fixed";
+  const el = $(cfg.rangeId);
+  const min = fixed ? 10 : 1.2;
+  const max = fixed ? 40 : 2.4;
+  const raw = fixed ? s[cfg.fixedKey] : s[cfg.ratioKey];
+  // 固定档取不到有效磅值时，按「倍数 × 字号」回算，而不是掉到最小值 10pt
+  const fallback = fixed
+    ? Math.round(Number(s[cfg.ratioKey]) * Number(s[cfg.sizeKey]) * 2) / 2
+    : Number(raw);
+  const num = Number(raw);
+  const pick = Number.isFinite(num) ? num : Number.isFinite(fallback) ? fallback : min;
+  const value = Math.min(max, Math.max(min, pick));
+  el.min = String(min);
+  el.max = String(max);
+  el.step = fixed ? "0.5" : "0.05";
+  el.value = String(value);
+  return { fixed, value };
+}
+
+// 一根行距滑杆的事件绑定：模式切换时做倍数 ⇄ 磅值换算
+function bindLineControl(cfg) {
+  const swap = (target) => {
+    const s = state.settings;
+    if (target === s[cfg.modeKey]) return;
+    // 两种模式的数值互算，输入缺失时回落到另一档的有效值，避免算出 NaN 掉到量程端点
+    const ratio = Number.isFinite(Number(s[cfg.ratioKey])) ? Number(s[cfg.ratioKey]) : 1.75;
+    const size = Number.isFinite(Number(s[cfg.sizeKey])) ? Number(s[cfg.sizeKey]) : 12;
+    if (target === "fixed") {
+      // 切到固定磅值：按当前倍数换算成磅，避免沿用与该字号无关的旧磅值
+      const pt = Math.min(40, Math.max(10, Math.round(ratio * size * 2) / 2));
+      update({ [cfg.modeKey]: "fixed", [cfg.fixedKey]: pt });
+    } else {
+      const fixedRaw = Number(s[cfg.fixedKey]);
+      const fixedPt = Number.isFinite(fixedRaw) ? fixedRaw : ratio * size;
+      const val = Math.min(2.4, Math.max(1.2, Math.round((fixedPt / size) * 20) / 20));
+      update({ [cfg.modeKey]: "ratio", [cfg.ratioKey]: val });
+    }
+  };
+  $(cfg.segId).addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-value]");
+    if (btn) swap(btn.dataset.value);
+  });
+  $(cfg.rangeId).addEventListener("input", (e) => {
+    const value = Number(e.target.value);
+    update(
+      state.settings[cfg.modeKey] === "fixed"
+        ? { [cfg.fixedKey]: value }
+        : { [cfg.ratioKey]: value }
+    );
+  });
+}
+
+// 文字排版三页签：标题 / 一级标题 / 正文
+function showTypePane(name) {
+  const key = name === "head" || name === "body" ? name : "title";
+  ["title", "head", "body"].forEach((k) => {
+    const pane = $(`pane${k[0].toUpperCase()}${k.slice(1)}`);
+    if (pane) pane.hidden = k !== key;
+  });
+  Array.from($("segTypeTab").querySelectorAll("button")).forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.value === key);
+  });
+  syncRangeSteppers();
 }
 
 let fitFrame = 0;
@@ -2844,8 +2991,40 @@ function pageLayoutValues() {
   }
   if (Number.isFinite(body.paraBefore)) out.paraBefore = clamp(body.paraBefore, 0, 24);
   if (Number.isFinite(body.paraAfter)) out.paraAfter = clamp(body.paraAfter, 0, 24);
-  if (pf.title && pf.title.sizePt) out.titleSize = clamp(pf.title.sizePt, 12, 40);
+  if (Number.isFinite(body.weight)) out.bodyWeight = weightKeyOf(body.weight);
+
+  // 大标题
+  const title = pf.title || {};
+  if (title.sizePt) out.titleSize = clamp(title.sizePt, 12, 40);
+  if (Number.isFinite(title.lineRatio)) {
+    out.titleLineMode = "ratio";
+    out.titleLine = clamp(title.lineRatio, 1.2, 2.4);
+    out.titleLineFixed = Math.min(60, Math.max(10, Math.round((Number(out.titleSize) || 22) * out.titleLine * 2) / 2));
+  }
+  if (Number.isFinite(title.paraBefore)) out.titleMt = clamp(title.paraBefore, 0, 24);
+  if (Number.isFinite(title.paraAfter)) out.titleMb = clamp(title.paraAfter, 0, 24);
+  if (Number.isFinite(title.weight)) out.titleWeight = weightKeyOf(title.weight);
+
+  // 一级标题（网页的 h1）
+  const h1 = (pf.heads && pf.heads.h1) || {};
+  if (h1.sizePt) out.h1Size = clamp(h1.sizePt, 8, 40);
+  if (Number.isFinite(h1.lineRatio)) {
+    out.h1LineMode = "ratio";
+    out.h1Line = clamp(h1.lineRatio, 1.2, 2.4);
+    out.h1LineFixed = Math.min(60, Math.max(10, Math.round((Number(out.h1Size) || 16) * out.h1Line * 2) / 2));
+  }
+  if (Number.isFinite(h1.paraBefore)) out.h1Mt = clamp(h1.paraBefore, 0, 24);
+  if (Number.isFinite(h1.paraAfter)) out.h1Mb = clamp(h1.paraAfter, 0, 24);
+  if (Number.isFinite(h1.weight)) out.h1Weight = weightKeyOf(h1.weight);
   return out;
+}
+
+// 网页算出来的字重数值映射到面板的四档
+function weightKeyOf(px) {
+  if (px >= 650) return "bold";
+  if (px >= 550) return "semibold";
+  if (px >= 450) return "medium";
+  return "normal";
 }
 
 function loadThemeProfile(theme, pageFormat, reset = false) {
@@ -2949,6 +3128,7 @@ function syncRangeSteppers() {
 
 function bindControls() {
   initRangeSteppers();
+  showTypePane("title");
   $("segTheme").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-value]");
     if (!btn || $("segTheme").classList.contains("is-disabled")) return;
@@ -2984,24 +3164,12 @@ function bindControls() {
     update({ imgSize: btn.dataset.value });
   });
 
-  $("segLineMode").addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-value]");
-    const s = state.settings;
-    if (!btn || btn.dataset.value === s.lineHeightMode) return;
-    // 两种模式的数值互算，输入缺失时回落到另一档的有效值，避免算出 NaN 掉到量程端点
-    const ratio = Number.isFinite(Number(s.lineHeight)) ? Number(s.lineHeight) : 1.75;
-    const fontSize = Number.isFinite(Number(s.fontSize)) ? Number(s.fontSize) : 12;
-    if (btn.dataset.value === "fixed") {
-      // 切到固定磅值：按当前倍数换算成磅，避免沿用一个与该字号无关的旧磅值
-      const pt = Math.min(40, Math.max(10, Math.round(ratio * fontSize * 2) / 2));
-      update({ lineHeightMode: "fixed", lineHeightFixed: pt });
-    } else {
-      const fixedRaw = Number(s.lineHeightFixed);
-      const fixedPt = Number.isFinite(fixedRaw) ? fixedRaw : ratio * fontSize;
-      const val = Math.min(2.4, Math.max(1.2, Math.round((fixedPt / fontSize) * 20) / 20));
-      update({ lineHeightMode: "ratio", lineHeight: val });
-    }
-  });
+  // 行距：三套控件同一套换算规则（倍数 ⇄ 固定磅值）
+  [
+    { segId: "segLineMode", rangeId: "lineHeight", modeKey: "lineHeightMode", ratioKey: "lineHeight", fixedKey: "lineHeightFixed", sizeKey: "fontSize" },
+    { segId: "segTitleLineMode", rangeId: "titleLine", modeKey: "titleLineMode", ratioKey: "titleLine", fixedKey: "titleLineFixed", sizeKey: "titleSize" },
+    { segId: "segH1LineMode", rangeId: "h1Line", modeKey: "h1LineMode", ratioKey: "h1Line", fixedKey: "h1LineFixed", sizeKey: "h1Size" },
+  ].forEach((cfg) => bindLineControl(cfg));
 
   $("fontSize").addEventListener("input", (e) => update({ fontSize: Number(e.target.value) }));
   $("bodyFont").addEventListener("change", (e) => update({ bodyFont: e.target.value }));
@@ -3011,14 +3179,27 @@ function bindControls() {
     update({ bodyWeight: btn.dataset.value });
   });
   $("titleFont").addEventListener("change", (e) => update({ titleFont: e.target.value }));
+  $("h1Font").addEventListener("change", (e) => update({ h1Font: e.target.value }));
+  $("segTitleWeight").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-value]");
+    if (!btn) return;
+    update({ titleWeight: btn.dataset.value });
+  });
+  $("segH1Weight").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-value]");
+    if (!btn) return;
+    update({ h1Weight: btn.dataset.value });
+  });
   $("titleSize").addEventListener("input", (e) => update({ titleSize: Number(e.target.value) }));
-  $("lineHeight").addEventListener("input", (e) => {
-    const value = Number(e.target.value);
-    update(
-      state.settings.lineHeightMode === "fixed"
-        ? { lineHeightFixed: value }
-        : { lineHeight: value }
-    );
+  $("h1Size").addEventListener("input", (e) => update({ h1Size: Number(e.target.value) }));
+  ["titleMt", "titleMb", "h1Mt", "h1Mb"].forEach((key) => {
+    $(key).addEventListener("input", (e) => update({ [key]: Number(e.target.value) }));
+  });
+  // 文字排版三页签
+  $("segTypeTab").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-value]");
+    if (!btn) return;
+    showTypePane(btn.dataset.value);
   });
   $("paraBefore").addEventListener("input", (e) => update({ paraBefore: Number(e.target.value) }));
   $("paraAfter").addEventListener("input", (e) => update({ paraAfter: Number(e.target.value) }));
@@ -3340,11 +3521,22 @@ async function buildExportHtml() {
     `--ep-body-font:${bodyFontStack(s.bodyFont, state.lang)}`,
     `--ep-body-weight:${BODY_WEIGHTS[s.bodyWeight] || 400}`,
     `--ep-title-font:${titleFontStack(s, state.lang)}`,
+    `--ep-title-weight:${BODY_WEIGHTS[s.titleWeight] || 700}`,
+    `--ep-title-line:${s.titleLineMode === "fixed" ? s.titleLineFixed + "pt" : s.titleLine}`,
+    `--ep-title-mt:${s.titleMt}px`,
+    `--ep-title-mb:${s.titleMb}px`,
     ...(pageTitleAlign() ? [`--ep-title-align:${pageTitleAlign()}`] : []),
-    ...["h1", "h2", "h3", "h4", "h5", "h6"].map(
+    `--ep-h1-font:${h1FontStack(s, state.lang) || "inherit"}`,
+    `--ep-h2-font:${s.h1Font === "page" ? pageHeadStack("h2") || "inherit" : h1FontStack(s, state.lang) || "inherit"}`,
+    `--ep-h1-size:${s.h1Size}pt`,
+    `--ep-h1-weight:${BODY_WEIGHTS[s.h1Weight] || 700}`,
+    `--ep-h1-line:${s.h1LineMode === "fixed" ? s.h1LineFixed + "pt" : s.h1Line}`,
+    `--ep-h1-mt:${s.h1Mt}px`,
+    `--ep-h1-mb:${s.h1Mb}px`,
+    ...["h3", "h4", "h5", "h6"].map(
       (tag) => `--ep-${tag}-font:${pageHeadStack(tag) || "inherit"}`
     ),
-    ...["h1", "h2", "h3", "h4", "h5", "h6"].flatMap((tag) => {
+    ...["h3", "h4", "h5", "h6"].flatMap((tag) => {
       const gap = headGapValue(tag);
       return gap
         ? [`--ep-${tag}-mt:${gap.mt}px`, `--ep-${tag}-mb:${gap.mb}px`]
@@ -3503,7 +3695,9 @@ function fillFontSelects() {
     .map(([key]) => `<option value="${key}">${esc(fontLabel(key))}</option>`)
     .join("");
   $("bodyFont").innerHTML = options;
-  $("titleFont").innerHTML = `<option value="inherit">${esc(t("inheritBody"))}</option>` + options;
+  const withInherit = `<option value="inherit">${esc(t("inheritBody"))}</option>` + options;
+  $("titleFont").innerHTML = withInherit;
+  $("h1Font").innerHTML = withInherit;
 }
 
 async function init() {
@@ -3540,6 +3734,15 @@ async function init() {
 
   state.payload = payload;
   chrome.storage.local.remove(STORAGE_KEY).catch(() => {});
+
+  // 原版：首次打开时把这一页的字体、字号、字重、行距、段前段后取成初始值
+  if (state.settings.theme === "paper" && state.settings.bodyFont === "page") {
+    const vals = pageLayoutValues();
+    if (vals) {
+      Object.assign(state.settings, vals);
+      syncControls();
+    }
+  }
 
   render(payload);
   applySettings();

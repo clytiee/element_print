@@ -27,9 +27,11 @@
   text-align: justify;
 }
 
-/* 层次序数字体：一级「一、」黑体，二级「（一）」楷体，三级及以下仿宋加粗 */
-.ep-sheet[data-theme="gov"] .ep-body h1,
-.ep-sheet[data-theme="gov"] .ep-body h2 {
+/* 层次序数：一级「一、」黑体加粗，二级「（一）」楷体加粗；字体与间距由「一级标题」页签统管 */
+.ep-sheet[data-theme="gov"] .ep-body h3,
+.ep-sheet[data-theme="gov"] .ep-body h4,
+.ep-sheet[data-theme="gov"] .ep-body h5,
+.ep-sheet[data-theme="gov"] .ep-body h6 {
   font-family: "Segoe UI", Arial, "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif;
   font-weight: 400;
   font-size: 1em;
