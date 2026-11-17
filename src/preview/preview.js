@@ -896,6 +896,8 @@ function applySettings() {
   if (biOn || serialOn || mob) root.style.setProperty("--ep-columns", "1");
   root.style.setProperty("--ep-split", (s.biSplit || 57) + "%");
   if (biResizer) biResizer.hidden = !biOn;
+  // 对照/串行下栏数用不上，面板里对应控件跟着置灰（视图切换不重跑 syncControls）
+  syncColumnLock();
 
   injectPageFontFaces();
   root.style.setProperty("--ep-body-font", bodyFontStack(s.bodyFont, state.lang));
@@ -1071,6 +1073,29 @@ function syncModifiedMarks() {
   });
 }
 
+// 双语对照/串行翻译与手机竖屏都用不上栏数：整组置灰，「标题跨栏」一并关掉。
+// 视图切换不走 syncControls，所以单独抽出来，由 applySettings 每次调用
+function syncColumnLock() {
+  const s = state.settings;
+  const mobNow = isMobile(s);
+  const biNow = biActive() || serialActive();
+  $("segColumns").classList.toggle("is-disabled", biNow || mobNow);
+  $("columnsNote").textContent = biNow
+    ? t("columnsLockedBi")
+    : mobNow
+      ? t("columnsLockedMobile")
+      : "";
+  // 单栏/固定单栏时，标题跨栏没有意义：禁用并取消勾选
+  const twoCol = Number(s.columns) === 2 && !biNow && !mobNow;
+  $("spanHead").disabled = !twoCol;
+  if (!twoCol) {
+    s.spanHead = false;
+    $("spanHead").checked = false;
+  } else {
+    $("spanHead").checked = Boolean(s.spanHead);
+  }
+}
+
 function syncControls() {
   const s = state.settings;
   const fixedLine = s.lineHeightMode === "fixed";
@@ -1174,26 +1199,8 @@ function syncControls() {
     btn.classList.toggle("is-active", btn.dataset.value === (s.imgSize || "full"));
   });
   // 双语对照、手机竖屏固定单栏；电纸书默认单栏但允许改成双栏
-  const erNow = isEreader(s);
+  syncColumnLock();
   const mobNow = isMobile(s);
-  const biNow = biActive() || serialActive();
-  $("segColumns").classList.toggle("is-disabled", biNow || mobNow);
-  $("columnsNote").textContent = biNow
-    ? t("columnsLockedBi")
-    : mobNow
-      ? t("columnsLockedMobile")
-      : "";
-
-  // 单栏/固定单栏时，标题跨栏没有意义：禁用并取消勾选
-  const twoCol = Number(s.columns) === 2 && !biNow && !mobNow;
-  $("spanHead").disabled = !twoCol;
-  if (!twoCol) {
-    s.spanHead = false;
-    $("spanHead").checked = false;
-  } else {
-    $("spanHead").checked = Boolean(s.spanHead);
-  }
-
   // 手机阅读不渲染页眉页脚，对应开关禁用并保持未选中
   $("showHeader").disabled = mobNow;
   $("showFooter").disabled = mobNow;
