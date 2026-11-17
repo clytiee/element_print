@@ -80,6 +80,8 @@
   "quoteNote": { "message": "随机一句，取自本地名句库" },
   "inkBlack": { "message": "文字纯黑" },
   "inkBlackNote": { "message": "适合黑色颜料墨打印" },
+  "hideBiBadge": { "message": "隐藏译文提示" },
+  "hideBiBadgeNote": { "message": "不显示「页面」「缓存」这类来源角标" },
   "closeAfterPrint": { "message": "打印后自动关闭" },
   "closeAfterPrintNote": { "message": "打印后关闭预览页" },
 

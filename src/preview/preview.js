@@ -922,6 +922,9 @@ function applySettings() {
   const titleAlign = pageTitleAlign();
   if (titleAlign) root.style.setProperty("--ep-title-align", titleAlign);
   else root.style.removeProperty("--ep-title-align");
+  // 标题译文不在 .ep-title 内部，继承不到那条对齐，直接写在元素上
+  const titleTransEl = $("titleTrans");
+  if (titleTransEl) titleTransEl.style.textAlign = titleAlign || "";
 
   // 一级标题（h1，h2 跟随）：字体、字号、字重、行高、段前段后都来自「一级标题」页签
   const h1Stack = h1FontStack(s, state.lang);
@@ -979,6 +982,9 @@ function applySettings() {
 
   $("metaUrl").hidden = !s.showUrl;
   $("metaTime").hidden = !s.showTime;
+  // 译文来源角标（页面 / 缓存）：关掉后只留「待翻译」标记，不影响其它版式
+  if (s.hideBiBadge) root.style.setProperty("--ep-bi-badge", "none");
+  else root.style.removeProperty("--ep-bi-badge");
   updateDocumentTitle();
   const hasAuthor = Boolean((state.payload && state.payload.author || "").trim());
   const hasPubDate = Boolean(formatPubDate(state.payload && state.payload.publishedTime));
@@ -1213,6 +1219,7 @@ function syncControls() {
   $("showFooter").checked = s.showFooter !== false;
   $("showQuote").checked = s.showQuote !== false;
   $("inkBlack").checked = Boolean(s.inkBlack);
+  $("hideBiBadge").checked = Boolean(s.hideBiBadge);
   $("closeAfterPrint").checked = Boolean(s.closeAfterPrint);
 
   $("bilingualOn").checked = Boolean(s.bilingual);
@@ -2641,10 +2648,35 @@ function onBiResizerDown(e) {
   window.addEventListener("pointerup", up);
 }
 
+// 块首块尾的 <br> 只是原网页排版留下的换行，留着会让原文凭空多出一行、
+// 与译文错位；块中间的 <br> 是作者主动换行，不动
+function trimBrEdges(el) {
+  for (const side of ["first", "last"]) {
+    let node = side === "first" ? el.firstChild : el.lastChild;
+    while (node) {
+      if (node.nodeType === 1 && node.tagName === "BR") {
+        const next = side === "first" ? node.nextSibling : node.previousSibling;
+        node.remove();
+        node = next;
+        continue;
+      }
+      if (node.nodeType === 3 && !node.nodeValue.trim()) {
+        const next = side === "first" ? node.nextSibling : node.previousSibling;
+        if (next && next.nodeType === 1 && next.tagName === "BR") {
+          node = next;
+          continue;
+        }
+      }
+      break;
+    }
+  }
+  return el;
+}
+
 function sourceClone(row) {
   // 一组可能有多个原始块（同语言的相邻段），一起搬进左栏
   const nodes = row.nodes && row.nodes.length ? row.nodes : [row];
-  const build = (item) => item.node.cloneNode(true);
+  const build = (item) => trimBrEdges(item.node.cloneNode(true));
   if (nodes.length > 1) {
     const wrap = document.createElement(row.quote ? "blockquote" : "div");
     wrap.className = "ep-bi__srcGroup";
@@ -3258,6 +3290,7 @@ function bindControls() {
   $("showFooter").addEventListener("change", (e) => update({ showFooter: e.target.checked }));
   $("showQuote").addEventListener("change", (e) => update({ showQuote: e.target.checked }));
   $("inkBlack").addEventListener("change", (e) => update({ inkBlack: e.target.checked }));
+  $("hideBiBadge").addEventListener("change", (e) => update({ hideBiBadge: e.target.checked }));
   $("closeAfterPrint").addEventListener("change", (e) => update({ closeAfterPrint: e.target.checked }));
 
   // 双语对照：开时先退出编辑/删减（改的是原文 #body，对照层只是只读副本）

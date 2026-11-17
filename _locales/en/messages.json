@@ -80,6 +80,8 @@
   "quoteNote": { "message": "A random quote from the local collection" },
   "inkBlack": { "message": "Solid black text" },
   "inkBlackNote": { "message": "Best for pigment-ink printing" },
+  "hideBiBadge": { "message": "Hide translation badges" },
+  "hideBiBadgeNote": { "message": "Hides the Page / Cache source tags" },
   "closeAfterPrint": { "message": "Close after printing" },
   "closeAfterPrintNote": { "message": "Close the preview after the print dialog closes" },
 

@@ -197,6 +197,11 @@
   text-align: inherit;
 }
 
+/* 标题译文要对齐标题，但它挂在 .ep-head 下，继承不到 .ep-title 上的对齐 */
+.ep-title + .ep-title-trans {
+  text-align: var(--ep-title-align, left);
+}
+
 /* 导语/摘要：标题下的斜体副题 */
 .ep-excerpt {
   margin: 1.6mm 0 0;
@@ -458,6 +463,17 @@
   margin: var(--ep-para-before) 0 var(--ep-para-after);
   border-collapse: collapse;
   font-size: 0.9em;
+  /* 表格允许跨页：整表 avoid 会让一张长表从下一页才开始，前面留一大片空白 */
+  break-inside: auto;
+  page-break-inside: auto;
+}
+
+/* 但行不能被劈开，跨页时表头重复 */
+.ep-body thead {
+  display: table-header-group;
+}
+
+.ep-body tr {
   break-inside: avoid;
   page-break-inside: avoid;
 }
@@ -722,6 +738,11 @@
   white-space: nowrap;
   pointer-events: none;
   user-select: none;
+}
+
+/* 「页面」「缓存」这类来源角标可以整体关掉；「待翻译」是状态提示，始终保留 */
+.ep-bi__badge:not(.ep-bi__badge--todo) {
+  display: var(--ep-bi-badge, inline-block);
 }
 
 /* 本次刚翻译出来的段落 */

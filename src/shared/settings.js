@@ -95,6 +95,7 @@ export const DEFAULT_SETTINGS = {
   showFooter: true, // 页脚（品牌 + 页码）
   showQuote: true, // 页脚左下角随机显示一句名言
   inkBlack: false, // 文字用纯黑（深色 #16181c 换成 #000），适合颜料墨打印
+  hideBiBadge: false, // 隐藏译文角标（「页面」「缓存」这些提示），与版式组合无关
   pageFormat: "a4", // a4 | ereader（10.3″ 4:3 电纸书）| mobile（手机竖屏）
   bilingual: false, // 双语对照：左原文 / 右译文（逐段对齐）
   biSplit: 57, // 原文列宽（%），中西文宽度差明显，默认原文略宽
@@ -220,6 +221,7 @@ const SHARED_KEYS = [
   "view",
   "closeAfterPrint",
   "inkBlack",
+  "hideBiBadge",
 ];
 
 export function profileKey(theme, pageFormat) {
@@ -399,6 +401,7 @@ function normalizeShared(raw, base) {
   if (typeof raw.bilingual === "boolean") base.bilingual = raw.bilingual;
   if (typeof raw.closeAfterPrint === "boolean") base.closeAfterPrint = raw.closeAfterPrint;
   if (typeof raw.inkBlack === "boolean") base.inkBlack = raw.inkBlack;
+  if (typeof raw.hideBiBadge === "boolean") base.hideBiBadge = raw.hideBiBadge;
   base.biCacheMax = clamp(raw.biCacheMax, 100, 20000, base.biCacheMax);
   if (raw.imgSize === "small" || raw.imgSize === "mid" || raw.imgSize === "full") {
     base.imgSize = raw.imgSize;
