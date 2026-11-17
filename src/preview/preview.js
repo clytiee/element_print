@@ -78,10 +78,6 @@ function applyStaticI18n() {
     el.placeholder = t(el.dataset.i18nPlaceholder);
   });
   const labels = {
-    editBtn: "edit",
-    trimBtn: "trim",
-    titleBtn: "title",
-    imgBtn: "imagesOn",
     origBtn: "viewSource",
     mixBtn: "viewMixed",
     biBtn: "viewTranslation",
@@ -922,9 +918,14 @@ function applySettings() {
   const titleAlign = pageTitleAlign();
   if (titleAlign) root.style.setProperty("--ep-title-align", titleAlign);
   else root.style.removeProperty("--ep-title-align");
-  // 标题译文不在 .ep-title 内部，继承不到那条对齐，直接写在元素上
+  // 标题译文不在 .ep-title 内部，继承不到标题的对齐；
+  // 标题居中可能是版式规则给的（学术期刊、公文），所以照算出来的对齐写，而不是只看--ep-title-align
   const titleTransEl = $("titleTrans");
-  if (titleTransEl) titleTransEl.style.textAlign = titleAlign || "";
+  const titleEl = $("title");
+  if (titleTransEl && titleEl) {
+    const titleTextAlign = getComputedStyle(titleEl).textAlign || "";
+    titleTransEl.style.textAlign = titleTextAlign === "start" ? "" : titleTextAlign;
+  }
 
   // 一级标题（h1，h2 跟随）：字体、字号、字重、行高、段前段后都来自「一级标题」页签
   const h1Stack = h1FontStack(s, state.lang);
@@ -1529,8 +1530,10 @@ function setEditing(on) {
   $("formatBar").hidden = !on;
   if (!on) closeReplacePanel();
   setHint(on ? t("editHint") : baseHint());
-  $("editBtn").textContent = on ? t("done") : t("edit");
   $("editBtn").classList.toggle("is-on", on);
+  const editTip = on ? t("done") : t("editTitle");
+  $("editBtn").title = editTip;
+  $("editBtn").setAttribute("aria-label", editTip);
   if (!on && document.activeElement && document.activeElement.blur) {
     document.activeElement.blur();
   }
@@ -2146,7 +2149,9 @@ function setTrimming(on) {
   const root = biActive() ? $("bilingual") : $("body");
   $("body").classList.toggle("is-trimming", on);
   $("trimBtn").classList.toggle("is-on", on);
-  $("trimBtn").textContent = on ? t("exitTrim") : t("trim");
+  const trimTip = on ? t("exitTrim") : t("trimTitle");
+  $("trimBtn").title = trimTip;
+  $("trimBtn").setAttribute("aria-label", trimTip);
   setHint(on ? t("trimHint") : baseHint());
   if (on) {
     root.addEventListener("mousemove", onTrimMove);
@@ -2218,7 +2223,9 @@ function setPickingTitle(on) {
   const root = biActive() ? $("bilingual") : $("body");
   $("body").classList.toggle("is-trimming", on);
   $("titleBtn").classList.toggle("is-on", on);
-  $("titleBtn").textContent = on ? t("exitTitle") : t("title");
+  const titleTip = on ? t("exitTitle") : t("titleTitle");
+  $("titleBtn").title = titleTip;
+  $("titleBtn").setAttribute("aria-label", titleTip);
   setHint(on ? t("titleHint") : baseHint());
   if (on) {
     root.addEventListener("mousemove", onPickMove);
@@ -2238,8 +2245,10 @@ function setImagesHidden(on) {
   hideImages = on;
   $("sheet").classList.toggle("is-noimg", on);
   $("imgBtn").classList.toggle("is-on", on);
-  $("imgBtn").textContent = on ? t("imagesOff") : t("imagesOn");
-  $("imgBtn").title = on ? t("imagesOffTitle") : t("imagesOnTitle");
+  $("imgBtn").classList.toggle("is-off", on);
+  const imgTip = on ? t("imagesOffTitle") : t("imagesOnTitle");
+  $("imgBtn").title = imgTip;
+  $("imgBtn").setAttribute("aria-label", imgTip);
   fit();
 }
 

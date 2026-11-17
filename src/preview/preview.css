@@ -228,6 +228,27 @@ body {
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
+/* 只有图标的按钮：方形、悬停显示名称（文字写在 title 上） */
+.ep-mini--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 23px;
+  height: 23px;
+  padding: 0;
+}
+
+.ep-mini--icon svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+
+/* 「无图」状态：图标压暗，一眼能看出当前是不带图 */
+.ep-mini--icon.is-off {
+  opacity: 0.55;
+}
+
 .ep-mini:hover {
   background: #eef1f5;
   border-color: #cfd5de;

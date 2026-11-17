@@ -16,10 +16,18 @@
         <span class="ep-hint__text" id="hintText" data-i18n="baseHint">右侧设置即时生效</span>
         <span class="ep-count" id="wordCount"></span>
         <div class="ep-hint__actions">
-          <button type="button" id="editBtn" class="ep-mini" title="进入编辑：直接修改标题、正文与页眉页脚（Esc 退出，有改动会确认）">编辑</button>
-          <button type="button" id="trimBtn" class="ep-mini" title="进入删减：点击要删掉的段落、图片或表格所在块（Esc 退出）">删减</button>
-          <button type="button" id="titleBtn" class="ep-mini" title="设置标题：从正文选择并替换当前标题（Esc 退出）">标题</button>
-          <button type="button" id="imgBtn" class="ep-mini" title="切换图片显示：无图时图片不参与排版与打印">有图</button>
+          <button type="button" id="editBtn" class="ep-mini ep-mini--icon" title="进入编辑：直接修改标题、正文与页眉页脚（Esc 退出，有改动会确认）" aria-label="编辑">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.2 1.8 14.2 4.8 5.6 13.4 1.9 14.1 2.6 10.4z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.6 3.4 12.6 6.4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          </button>
+          <button type="button" id="trimBtn" class="ep-mini ep-mini--icon" title="进入删减：点击要删掉的段落、图片或表格所在块（Esc 退出）" aria-label="删减">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="4.2" cy="5.4" r="2.1" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="4.2" cy="10.6" r="2.1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M6.3 6.4 13.4 10.9M6.3 9.6 13.4 5.1" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          </button>
+          <button type="button" id="titleBtn" class="ep-mini ep-mini--icon" title="设置标题：从正文选择并替换当前标题（Esc 退出）" aria-label="标题">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.4 3.2h11.2M8 3.2v8.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M4.6 12.9h6.8" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          </button>
+          <button type="button" id="imgBtn" class="ep-mini ep-mini--icon" title="切换图片显示：无图时图片不参与排版与打印" aria-label="有图">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.9" y="2.6" width="12.2" height="10.4" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="5.4" cy="6" r="1.3" fill="currentColor" opacity=".55"/><path d="M2.6 11.6 6.6 8.2l3 2.5 2.3-1.9 1.5 1.2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
           <div class="ep-bi-switch">
             <button type="button" id="origBtn" class="ep-mini ep-mini--soft ep-mini--seg" title="回到单栏原文视图">原文</button>
             <span class="ep-bi-switch__sep" id="origMixSep"></span>
