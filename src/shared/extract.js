@@ -966,8 +966,10 @@
     // 标题居左/居中写在网页的 text-align 上，原版要让标题和它下面的译文都跟着走
     const rawAlign = String(cs.textAlign || "").trim().toLowerCase();
     const align = rawAlign && rawAlign !== "start" ? rawAlign : "";
-    // 字重数值化成 100–900，供原版恢复标题/正文的粗细
-    const weight = Math.round(parseFloat(cs.fontWeight) || 400);
+    // 字重数值化成 100–900，供原版恢复标题/正文的粗细。
+    // 关键字（bold/normal）在部分页面里会原样出现，parseFloat 会得到 NaN，
+    // 直接回落 400 会把粗体标题记成常规
+    const weight = weightValue(cs.fontWeight);
     return {
       stack,
       sizePx,
@@ -979,6 +981,15 @@
       weight,
       color: darkColorOf(cs.color),
     };
+  }
+
+  // computedStyle 的字重有时是 bold/normal 这类关键字，统一换算成 100–900
+  function weightValue(raw) {
+    const text = String(raw || "").trim().toLowerCase();
+    if (text === "bold") return 700;
+    if (text === "normal") return 400;
+    const num = parseFloat(text);
+    return Number.isFinite(num) ? Math.round(num) : 400;
   }
 
   // 网页文字色：只有够深的颜色才搬，浅色多半是深色主题下的白字，搬到白纸上会看不见
@@ -1025,18 +1036,23 @@
     // 标题带站点名后缀时只能靠包含匹配，同样先看标题标签，且不允许明显长于标题
     const loose = list.filter((node) => {
       const txt = normText(node.textContent);
-      if (!txt || !txt.includes(wanted)) return false;
-      return titleRank(node) < 3 || txt.length <= wanted.length + 20;
+      if (!txt) return false;
+      if (txt.includes(wanted)) return titleRank(node) < 3 || txt.length <= wanted.length + 20;
+      // 反过来也允许：网页 og:title 与页面大标题不是同一句时（NPR 这类），
+      // 大标题只是 og:title 的一部分，取够长的标题标签节点
+      return titleRank(node) < 3 && txt.length >= 10 && wanted.includes(txt);
     });
     if (loose.length) {
       loose.sort((a, b) => {
         const r = titleRank(a) - titleRank(b);
         if (r) return r;
-        return normText(a.textContent).length - normText(b.textContent).length;
+        return normText(b.textContent).length - normText(a.textContent).length;
       });
       return loose[0];
     }
-    return null;
+    // 文字完全对不上（编辑给的标题、og:title、页面大标题三套各说各话）时，
+    // 退回文档里第一个 h1/h2：标题的字体样式几乎总是写在它身上
+    return document.querySelector("h1") || document.querySelector("h2") || null;
   }
 
   // 段落候选里可能有导语、图片说明、推广语；按「字数最多的字号/行距组合」定正文样式

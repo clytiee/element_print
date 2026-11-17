@@ -243,9 +243,17 @@
         paraBefore,
         paraAfter,
         align: rawAlign && rawAlign !== "start" ? rawAlign : "",
-        weight: Math.round(parseFloat(cs.fontWeight) || 400),
+        weight: weightValue(cs.fontWeight),
         color: darkColorOf(cs.color),
       };
+    };
+    // computedStyle 的字重有时是 bold/normal 关键字，统一换成 100–900
+    const weightValue = (raw) => {
+      const text = String(raw || "").trim().toLowerCase();
+      if (text === "bold") return 700;
+      if (text === "normal") return 400;
+      const num = parseFloat(text);
+      return Number.isFinite(num) ? Math.round(num) : 400;
     };
     // 只有够深的文字色才搬：浅色多半是深色主题下的白字，印到白纸上会看不见
     const darkColorOf = (raw) => {
@@ -261,18 +269,31 @@
     const wanted = normText(title);
     let titleNode = null;
     if (wanted) {
-      const list = document.querySelectorAll(
-        "h1, h2, h3, [class*=title], [class*=headline], [class*=hed], [class*=heading]"
+      // 标题标签优先：div.storytitle 这类容器只是把 <h1> 包起来，字体是从 h1 继承/共用，
+      // 但容器自己的字重是 normal，先取容器会把粗体标题记成常规
+      const heads = Array.from(document.querySelectorAll("h1, h2, h3"));
+      const boxes = Array.from(
+        document.querySelectorAll("[class*=title], [class*=headline], [class*=hed], [class*=heading]")
       );
-      for (const node of list) {
-        const txt = normText(node.textContent);
-        if (!txt) continue;
-        if (txt === wanted || (wanted.length >= 8 && txt.includes(wanted))) {
-          titleNode = node;
-          break;
-        }
+      const pick = (nodes, exactOnly) =>
+        nodes.find((node) => {
+          const txt = normText(node.textContent);
+          if (!txt) return false;
+          if (txt === wanted) return true;
+          return !exactOnly && wanted.length >= 8 && txt.includes(wanted);
+        }) || null;
+      titleNode = pick(heads, true) || pick(heads, false) || pick(boxes, true) || pick(boxes, false);
+      // 网页 og:title 与页面大标题不是同一句时，允许大标题只是标题的一部分
+      if (!titleNode) {
+        titleNode =
+          heads.find((node) => {
+            const txt = normText(node.textContent);
+            return txt.length >= 10 && wanted.includes(txt);
+          }) || null;
       }
     }
+    // 文字都对不上时退回文档里第一个 h1/h2：标题字体样式几乎总写在它身上
+    if (!titleNode) titleNode = document.querySelector("h1") || document.querySelector("h2");
     // 正文：先用 Readability 抽出的真实正文段落回原页面找同文段落，找到就以它为准；
     // 找不到再退到「正文容器里字数最多的字号组合」，最后退到整页第一个有字段落
     let bodyNode = null;
