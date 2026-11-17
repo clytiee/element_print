@@ -961,8 +961,13 @@ function applySettings() {
     root.style.setProperty(name, value);
   });
   // 文字纯黑：默认的近黑 #16181c 在彩打/彩色 PDF 里会转成 CMY 混色而显灰，
-  // 用黑色颜料墨时改成纯黑更实
-  root.style.setProperty("--ep-ink", s.inkBlack ? "#000" : "#16181c");
+  // 用黑色颜料墨时改成纯黑更实。原版还把网页的文字色一并搬来（浅色已在抽取端剔除）
+  const pfColors = (state.payload && state.payload.pageFont) || {};
+  const pageInk = s.bodyFont === "page" ? ((pfColors.body && pfColors.body.color) || "") : "";
+  const ink = s.inkBlack ? "#000" : pageInk || "#16181c";
+  root.style.setProperty("--ep-ink", ink);
+  const titleColor = s.bodyFont === "page" ? ((pfColors.title && pfColors.title.color) || ink) : ink;
+  root.style.setProperty("--ep-title-color", titleColor);
 
   $("pageHead").hidden = er || mob || s.showHeader === false;
   // 电纸书固定打开页脚，只显示格言；手机版隐藏重复页脚，格言移到文末；A4 页脚受开关控制并显示页码
@@ -3544,7 +3549,19 @@ async function buildExportHtml() {
     }),
     `--ep-quote-font:${pageQuoteStack() || "inherit"}`,
     ...quoteBoxVars(pageQuoteData(), pageQuoteStyle()).map(([name, value]) => `${name}:${value}`),
-    `--ep-ink:${s.inkBlack ? "#000" : "#16181c"}`,
+    `--ep-ink:${(() => {
+      const pf = (state.payload && state.payload.pageFont) || {};
+      if (s.inkBlack) return "#000";
+      return s.bodyFont === "page" ? ((pf.body && pf.body.color) || "#16181c") : "#16181c";
+    })()}`,
+    `--ep-title-color:${(() => {
+      const pf = (state.payload && state.payload.pageFont) || {};
+      const ink = s.inkBlack
+        ? "#000"
+        : s.bodyFont === "page" ? ((pf.body && pf.body.color) || "#16181c") : "#16181c";
+      if (s.bodyFont !== "page") return ink;
+      return (pf.title && pf.title.color) || ink;
+    })()}`,
     `--ep-page-w:${sizePage ? sizePage.w : "210mm"}`,
     `--ep-page-h:${sizePage ? sizePage.h : "297mm"}`,
     `--ep-mt:${mob ? MOBILE_PAGE.mt : s.marginTop}mm`,

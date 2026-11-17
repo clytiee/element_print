@@ -181,6 +181,7 @@
   letter-spacing: 0.02em;
   word-break: break-word;
   text-align: var(--ep-title-align, left);
+  color: var(--ep-title-color, var(--ep-ink));
 }
 
 /* 标题译文：贴在英文标题下面，用比标题小两号的同一字形，不抢标题的分量 */

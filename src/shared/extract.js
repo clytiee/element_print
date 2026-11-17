@@ -977,7 +977,21 @@
       paraAfter,
       align,
       weight,
+      color: darkColorOf(cs.color),
     };
+  }
+
+  // 网页文字色：只有够深的颜色才搬，浅色多半是深色主题下的白字，搬到白纸上会看不见
+  function darkColorOf(raw) {
+    const m = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?/i.exec(String(raw || ""));
+    if (!m) return "";
+    if (m[4] !== undefined && Number(m[4]) < 0.5) return "";
+    const [r, g, b] = [Number(m[1]), Number(m[2]), Number(m[3])];
+    // 感知亮度（sRGB 加权），0.62 以上视为浅色
+    const luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    if (luma > 0.62) return "";
+    const hex = (n) => n.toString(16).padStart(2, "0");
+    return `#${hex(r)}${hex(g)}${hex(b)}`;
   }
 
   // 在原页面按标题文本回找标题节点（Readability 与手动选取都适用）

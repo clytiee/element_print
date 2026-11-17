@@ -244,7 +244,19 @@
         paraAfter,
         align: rawAlign && rawAlign !== "start" ? rawAlign : "",
         weight: Math.round(parseFloat(cs.fontWeight) || 400),
+        color: darkColorOf(cs.color),
       };
+    };
+    // 只有够深的文字色才搬：浅色多半是深色主题下的白字，印到白纸上会看不见
+    const darkColorOf = (raw) => {
+      const m = /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?/i.exec(String(raw || ""));
+      if (!m) return "";
+      if (m[4] !== undefined && Number(m[4]) < 0.5) return "";
+      const [r, g, b] = [Number(m[1]), Number(m[2]), Number(m[3])];
+      const luma = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+      if (luma > 0.62) return "";
+      const hex = (n) => n.toString(16).padStart(2, "0");
+      return `#${hex(r)}${hex(g)}${hex(b)}`;
     };
     const wanted = normText(title);
     let titleNode = null;
