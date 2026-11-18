@@ -142,9 +142,9 @@ body {
 .ep-hint {
   position: relative;
   flex: 0 0 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 6px 12px 6px 18px;
   color: #7a828d;
@@ -155,8 +155,8 @@ body {
 }
 
 .ep-hint__text {
-  flex: 0 1 auto;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -211,8 +211,7 @@ body {
 .ep-hint__actions {
   display: flex;
   gap: 6px;
-  flex: 0 0 auto;
-  margin-left: auto;
+  justify-self: end;
 }
 
 .ep-mini {
@@ -981,11 +980,11 @@ input[type="range"] {
   }
 }
 
-/* 工具栏正中：原文字数统计，绝对居中，不与两侧按钮抢位置 */
+/* 工具栏正中：原文字数统计，用 grid 中列居中，两侧列等宽，互不重叠 */
 .ep-count {
-  flex: 0 1 auto;
+  justify-self: center;
   min-width: 0;
-  margin-left: 10px;
+  max-width: 34vw;
   overflow: hidden;
   text-overflow: ellipsis;
   color: #6f7884;

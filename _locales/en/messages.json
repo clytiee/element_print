@@ -121,9 +121,9 @@
   "imagesOn": { "message": "Images on" },
   "imagesOff": { "message": "Images off" },
 
-  "viewSource": { "message": "Source" },
-  "viewMixed": { "message": "Mixed" },
-  "viewTranslation": { "message": "Translation" },
+  "viewSource": { "message": "Src" },
+  "viewMixed": { "message": "Mix" },
+  "viewTranslation": { "message": "Trans" },
 
   "editTitle": { "message": "Edit: change the title, body, header and footer directly. Esc exits and confirms changes." },
   "trimTitle": { "message": "Trim: click a block containing a paragraph, image or table to remove it. Esc exits." },
