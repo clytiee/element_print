@@ -1257,6 +1257,28 @@
     return false;
   }
 
+  // 从字体文件名读出真实字形：站点常把粗斜体文件也声明成 400/normal，
+  // 只认声明会让正文命中 BoldItalic，整段看起来又斜又粗
+  function fontFileHint(url) {
+    const raw = String(url || "").split(/[?#]/)[0].split("/").pop() || "";
+    const low = decodeURIComponent(raw)
+      .replace(/\.(woff2?|ttf|otf|eot)(\..*)?$/i, "")
+      .toLowerCase();
+    const italic = /italic|oblique/.test(low);
+    let weight = "";
+    if (/extra[-\s_]?bold|ultra[-\s_]?bold/.test(low)) weight = "800";
+    else if (/semi[-\s_]?bold|demi[-\s_]?bold/.test(low)) weight = "600";
+    else if (/(^|[^a-z])bold/.test(low)) weight = "700";
+    else if (/medium/.test(low)) weight = "500";
+    else if (/thin|hairline/.test(low)) weight = "100";
+    else if (/light/.test(low)) weight = "300";
+    else if (/black|heavy/.test(low)) weight = "900";
+    else if (/(^|[^a-z])(regular|book|roman)([^a-z]|$)/.test(low) || /(^|[^0-9])400([^0-9]|$)/.test(low)) {
+      weight = "400";
+    }
+    return { italic, weight };
+  }
+
   function fontFaceSrc(rule) {
     const src = rule.style.getPropertyValue("src") || "";
     const list = [];
@@ -1362,11 +1384,16 @@
         .replace(/^["']|["']$/g, "");
       if (!family || !wanted.has(family.toLowerCase())) return;
       if (!coversLatin(rule.style.getPropertyValue("unicode-range"))) return;
+      const pick = fontFaceSrc(rule);
+      if (!pick) return;
+      // 以文件名为准修正字重与样式：粗斜体文件即使被声明成 400 normal，也不当成常规字形用
+      const hint = pick.url.startsWith("data:") ? { italic: false, weight: "" } : fontFileHint(pick.url);
       candidates.push({
         rule,
         family,
-        weight: rule.style.getPropertyValue("font-weight") || "400",
-        style: rule.style.getPropertyValue("font-style") || "normal",
+        pick,
+        weight: hint.weight || rule.style.getPropertyValue("font-weight") || "400",
+        style: hint.italic ? "italic" : rule.style.getPropertyValue("font-style") || "normal",
       });
     });
     candidates.sort((a, b) => {
@@ -1384,11 +1411,9 @@
     let total = 0;
     for (const candidate of candidates) {
       if (faces.length >= FONT_FACE_LIMIT) break;
-      const { rule, family, weight, style } = candidate;
+      const { rule, family, weight, style, pick } = candidate;
       const faceKey = `${family.toLowerCase()}|${weight}|${style}`;
       if (seen.has(faceKey)) continue;
-      const pick = fontFaceSrc(rule);
-      if (!pick) continue;
       // 站点常把字体直接 base64 内嵌在 CSS 里（data:font/woff2;base64,…），
       // 预览页没有那份 CSS，这种也得原样搬过去，否则家族缺失会回退到别家字体
       const inline = pick.url.startsWith("data:");

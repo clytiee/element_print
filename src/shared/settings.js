@@ -387,6 +387,8 @@ export const MARGIN_PRESETS = {
 const THEMES = Object.keys(THEME_PRESETS);
 
 const STORAGE_KEY = "ep:settings";
+// 版式档案的存储版本：只有存「用户改过的项」的档案才沿用，旧版整份排版的档案视为无效
+const PROFILE_VERSION = 2;
 
 function clamp(value, min, max, fallback) {
   return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
@@ -483,13 +485,15 @@ function normalize(raw) {
   normalizeShared(raw, base);
 
   const profiles = raw.profiles && typeof raw.profiles === "object" ? { ...raw.profiles } : {};
+  // 档案只存用户改过的项（PROFILE_VERSION）。旧版写进档案的是整份排版，
+  // 会把上一页的网页值当成「用户改过的值」带进新页，这类旧档案整份丢弃
+  const profilesV = raw.profilesVersion === PROFILE_VERSION ? profiles : {};
   const key = profileKey(base.theme, base.pageFormat);
-  let saved = profiles[key];
+  let saved = profilesV[key];
   // 兼容旧的按「版式 × 手机」存下的档案：并入统一 mobile 档案
   if (!saved && base.pageFormat === "mobile") {
-    saved = profiles[`${base.theme}:mobile`] || null;
+    saved = profilesV[`${base.theme}:mobile`] || null;
   }
-  if (!saved && LAYOUT_KEYS.some((k) => raw[k] !== undefined)) saved = raw;
 
   const layoutBase =
     base.pageFormat === "mobile"
@@ -512,7 +516,7 @@ function normalize(raw) {
   delete layoutBase.pageFormat;
   SHARED_KEYS.forEach((key) => delete layoutBase[key]);
 
-  return { ...base, ...layoutBase, profiles };
+  return { ...base, ...layoutBase, profiles: profilesV };
 }
 
 export async function loadSettings() {
@@ -539,13 +543,13 @@ async function persistSettings(settings, profiles) {
         mergedProfiles[key] = value;
       });
     }
-    const key = profileKey(settings.theme, settings.pageFormat);
-    mergedProfiles[key] = pickLayout(settings);
+    // 档案由 rememberCurrentProfile() 维护，只存用户改过的项；这里不再用整份排版覆盖
     const out = {
       ...pickShared(settings),
       theme: settings.theme,
       pageFormat: settings.pageFormat,
       profiles: mergedProfiles,
+      profilesVersion: PROFILE_VERSION,
     };
     await chrome.storage.local.set({ [STORAGE_KEY]: out });
   } catch {

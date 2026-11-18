@@ -3058,10 +3058,12 @@ function syncResetBtn() {
 
   const baseline = getBaseline();
   const colForced = biActive() || serialActive() || isMobile(s);
-  const dirty = LAYOUT_KEYS.some((key) => {
+  const diffKeys = LAYOUT_KEYS.filter((key) => {
     if (key === "columns" && colForced) return false;
     return !settingsEqual(key, s, baseline);
   });
+  const dirty = diffKeys.length > 0;
+  if (dirty) console.debug("[ElementPrint] 重置版式可用的差异项", diffKeys.map((k) => [k, s[k], baseline[k]]));
   const formatLabel = isEreader(s)
     ? t("ereader")
     : isMobile(s)
@@ -3082,9 +3084,17 @@ function themeLabel(theme) {
       : t("paper");
 }
 
+// 只记用户真正改过的项：和「套装默认值 + 本页网页值」比，没动过的项不写进档案，
+// 这样下一页照样跟随新网页的字体、字号、间距
 function rememberCurrentProfile() {
   const key = profileKey(state.settings.theme, state.settings.pageFormat);
-  state.profiles[key] = pickLayout(state.settings);
+  const baseline = getBaseline();
+  const layout = pickLayout(state.settings);
+  const diff = {};
+  Object.keys(layout).forEach((k) => {
+    if (!settingsEqual(k, state.settings, baseline)) diff[k] = layout[k];
+  });
+  state.profiles[key] = diff;
 }
 
 // 原版跟随网页的字号与段落节奏：把抽取时记下的网页值换算成设置项（含夹取范围）。
@@ -3149,30 +3159,24 @@ function loadThemeProfile(theme, pageFormat, reset = false) {
   const saved = reset ? {} : state.profiles[profileKey(theme, pageFormat)] || {};
   if (isMob) {
     const mobileBase = { ...DEFAULT_SETTINGS, ...MOBILE_DEFAULTS };
-    state.settings = reset
-      ? { ...mobileBase, ...pickShared(state.settings), theme, pageFormat }
-      : { ...state.settings, ...mobileBase, ...saved, theme, pageFormat };
+    state.settings = { ...mobileBase, ...pickShared(state.settings), ...saved, theme, pageFormat };
     state.settings.columns = 1;
     if (reset) state.settings.headGapMode = "page";
     return true;
   }
-  if (reset) {
-    const shared = pickShared(state.settings);
-    state.settings = { ...DEFAULT_SETTINGS, ...preset, ...shared, theme, pageFormat };
-    // 重置后标题的段前段后回到网页取值（而不是继续跟着正文）
-    state.settings.headGapMode = "page";
-  } else {
-    state.settings = { ...state.settings, ...preset, ...saved, theme, pageFormat };
-  }
+  // 起点永远是「套装默认值 + 本页网页值」，再叠加用户改过的项（saved 只存改动项）：
+  // 没改过 → 完全跟随新网页；改过某几项 → 只记那几项
+  state.settings = { ...DEFAULT_SETTINGS, ...preset, ...pickShared(state.settings), theme, pageFormat };
   if (pageFormat === "ereader" && Object.keys(saved).length === 0) {
     Object.assign(state.settings, EREADER_DEFAULTS);
   }
-  // 原版跟随网页的字号与段落节奏：仅在采用推荐值（切版式或重置）时把网页值写进设置，
-  // 之后拖动滑块仍是用户自己的值，不会被再次覆盖
-  if (theme === "paper" && state.settings.bodyFont === "page" && (reset || !Object.keys(saved).length)) {
+  if (theme === "paper" && state.settings.bodyFont === "page") {
     const vals = pageLayoutValues();
     if (vals) Object.assign(state.settings, vals);
   }
+  // 重置后标题的段前段后回到网页取值（而不是继续跟着正文）
+  state.settings.headGapMode = "page";
+  Object.assign(state.settings, saved);
   return true;
 }
 
@@ -3863,14 +3867,10 @@ async function init() {
   state.payload = payload;
   chrome.storage.local.remove(STORAGE_KEY).catch(() => {});
 
-  // 原版：首次打开时把这一页的字体、字号、字重、行距、段前段后取成初始值
-  if (state.settings.theme === "paper" && state.settings.bodyFont === "page") {
-    const vals = pageLayoutValues();
-    if (vals) {
-      Object.assign(state.settings, vals);
-      syncControls();
-    }
-  }
+  // 每次打开都用「套装默认值 + 本页网页值 + 用户改过的项」重建设置，
+  // 不带上一页残留；原版跟随网页时，本页的字体、字号、行距、段前段后由此生效
+  loadThemeProfile(state.settings.theme, state.settings.pageFormat);
+  syncControls();
 
   render(payload);
   applySettings();
