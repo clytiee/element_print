@@ -283,6 +283,36 @@
     return best ? best.node : fallback;
   }
 
+  // 同字号、同行的段落里，占字数最多的那组（段前、段后）边距
+  function dominantMargins(node) {
+    const base = getComputedStyle(node);
+    if (!base) return null;
+    const pool = Array.from(document.querySelectorAll("p, li, dd")).filter((p) => {
+      const cs = getComputedStyle(p);
+      return (
+        cs.fontSize === base.fontSize &&
+        cs.lineHeight === base.lineHeight &&
+        normText(p.textContent).length >= 40
+      );
+    });
+    if (pool.length < 3) return null;
+    const groups = new Map();
+    pool.forEach((p) => {
+      const cs = getComputedStyle(p);
+      const key = `${cs.marginTop}|${cs.marginBottom}`;
+      const hit =
+        groups.get(key) || { chars: 0, mt: parseFloat(cs.marginTop) || 0, mb: parseFloat(cs.marginBottom) || 0 };
+      hit.chars += normText(p.textContent).length;
+      groups.set(key, hit);
+    });
+    let best = null;
+    for (const hit of groups.values()) {
+      if (!best || hit.chars > best.chars) best = hit;
+    }
+    // 主体段落本身就没有外边距时，保持原样（用空行式间距的站点不该被硬塞间距）
+    return best;
+  }
+
   // Readability 的正文容器是离屏副本，读不到页面样式；在原文档上找对应节点取计算样式
   function pageFontInfo(title, samples, headTexts) {
     const computed = (node) => {
@@ -382,6 +412,16 @@
       bodyNode = pickBodyParagraph(Array.from(containers), firstText);
     }
     const body = computed(bodyNode);
+    // 段间距可能只写在部分段落上：有的站用 p + p { margin-top }，首段 margin-top 是 0；
+    // 有的首段还被单独去掉外边距。单个节点取不到时，按同字号同行的段落里占比最大的
+    // 那组上下边距作为代表值，避免整篇的段间距被记成 0
+    if (body && bodyNode) {
+      const group = dominantMargins(bodyNode);
+      if (group) {
+        body.paraBefore = Math.round(group.mt);
+        body.paraAfter = Math.round(group.mb);
+      }
+    }
     const titleFont = computed(titleNode);
     // 各级标题的字体：拿 Readability 正文里的标题文字回原页面找同一个标题节点；
     // 找不到就退到正文容器内文字最多的同级标题（避开导航、侧栏的小标题样式）

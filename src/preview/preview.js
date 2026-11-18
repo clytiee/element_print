@@ -2743,24 +2743,27 @@ function fillBiTarget(tgt, row, text) {
 // 对照行由 flex 容器排布，行与行之间的外边距不会像普通段落那样合并；
 // 所以把每个原文块自己的段前段后挪到整行上：行距 = max(上一行的段后, 本行的段前)，
 // 与网页里相邻块的自然表现一致，标题那种「上下各 32px」也不会算成 64
-function takeRowSpacing(line, srcCol, carry) {
-  // 一组同语言相邻块会被包进 ep-bi__srcGroup，真正的块在它里面
-  const group = srcCol.querySelector(".ep-bi__srcGroup");
-  const blocks = Array.from((group || srcCol).children);
-  if (!blocks.length) return carry;
+function takeRowSpacing(line, row, srcCol, carry) {
+  // 间距必须量「原文块」本身：克隆进 ep-bi__src 之后，.ep-bi__src > :first-child
+  // 的 margin-top:0 规则已经生效，再量克隆只会得到 0，导致整篇对照行都没有段间距
+  const nodes = (row.nodes && row.nodes.length ? row.nodes : [row]).map((item) => item.node);
   let mt = 0;
   let mb = 0;
-  blocks.forEach((el, i) => {
-    const cs = getComputedStyle(el);
-    if (i === 0) {
-      mt = parseFloat(cs.marginTop) || 0;
-      el.style.marginTop = "0px";
-    }
-    if (i === blocks.length - 1) {
-      mb = parseFloat(cs.marginBottom) || 0;
-      el.style.marginBottom = "0px";
-    }
-  });
+  const first = nodes[0];
+  const last = nodes[nodes.length - 1];
+  if (first && first.nodeType === Node.ELEMENT_NODE) {
+    mt = parseFloat(getComputedStyle(first).marginTop) || 0;
+  }
+  if (last && last.nodeType === Node.ELEMENT_NODE) {
+    mb = parseFloat(getComputedStyle(last).marginBottom) || 0;
+  }
+  // 克隆自身不要再带间距：格子首块的段前、末块的段后清掉，由行间距统一给
+  const group = srcCol.querySelector(".ep-bi__srcGroup");
+  const blocks = Array.from((group || srcCol).children);
+  if (blocks.length) {
+    blocks[0].style.marginTop = "0px";
+    blocks[blocks.length - 1].style.marginBottom = "0px";
+  }
   line.style.marginTop = Math.max(carry, mt) + "px";
   return mb;
 }
@@ -2808,7 +2811,7 @@ function buildBilingual(rows) {
       line.appendChild(tgt);
     }
     box.appendChild(line);
-    carry = takeRowSpacing(line, src, carry);
+    carry = takeRowSpacing(line, row, src, carry);
   });
   box.hidden = false;
   syncBiButton();
@@ -2851,7 +2854,7 @@ function buildSerial(rows) {
       line.appendChild(tgt);
     }
     box.appendChild(line);
-    carry = takeRowSpacing(line, src, carry);
+    carry = takeRowSpacing(line, row, src, carry);
   });
   box.hidden = false;
   syncBiButton();
@@ -3086,8 +3089,8 @@ function pageLayoutValues() {
     const fs = Number(out.fontSize) || clamp(body.sizePt || 12, 8, 18);
     out.lineHeightFixed = Math.min(40, Math.max(10, Math.round(out.lineHeight * fs * 2) / 2));
   }
-  if (Number.isFinite(body.paraBefore)) out.paraBefore = clamp(body.paraBefore, 0, 24);
-  if (Number.isFinite(body.paraAfter)) out.paraAfter = clamp(body.paraAfter, 0, 24);
+  if (Number.isFinite(body.paraBefore)) out.paraBefore = clamp(body.paraBefore, 0, 40);
+  if (Number.isFinite(body.paraAfter)) out.paraAfter = clamp(body.paraAfter, 0, 48);
   if (Number.isFinite(body.weight)) out.bodyWeight = weightKeyOf(body.weight);
 
   // 大标题
