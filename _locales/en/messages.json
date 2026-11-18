@@ -70,6 +70,7 @@
 
   "showUrl": { "message": "Show URL" },
   "showTimestamp": { "message": "Show timestamp" },
+  "showExcerpt": { "message": "Show summary" },
   "spanHead": { "message": "Span title across columns" },
   "allowBreak": { "message": "Allow paragraph breaks across pages" },
   "allowBreakNote": { "message": "Uncheck to keep the whole paragraph on one page" },

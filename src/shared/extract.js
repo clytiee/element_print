@@ -851,14 +851,6 @@
 
   const EXCERPT_TRUNC_RE = /(\.\.\.|…|。。。)\s*$/;
 
-  function excerptCandidate(list) {
-    const clean = list.map((s) => normText(s || "")).filter(Boolean);
-    const complete = clean.filter((s) => !EXCERPT_TRUNC_RE.test(s));
-    const pool = complete.length ? complete : clean;
-    pool.sort((a, b) => b.length - a.length);
-    return pool[0] || "";
-  }
-
   function readVisibleDate() {
     const selectors = [
       "time[datetime]",
@@ -906,9 +898,8 @@
   function readLdMetadata() {
     let author = "";
     let publishedTime = "";
-    let excerpt = "";
     document.querySelectorAll('script[type="application/ld+json"]').forEach((script) => {
-      if (author && publishedTime && excerpt) return;
+      if (author && publishedTime) return;
       let data;
       try {
         data = JSON.parse(script.textContent);
@@ -919,13 +910,13 @@
       nodes.forEach((node) => {
         author = author || ldValue(node, "author");
         publishedTime = publishedTime || ldValue(node, "datePublished");
-        excerpt = excerpt || ldValue(node, "description");
       });
     });
-    return { author, publishedTime, excerpt };
+    return { author, publishedTime };
   }
 
-  // 手动选取时 Readability 不在场，从 meta / JSON-LD 兜底取作者、发布日期、导语
+  // 手动选取时 Readability 不在场，从 meta / JSON-LD 兜底取作者、发布日期。
+  // 摘要不从 meta 取：那里的文字页面看不见（还常是整篇正文），错摘比漏摘更糟
   function readPageMeta() {
     const ld = readLdMetadata();
     return {
@@ -944,14 +935,6 @@
         metaContent('meta[name="pub-date"]', "content") ||
         metaContent('meta[name="date"]', "content") ||
         ld.publishedTime,
-      excerpt: excerptCandidate([
-        metaContent('meta[property="og:description"]', "content"),
-        metaContent('meta[property="dc:description"]', "content"),
-        metaContent('meta[name="dc.description"]', "content"),
-        metaContent('meta[name="description"]', "content"),
-        metaContent('meta[name="twitter:description"]', "content"),
-        ld.excerpt,
-      ]),
     };
   }
 
@@ -1577,32 +1560,22 @@
     const visibleDate = extractDateText(opts.author) || readVisibleDate();
     const authorClean = cleanAuthor(opts.author) || cleanAuthor(pageMeta.author);
     const pubDate = visibleDate || opts.publishedTime || pageMeta.publishedTime;
-    let excerptText = excerptCandidate([opts.excerpt, pageMeta.excerpt]);
+    // 摘要直接来自调用方（Readability 的 excerpt）；论文页有 Abstract 容器时用摘要原文
+    let excerptText = normText(opts.excerpt || "");
     const abstractText = abstractNode ? normText(abstractNode.textContent) : "";
-    if (abstractText) {
-      excerptText = abstractText;
-    } else if (EXCERPT_TRUNC_RE.test(excerptText)) {
-      // meta / og:description 常被站点截断并带省略号；若正文首段就是同一段导语，用完整首段补全
-      const excerptFirst = firstTextBlock(clone);
-      const excerptFirstText = excerptFirst ? normText(excerptFirst.textContent) : "";
-      // 首段明显比导语长很多时，说明拿到的其实是整篇容器，不能当日志补全
-      if (
-        excerptText.length >= 20 &&
-        excerptFirstText.length > excerptText.length &&
-        excerptFirstText.length <= Math.max(excerptText.length * 3, excerptText.length + 400)
-      ) {
-        let prefix = 0;
-        const min = Math.min(excerptText.length, excerptFirstText.length);
-        while (prefix < min && excerptText[prefix] === excerptFirstText[prefix]) prefix += 1;
-        if (prefix >= Math.min(60, excerptText.length * 0.8)) {
-          excerptText = excerptFirstText;
-        }
-      }
+    if (abstractText) excerptText = abstractText;
+    // 站点把整篇正文塞进 meta 时，摘要会和正文大段重复；正文里已经有的就不显示
+    if (excerptText && excerptText.length > 200) {
+      const bodyPlain = normText(clone.textContent || "");
+      const probe = normText(excerptText.slice(0, 120));
+      if (probe && bodyPlain.includes(probe)) excerptText = "";
     }
     const excerptTruncated = EXCERPT_TRUNC_RE.test(excerptText);
     const matchedExcerptPair = findExcerptPair(excerptText, pageTranslations);
     const excerptTrans = normText(
-      (matchedExcerptPair ? matchedExcerptPair.dst : "") || mixedAbstractTrans || opts.excerptTrans
+      (excerptText &&
+        ((matchedExcerptPair ? matchedExcerptPair.dst : "") || mixedAbstractTrans || opts.excerptTrans)) ||
+        ""
     );
 
     // 作者、日期已放在标题区；正文里整块重复的作者行/日期行一并删掉

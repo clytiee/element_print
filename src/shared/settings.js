@@ -91,6 +91,7 @@ export const DEFAULT_SETTINGS = {
   marginLeft: 15,
   showUrl: false,
   showTime: false,
+  showExcerpt: true, // 标题下的摘要
   showHeader: true, // 页眉（Element Print / 摘自 域名）
   showFooter: true, // 页脚（品牌 + 页码）
   showQuote: true, // 页脚左下角随机显示一句名言
@@ -200,6 +201,7 @@ export const LAYOUT_KEYS = [
   "marginLeft",
   "showUrl",
   "showTime",
+  "showExcerpt",
   "showHeader",
   "showFooter",
   "showQuote",
@@ -461,6 +463,7 @@ function normalizeLayout(raw, base) {
   if (typeof raw.allowBreak === "boolean") base.allowBreak = raw.allowBreak;
   if (typeof raw.showUrl === "boolean") base.showUrl = raw.showUrl;
   if (typeof raw.showTime === "boolean") base.showTime = raw.showTime;
+  if (typeof raw.showExcerpt === "boolean") base.showExcerpt = raw.showExcerpt;
   if (typeof raw.showHeader === "boolean") base.showHeader = raw.showHeader;
   if (typeof raw.showFooter === "boolean") base.showFooter = raw.showFooter;
   if (typeof raw.showQuote === "boolean") base.showQuote = raw.showQuote;

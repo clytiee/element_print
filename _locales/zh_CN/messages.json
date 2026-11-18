@@ -70,6 +70,7 @@
 
   "showUrl": { "message": "显示网址" },
   "showTimestamp": { "message": "显示时间戳" },
+  "showExcerpt": { "message": "显示摘要" },
   "spanHead": { "message": "一级标题跨栏（双栏时）" },
   "allowBreak": { "message": "段落可跨页" },
   "allowBreakNote": { "message": "取消勾选则整段移到下一页" },

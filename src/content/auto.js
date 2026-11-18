@@ -75,51 +75,11 @@
     return "";
   }
 
-  // 页面上的导语/副标题（dek）：比 meta description 更适合当摘要——meta 文字翻译插件
-  // 不会翻译，永远没有译文；页面上的导语能跟着译文一起取到。
-  // 类名不一定可靠（不少站是 styled-components 哈希类名），所以按位置找：
-  // 标题之后、正文第一段之前的第一个短句块。
-  const DECK_CLASS_RE =
-    /(dek|subhead|subheading|standfirst|stand-first|summary|excerpt|lead|intro|description)/i;
-  const DECK_SKIP_CLASS_RE = /(byline|author|meta|time|date|share|tag|credit|nav|breadcrumb)/i;
-  const DECK_DATE_RE = /(\b(19|20)\d\d\b)|(月)|(日)|(\d{1,2}:\d{2})/;
-  const DECK_INLINE_TAGS = /^(A|B|I|EM|STRONG|SPAN|FONT|BR|SMALL|U|SUP|SUB|TIME)$/;
-
-  function deckText(node) {
-    const kids = Array.from(node.children || []);
-    if (kids.some((k) => !DECK_INLINE_TAGS.test(k.tagName))) return "";
-    const full = normText(node.textContent);
-    if (!full || full.length < 12 || full.length > 260) return "";
-    const marks = transMarks(node);
-    const dst = marks.length ? normText(marks.map((m) => m.textContent).join(" ")) : "";
-    return dst ? normText(full.replace(dst, "")) : full;
-  }
-
-  function readVisibleDeck(title) {
-    const api = window.ElementPrintExtract;
-    if (!api || typeof api.findTitleNode !== "function") return "";
-    const titleEl = api.findTitleNode(title || "");
-    if (!titleEl) return "";
-    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, null);
-    walker.currentNode = titleEl;
-    let node = titleEl;
-    let seen = 0;
-    while ((node = walker.nextNode()) && seen < 300) {
-      if (titleEl.contains(node)) continue;
-      seen += 1;
-      // 碰到正文第一段就停：标题区已经走完了
-      if (/^(P|BLOCKQUOTE)$/.test(node.tagName) && normText(node.textContent).length >= 40) break;
-      if (!/^(P|DIV|SPAN|H2|H3|H4|SECTION)$/.test(node.tagName)) continue;
-      const txt = deckText(node);
-      if (!txt) continue;
-      if (DECK_DATE_RE.test(txt)) continue;
-      if (/^(by|posted|updated|published|written)\b/i.test(txt)) continue;
-      const cls = String(node.className || "") + " " + String(node.id || "");
-      if (DECK_SKIP_CLASS_RE.test(cls)) continue;
-      // 有导语类名的最可信，直接收；没有类名的短句（如摘要副题）只在紧跟标题时收
-      if (DECK_CLASS_RE.test(cls) || seen <= 12) return txt;
-    }
-    return "";
+  // 摘要直接用 Readability 摘出来的 excerpt（它自己按 og:description / description / JSON-LD
+  // 选，都没有时用正文首段兜底并标记 excerptFallback）
+  function readabilityExcerpt(article) {
+    if (!article || article.excerptFallback) return "";
+    return normText(article.excerpt || "");
   }
 
   function sameText(src, wanted) {
@@ -582,12 +542,8 @@
     } catch (err) {
       /* 解析失败就只用启发式 */
     }
-    // Readability 在缺少 meta/JSON-LD 摘要时会用正文首段兜底；这类首段不作为摘要，避免和正文重复
-    const metaExcerpt = article.excerptFallback ? "" : article.excerpt || "";
-    // 页面上的导语块（副标题/dek）比 meta description 更值得当摘要：
-    // meta 里的文字翻译插件不会翻译，永远没有译文；页面上的导语则能跟着译文一起取到
-    const deckExcerpt = readVisibleDeck(article.title || titleText);
-    const excerptText = deckExcerpt || metaExcerpt;
+    // 摘要就取 Readability 的 excerpt（首段兜底的那种不算，避免和正文重复）
+    const excerptText = readabilityExcerpt(article);
     let payload;
     try {
       payload = await window.ElementPrintExtract.extract(holder, {
@@ -604,9 +560,6 @@
       });
     } finally {
       holder.remove();
-    }
-    if (article.title && article.title.trim()) {
-      payload.title = article.title.trim();
     }
 
     payload.debug = {

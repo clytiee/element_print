@@ -251,6 +251,11 @@ function pad(n) {
   return String(n).padStart(2, "0");
 }
 
+// 面板上字号、固定行距按 px 显示（打印仍用 pt，1pt = 4/3px @96dpi）
+function ptToPx(pt) {
+  return Math.round(Number(pt || 0) * 4 / 3 * 10) / 10;
+}
+
 function fmtTime(ts) {
   const d = new Date(ts || Date.now());
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -501,11 +506,12 @@ function syncExcerptTrans() {
   const src = $("excerpt");
   const text = (state.payload && state.payload.excerptTrans) || "";
   const srcText = (state.payload && state.payload.excerpt) || "";
+  const show = state.settings ? state.settings.showExcerpt !== false : true;
   const paired = biActive() || serialActive();
   el.textContent = text;
-  el.hidden = !text || !paired;
+  el.hidden = !text || !paired || !show;
   if (!src) return;
-  src.hidden = !srcText;
+  src.hidden = !srcText || !show;
   let note = src.querySelector(".ep-excerpt-note");
   if (paired && !text) {
     if (!note) {
@@ -570,7 +576,6 @@ function render(payload) {
 
   const excerpt = (payload.excerpt || "").trim();
   $("excerpt").textContent = excerpt;
-  $("excerpt").hidden = !excerpt;
   syncExcerptTrans();
 }
 
@@ -1002,6 +1007,7 @@ function applySettings() {
 
   $("metaUrl").hidden = !s.showUrl;
   $("metaTime").hidden = !s.showTime;
+  syncExcerptTrans(); // 摘要的显示开关
   // 译文来源角标（页面 / 缓存）：关掉后只留「待翻译」标记，不影响其它版式
   if (s.hideBiBadge) root.style.setProperty("--ep-bi-badge", "none");
   else root.style.removeProperty("--ep-bi-badge");
@@ -1235,6 +1241,8 @@ function syncControls() {
   $("showTime").checked = s.showTime;
   $("spanHead").checked = Boolean(s.spanHead);
   $("allowBreak").checked = Boolean(s.allowBreak);
+  $("showUrl").checked = Boolean(s.showUrl);
+  $("showExcerpt").checked = s.showExcerpt !== false;
   $("showHeader").checked = s.showHeader !== false;
   $("showFooter").checked = s.showFooter !== false;
   $("showQuote").checked = s.showQuote !== false;
@@ -1253,12 +1261,18 @@ function syncControls() {
   $("vBiSplit").textContent = s.biSplit + " / " + (100 - s.biSplit);
   $("biCacheMax").value = String(s.biCacheMax);
 
-  $("vFontSize").textContent = s.fontSize + "pt";
-  $("vTitleSize").textContent = s.titleSize + "pt";
-  $("vH1Size").textContent = s.h1Size + "pt";
-  $("vLineHeight").textContent = bodyLine.fixed ? s.lineHeightFixed + "pt" : s.lineHeight.toFixed(2) + "×";
-  $("vTitleLine").textContent = titleLine.fixed ? s.titleLineFixed + "pt" : s.titleLine.toFixed(2) + "×";
-  $("vH1Line").textContent = headLine.fixed ? s.h1LineFixed + "pt" : s.h1Line.toFixed(2) + "×";
+  $("vFontSize").textContent = ptToPx(s.fontSize) + "px";
+  $("vTitleSize").textContent = ptToPx(s.titleSize) + "px";
+  $("vH1Size").textContent = ptToPx(s.h1Size) + "px";
+  $("vLineHeight").textContent = bodyLine.fixed
+    ? ptToPx(s.lineHeightFixed) + "px"
+    : s.lineHeight.toFixed(2) + "×";
+  $("vTitleLine").textContent = titleLine.fixed
+    ? ptToPx(s.titleLineFixed) + "px"
+    : s.titleLine.toFixed(2) + "×";
+  $("vH1Line").textContent = headLine.fixed
+    ? ptToPx(s.h1LineFixed) + "px"
+    : s.h1Line.toFixed(2) + "×";
   $("vParaBefore").textContent = s.paraBefore + "px";
   $("vParaAfter").textContent = s.paraAfter + "px";
   $("vTitleMt").textContent = s.titleMt + "px";
@@ -3318,6 +3332,7 @@ function bindControls() {
 
   $("showUrl").addEventListener("change", (e) => update({ showUrl: e.target.checked }));
   $("showTime").addEventListener("change", (e) => update({ showTime: e.target.checked }));
+  $("showExcerpt").addEventListener("change", (e) => update({ showExcerpt: e.target.checked }));
   $("spanHead").addEventListener("change", (e) => update({ spanHead: e.target.checked }));
   $("allowBreak").addEventListener("change", (e) => update({ allowBreak: e.target.checked }));
   $("showHeader").addEventListener("change", (e) => update({ showHeader: e.target.checked }));
@@ -3741,7 +3756,7 @@ function openReadabilityDebug() {
   body { margin: 0; padding: 24px; font: 15px/1.75 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color: #16233a; background: #f5f7fa; }
   .meta { max-width: 760px; margin: 0 auto 18px; padding: 12px 16px; border-radius: 10px; background: #fff; box-shadow: 0 2px 10px rgba(15,23,42,.08); }
   .meta div { display: flex; gap: 10px; padding: 3px 0; }
-  .meta span { flex: 0 0 56px; color: #64748b; }
+  .meta span { flex: 0 0 auto; min-width: 56px; white-space: nowrap; color: #64748b; }
   main { max-width: 760px; margin: 0 auto; padding: 22px 26px; border-radius: 12px; background: #fff; box-shadow: 0 2px 12px rgba(15,23,42,.08); }
   main img { max-width: 100%; }
 </style>
