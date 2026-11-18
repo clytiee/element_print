@@ -1315,36 +1315,72 @@
     }
   }
 
-  async function remoteFontFaceRules() {
-    const links = Array.from(document.querySelectorAll('link[rel="stylesheet"][href]'));
-    const out = [];
-    let fetched = 0;
-    for (const link of links) {
-      if (fetched >= 8) break;
+  // 跨域外链样式表里的 @font-face：能取到文本就自己解析，取不到（多数字体 CDN 不给 CORS）
+  // 就把地址记下来，交给预览页用 <link> 自己去加载。只收字体类站点，避免把对方整站 CSS 搬进来
+  async function remoteFontFaceRules(remoteOut, diag) {
+    const links = Array.from(document.querySelectorAll('link[rel="stylesheet"][href]')).slice(0, 12);
+    const note = (href, status) => {
+      if (diag) {
+        diag.remote = diag.remote || [];
+        diag.remote.push(`${href} → ${status}`);
+      }
+    };
+    const jobs = links.map(async (link) => {
       const href = link.href;
-      if (!href || href.startsWith("data:")) continue;
+      if (!href || href.startsWith("data:")) return null;
+      let cross = false;
       try {
-        if (new URL(href).origin === location.origin) continue; // 同源的上面已经读到了
+        cross = new URL(href).origin !== location.origin;
       } catch (err) {
-        continue;
+        note(href, "地址异常");
+        return null;
       }
+      if (!cross) {
+        note(href, "同源（已直接读取）");
+        return null;
+      }
+      const fontHost = /fonts?\.|typekit|googleapis\.com\/css|bunny\./i.test(href);
       try {
-        const res = await fetch(href, { credentials: "omit", cache: "force-cache" });
-        if (!res.ok) continue;
+        const opts = { credentials: "omit", cache: "force-cache" };
+        if (typeof AbortSignal !== "undefined" && AbortSignal.timeout) {
+          opts.signal = AbortSignal.timeout(4000);
+        }
+        const res = await fetch(href, opts);
+        if (!res.ok) {
+          note(href, "取不到（" + res.status + "）");
+          return fontHost ? { remote: href } : null;
+        }
         const text = await res.text();
-        fetched += 1;
-        if (text.length > 2 * 1024 * 1024 || !/@font-face/i.test(text)) continue;
-        out.push(...parseFontFaceRules(text));
+        if (text.length > 2 * 1024 * 1024 || !/@font-face/i.test(text)) {
+          note(href, "无 @font-face");
+          return fontHost ? { remote: href } : null;
+        }
+        const parsed = parseFontFaceRules(text);
+        note(href, "解析出 " + parsed.length + " 条 @font-face");
+        return { rules: parsed };
       } catch (err) {
-        /* 对方没开 CORS 就取不到，跳过 */
+        /* 对方没开 CORS 就取不到，字体类地址留到预览页自行加载 */
+        note(href, "CORS 拒绝");
+        return fontHost ? { remote: href } : null;
       }
-    }
+    });
+    const results = await Promise.all(jobs);
+    const out = [];
+    results.forEach((item) => {
+      if (!item) return;
+      if (item.remote) {
+        if (remoteOut) remoteOut.push(item.remote);
+      } else if (item.rules) {
+        out.push(...item.rules);
+      }
+    });
     return out;
   }
 
-  async function collectWebFonts(stacks) {
+  async function collectWebFonts(stacks, remoteOut, diag) {
     const wanted = new Set();
     stacks.forEach((stack) => fontFamilies(stack).forEach((name) => wanted.add(name.toLowerCase())));
+    if (diag) diag.wanted = [...wanted];
     if (!wanted.size) return [];
 
     const rules = [];
@@ -1356,13 +1392,22 @@
     };
     for (const sheet of Array.from(document.styleSheets || [])) {
       // 跨域样式表读不到规则内容，稍后用 fetch 取 CSS 文本补上
+      const before = rules.length;
+      let status = "✓";
       try {
         visit(sheet.cssRules);
       } catch (err) {
+        status = "×（跨域）";
         /* 忽略：拿不到字体地址 */
       }
+      if (diag) {
+        diag.sheets = diag.sheets || [];
+        if (diag.sheets.length < 14) {
+          diag.sheets.push(`${sheet.href || "(内联样式)"} → ${status} ${rules.length - before} 条`);
+        }
+      }
     }
-    rules.push(...(await remoteFontFaceRules()));
+    rules.push(...(await remoteFontFaceRules(remoteOut, diag)));
 
     // 正文字体家族优先、正体优先、400 字重优先：内嵌名额有限时，
     // 先保证正文能拿到它真正的常规字重，而不是标题的粗体把名额占掉
@@ -1406,57 +1451,69 @@
       return weightRank(a.weight) - weightRank(b.weight);
     });
 
-    const faces = [];
-    const seen = new Set();
-    let total = 0;
-    for (const candidate of candidates) {
-      if (faces.length >= FONT_FACE_LIMIT) break;
+    // 并发取字体：一个页面动辄十几个字体文件，串行 await 会拖到十几秒
+    const jobs = candidates.slice(0, FONT_FACE_LIMIT * 3).map(async (candidate) => {
       const { rule, family, weight, style, pick } = candidate;
-      const faceKey = `${family.toLowerCase()}|${weight}|${style}`;
-      if (seen.has(faceKey)) continue;
+      const unicodeRange = rule.style.getPropertyValue("unicode-range") || "";
       // 站点常把字体直接 base64 内嵌在 CSS 里（data:font/woff2;base64,…），
       // 预览页没有那份 CSS，这种也得原样搬过去，否则家族缺失会回退到别家字体
-      const inline = pick.url.startsWith("data:");
-      const faceSrc = inline ? pick.url : null;
-      const inlineBytes = inline ? Math.round((pick.url.length - pick.url.indexOf("base64,") - 7) * 0.75) : 0;
-      if (inline && inlineBytes > FONT_FILE_MAX) continue;
-      if (inline && total + inlineBytes > FONT_TOTAL_MAX) continue;
+      if (pick.url.startsWith("data:")) {
+        const bytes = Math.round((pick.url.length - pick.url.indexOf("base64,") - 7) * 0.75);
+        if (bytes > FONT_FILE_MAX) return null;
+        return { family, weight, style, unicodeRange, src: pick.url, bytes };
+      }
       try {
-        if (inline) {
-          total += inlineBytes;
-          seen.add(faceKey);
-          faces.push({
-            family,
-            weight,
-            style,
-            unicodeRange: rule.style.getPropertyValue("unicode-range") || "",
-            src: faceSrc,
-          });
-          continue;
-        }
         const url = new URL(pick.url, document.baseURI).href;
-        const res = await fetch(url, { credentials: "omit", cache: "force-cache" });
-        if (!res.ok) continue;
+        const opts = { credentials: "omit", cache: "force-cache" };
+        if (typeof AbortSignal !== "undefined" && AbortSignal.timeout) {
+          opts.signal = AbortSignal.timeout(4000);
+        }
+        const res = await fetch(url, opts);
+        if (!res.ok) return null;
         const buf = await res.arrayBuffer();
-        if (buf.byteLength > FONT_FILE_MAX) continue;
-        if (total + buf.byteLength > FONT_TOTAL_MAX) continue;
-        total += buf.byteLength;
-        seen.add(faceKey);
+        if (buf.byteLength > FONT_FILE_MAX) return null;
         const mime = pick.format.includes("woff2")
           ? "font/woff2"
           : pick.format.includes("woff")
             ? "font/woff"
             : "application/octet-stream";
-        faces.push({
+        return {
           family,
           weight,
           style,
-          unicodeRange: rule.style.getPropertyValue("unicode-range") || "",
+          unicodeRange,
           src: `data:${mime};base64,${bytesToBase64(buf)}`,
-        });
+          bytes: buf.byteLength,
+        };
       } catch (err) {
         /* 单个字体取不到不影响整体 */
+        return null;
       }
+    });
+
+    const results = await Promise.all(jobs);
+    if (diag) {
+      // 规则里的家族名：家族对不上时，一眼能看出网页到底声明了哪些名字
+      diag.ruleFamilies = Array.from(
+        new Set(
+          rules.map((r) => (r.style.getPropertyValue("font-family") || "").trim()).filter(Boolean)
+        )
+      ).slice(0, 20);
+      diag.candidates = candidates.length;
+    }
+    const faces = [];
+    const seen = new Set();
+    let total = 0;
+    for (const face of results) {
+      if (!face) continue;
+      if (faces.length >= FONT_FACE_LIMIT) break;
+      const faceKey = `${face.family.toLowerCase()}|${face.weight}|${face.style}`;
+      if (seen.has(faceKey)) continue;
+      if (total + face.bytes > FONT_TOTAL_MAX) continue;
+      total += face.bytes;
+      seen.add(faceKey);
+      const { bytes, ...keep } = face;
+      faces.push(keep);
     }
     return faces;
   }
@@ -1568,18 +1625,32 @@
 
     // 整页提取时正文容器是离屏副本，读不到页面样式，由 auto.js 事先算好传进来
     const pageFont = opts.pageFont || readPageFont(el, title);
+    const timing = {};
     if (pageFont && !pageFont.faces) {
-      pageFont.faces = await collectWebFonts([
-        pageFont.body && pageFont.body.stack,
-        pageFont.title && pageFont.title.stack,
-        ...["h1", "h2", "h3", "h4", "h5", "h6"].map(
-          (tag) => pageFont.heads && pageFont.heads[tag] && pageFont.heads[tag].stack
-        ),
-        pageFont.quote && pageFont.quote.stack,
-      ]);
+      const t0 = performance.now();
+      const remoteStyles = [];
+      const diag = {};
+      pageFont.faces = await collectWebFonts(
+        [
+          pageFont.body && pageFont.body.stack,
+          pageFont.title && pageFont.title.stack,
+          ...["h1", "h2", "h3", "h4", "h5", "h6"].map(
+            (tag) => pageFont.heads && pageFont.heads[tag] && pageFont.heads[tag].stack
+          ),
+          pageFont.quote && pageFont.quote.stack,
+        ],
+        remoteStyles,
+        diag
+      );
+      // 取不到正文的字体 CSS：地址带出去，预览页用自己的 <link> 加载
+      if (remoteStyles.length) pageFont.remoteStyles = remoteStyles.slice(0, 4);
+      pageFont.diag = diag;
+      timing.fontsMs = Math.round(performance.now() - t0);
     }
 
+    const tImg = performance.now();
     const imgStats = await inlineImages(clone);
+    timing.imagesMs = Math.round(performance.now() - tImg);
 
     const pageMeta = readPageMeta();
     const visibleDate = extractDateText(opts.author) || readVisibleDate();
@@ -1672,6 +1743,7 @@
       bytes: html.length,
       imagesExternal: imgStats ? imgStats.external : 0,
       pageFont: pageFont || null,
+      timing,
     };
   }
 

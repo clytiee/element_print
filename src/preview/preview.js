@@ -702,14 +702,44 @@ function injectPageFontFaces() {
   let style = document.getElementById("ep-page-fonts");
   if (!css) {
     if (style) style.textContent = "";
-    return;
+  } else {
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "ep-page-fonts";
+      document.head.appendChild(style);
+    }
+    if (style.textContent !== css) style.textContent = css;
   }
-  if (!style) {
-    style = document.createElement("style");
-    style.id = "ep-page-fonts";
-    document.head.appendChild(style);
-  }
-  if (style.textContent !== css) style.textContent = css;
+  injectRemoteFontLinks();
+}
+
+// 字体 CSS 读不到内容时（多数字体 CDN 不开 CORS），直接挂上原样式表地址让浏览器自己加载
+function remoteFontLinksHtml() {
+  const links = (state.payload && state.payload.pageFont && state.payload.pageFont.remoteStyles) || [];
+  return links
+    .map((href) => `<link rel="stylesheet" href="${esc(href)}">`)
+    .join("\n");
+}
+
+function injectRemoteFontLinks() {
+  const links = (state.payload && state.payload.pageFont && state.payload.pageFont.remoteStyles) || [];
+  const box = document.getElementById("ep-remote-fonts") || (() => {
+    const node = document.createElement("div");
+    node.id = "ep-remote-fonts";
+    node.hidden = true;
+    document.head.appendChild(node);
+    return node;
+  })();
+  const wanted = links.join("|");
+  if (box.dataset.hrefs === wanted) return;
+  box.dataset.hrefs = wanted;
+  box.innerHTML = "";
+  links.forEach((href) => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    box.appendChild(link);
+  });
 }
 
 // 正文字体栈：选了「自动」且正文是西文时，换成纯拉丁衬线，不挂中文兜底
@@ -1188,6 +1218,7 @@ function syncControls() {
   $("bodyFont").value = s.bodyFont || "auto";
   $("titleFont").value = s.titleFont || "inherit";
   $("h1Font").value = s.h1Font || "inherit";
+  syncFontSelectTitles();
   syncWeightSeg("segBodyWeight", "bodyWeight");
   syncWeightSeg("segTitleWeight", "titleWeight");
   syncWeightSeg("segH1Weight", "h1Weight");
@@ -3718,6 +3749,7 @@ async function buildExportHtml() {
 <style>
 ${css}
 ${fontFaces}
+${remoteFontLinksHtml()}
 :root{${vars};--ep-scale:1}
 body{margin:0;background:#fff}
 .ep-sheet{margin:0 auto}
@@ -3737,6 +3769,7 @@ ${sheetHtml}
 
 function openReadabilityDebug() {
   const debug = state.payload && state.payload.debug;
+  const pf = (state.payload && state.payload.pageFont) || {};
   if (!debug || !debug.html) {
     showToast(t("noReadabilityData"));
     return;
@@ -3753,6 +3786,34 @@ function openReadabilityDebug() {
     [t("debugDate"), debug.publishedTime],
     [t("debugExcerpt"), debug.excerpt],
     [t("debugFallback"), debug.excerptFallback ? t("debugYes") : t("debugNo")],
+    [t("debugBodyStack"), (pf.body && pf.body.stack) || ""],
+    [t("debugPageColors"), [
+      pf.body && pf.body.color ? `正文 ${pf.body.color}` : "",
+      pf.title && pf.title.color ? `标题 ${pf.title.color}` : "",
+    ].filter(Boolean).join(" · ")],
+    [t("debugTitleStack"), (pf.title && pf.title.stack) || ""],
+    [t("debugFaces"), (pf.faces || [])
+      .map((f) => `${f.family} | ${f.weight} | ${f.style} | ${String(f.src || "").slice(0, 40)}`)
+      .join("\n")],
+    [t("debugRemoteStyles"), (pf.remoteStyles || []).join("\n")],
+    [t("debugFontDiag"), (() => {
+      const dg = pf.diag;
+      if (!dg) return "";
+      const lines = [];
+      if (dg.wanted) lines.push("需要家族: " + dg.wanted.join(", "));
+      if (dg.ruleFamilies) lines.push("规则里的家族: " + dg.ruleFamilies.join(", "));
+      if (Number.isFinite(dg.candidates)) lines.push("候选 @font-face: " + dg.candidates);
+      (dg.sheets || []).forEach((s) => lines.push("样式表 " + s));
+      (dg.remote || []).forEach((s) => lines.push("外链 " + s));
+      return lines.join("\n");
+    })()],
+    [t("debugTiming"), (() => {
+      const tm = (state.payload && state.payload.timing) || {};
+      return ["readabilityMs", "fontsMs", "imagesMs", "totalMs"]
+        .filter((k) => Number.isFinite(tm[k]))
+        .map((k) => `${k.replace(/Ms$/, "")} ${Math.round(tm[k])}ms`)
+        .join(" · ");
+    })()],
   ].filter(([, value]) => String(value || "").trim());
   const metaHtml = rows
     .map(([key, value]) => `<div><span class="k">${esc(key)}</span><span class="v">${esc(value)}</span></div>`)
@@ -3827,16 +3888,49 @@ function fontKeyVisible(key) {
   return LATIN_FONT_KEYS.includes(key);
 }
 
+// 网页字体名：取字体栈里第一个家族，用来在「网页原字体」后面标注具体是哪一款
+function stackFamilyName(stack) {
+  const first = String(stack || "").split(",")[0].replace(/["']/g, "").trim();
+  return first;
+}
+
+function pageFontName(kind) {
+  const pf = (state.payload && state.payload.pageFont) || {};
+  if (kind === "title") {
+    return stackFamilyName((pf.title && pf.title.stack) || (pf.body && pf.body.stack));
+  }
+  if (kind === "h1") {
+    return stackFamilyName((pf.heads && pf.heads.h1 && pf.heads.h1.stack) || (pf.body && pf.body.stack));
+  }
+  return stackFamilyName(pf.body && pf.body.stack);
+}
+
 // 字体下拉的选项直接由 FONT_PRESETS 生成，避免两处各写一份
 function fillFontSelects() {
   const entries = Object.entries(FONT_PRESETS).filter(([key]) => fontKeyVisible(key));
-  const options = entries
-    .map(([key]) => `<option value="${key}">${esc(fontLabel(key))}</option>`)
-    .join("");
-  $("bodyFont").innerHTML = options;
-  const withInherit = `<option value="inherit">${esc(t("inheritBody"))}</option>` + options;
-  $("titleFont").innerHTML = withInherit;
-  $("h1Font").innerHTML = withInherit;
+  const optionsFor = (kind) =>
+    entries
+      .map(([key]) => {
+        const name = key === "page" ? pageFontName(kind) : "";
+        const label = name ? `${fontLabel(key)}（${name}）` : fontLabel(key);
+        return `<option value="${key}">${esc(label)}</option>`;
+      })
+      .join("");
+  $("bodyFont").innerHTML = optionsFor("body");
+  const withInherit = (html) => `<option value="inherit">${esc(t("inheritBody"))}</option>` + html;
+  $("titleFont").innerHTML = withInherit(optionsFor("title"));
+  $("h1Font").innerHTML = withInherit(optionsFor("h1"));
+  syncFontSelectTitles();
+}
+
+// 下拉收起来时文本可能被截断，把完整文案挂到 title 上，悬浮可见
+function syncFontSelectTitles() {
+  ["bodyFont", "titleFont", "h1Font"].forEach((id) => {
+    const sel = $(id);
+    if (!sel) return;
+    const opt = sel.options[sel.selectedIndex];
+    sel.title = opt ? opt.text : "";
+  });
 }
 
 async function init() {
@@ -3873,6 +3967,8 @@ async function init() {
 
   state.payload = payload;
   chrome.storage.local.remove(STORAGE_KEY).catch(() => {});
+  // 读过 payload 后重填字体下拉，才能在「网页原字体」后面标出本页真正的字体名
+  fillFontSelects();
 
   // 每次打开都用「套装默认值 + 本页网页值 + 用户改过的项」重建设置，
   // 不带上一页残留；原版跟随网页时，本页的字体、字号、行距、段前段后由此生效

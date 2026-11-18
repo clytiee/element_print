@@ -354,9 +354,10 @@
     }
     // 文字都对不上时退回文档里第一个 h1/h2：标题字体样式几乎总写在它身上
     if (!titleNode) titleNode = document.querySelector("h1") || document.querySelector("h2");
-    // 正文：先用 Readability 抽出的真实正文段落回原页面找同文段落，找到就以它为准；
-    // 找不到再退到「正文容器里字数最多的字号组合」，最后退到整页第一个有字段落
-    let bodyNode = null;
+    // 正文：先用 Readability 抽出的真实正文段落回原页面找同文段落。
+    // 单个样本可能撞上摘要、灰色说明段这类「同文但不是主体」的段落，
+    // 所以把所有样本匹配到的节点收在一起，再按字数最多的那组样式取代表
+    let matchedBodyNodes = [];
     if (samples && samples.length) {
       const all = document.querySelectorAll("p, li, dd, dt, blockquote");
       for (const sample of samples) {
@@ -365,12 +366,12 @@
           const txt = normText(node.textContent);
           return txt.length >= 30 && (txt.slice(0, 40) === head || txt.includes(head));
         });
-        if (match) {
-          bodyNode = match;
-          break;
-        }
+        if (match && !matchedBodyNodes.includes(match)) matchedBodyNodes.push(match);
       }
     }
+    let bodyNode = matchedBodyNodes.length
+      ? pickBodyParagraph(matchedBodyNodes, matchedBodyNodes[0])
+      : null;
     if (!bodyNode) {
       const containers = document.querySelectorAll(
         "article p, main p, [class*=content] p, [class*=article] p, [class*=post] p"
@@ -481,6 +482,7 @@
 
   async function run() {
     toast(t("detecting"), true);
+    const tRun = performance.now();
 
     // Readability 会删脚本、改候选节点，先克隆文档，避免动到当前页面
     let article;
@@ -497,6 +499,7 @@
     if (!article || !article.content || !(article.textContent || "").trim()) {
       throw new Error(t("articleDetectFailed"));
     }
+    const tReadability = Math.round(performance.now() - tRun);
 
     const holder = document.createElement("div");
     holder.innerHTML = article.content;
@@ -582,6 +585,12 @@
       excerpt: excerptText,
       excerptFallback: Boolean(article.excerptFallback),
       html: contentHtml,
+    };
+    // 抽取各阶段耗时，debug 面板里能看出慢在哪
+    payload.timing = {
+      ...(payload.timing || {}),
+      readabilityMs: tReadability,
+      totalMs: Math.round(performance.now() - tRun),
     };
 
     await window.ElementPrintExtract.savePayload(payload);

@@ -584,6 +584,9 @@ body {
   -webkit-appearance: none;
   appearance: none;
   cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ep-select:focus {
