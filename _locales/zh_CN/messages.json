@@ -1,7 +1,7 @@
 {
   "extName": { "message": "Element Print" },
   "previewTitle": { "message": "Element Print" },
-  "extDesc": { "message": "离开发光屏幕 —— 把网页变成你喜欢的读物，无论是纸张还是电纸书。" },
+  "extDesc": { "message": "离开发光屏幕，在你喜欢的介质上阅读：无论是纸张还是电纸书。一键把网页变成排版精良、适宜阅读的 PDF。" },
   "actionTitle": { "message": "Element Print · 选取元素 或 右键图标开启整页提取" },
 
   "panelTitle": { "message": "版式设置" },

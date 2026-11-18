@@ -1,7 +1,7 @@
 {
   "extName": { "message": "Element Print" },
   "previewTitle": { "message": "Element Print · Print preview" },
-  "extDesc": { "message": "Off the glowing screen — turn web pages into something you enjoy reading, on paper or on e-ink." },
+  "extDesc": { "message": "Off the glowing screen, read on paper or e-ink. Turn any web page into a clean, beautifully formatted PDF — in one click." },
   "actionTitle": { "message": "Element Print · Pick an element, or right-click the icon to extract the whole article" },
 
   "panelTitle": { "message": "Layout settings" },
