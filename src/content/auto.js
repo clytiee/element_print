@@ -56,7 +56,7 @@
   }
 
   // Readability 只把正文放进提取容器；标题自带的中文译文要回原页面标题节点里取
-  function readTitleTranslation(title) {
+  function readTitleTranslation(title, probe) {
     const wanted = normText(title);
     if (!wanted) return "";
     const candidates = Array.from(
@@ -65,12 +65,21 @@
     for (const el of candidates) {
       const marks = transMarks(el);
       if (!marks.length) continue;
-      const dst = normText(marks[marks.length - 1].textContent);
-      const src = normText(normText(el.textContent).replace(dst, ""));
-      const same =
-        src === wanted ||
-        (src.length >= 8 && wanted.length >= 8 && (src.includes(wanted) || wanted.includes(src)));
-      if (same) return dst;
+      // 逐条比对：译文必须和它所在节点的原文对上，才认定是标题的译文。
+      // 只取最后一个标记会踩到「标题容器里还包着发布时间」这类结构，把时间译文当成标题译文
+      for (const mark of marks) {
+        const dst = normText(mark.textContent);
+        if (!dst) continue;
+        const host = mark.parentElement || el;
+        const src = normText(normText(host.textContent).replace(dst, ""));
+        const same =
+          src === wanted ||
+          (src.length >= 8 && wanted.length >= 8 && (src.includes(wanted) || wanted.includes(src)));
+        if (probe) {
+          probe.push({ host: host.tagName, cls: host.className || "", src: src.slice(0, 80), dst: dst.slice(0, 80), same });
+        }
+        if (same) return dst;
+      }
     }
     return "";
   }
@@ -544,13 +553,14 @@
     }
     // 摘要就取 Readability 的 excerpt（首段兜底的那种不算，避免和正文重复）
     const excerptText = readabilityExcerpt(article);
+    const titleProbe = [];
     let payload;
     try {
       payload = await window.ElementPrintExtract.extract(holder, {
         sourceUrl: location.href,
         title: titleText,
         pageTitle: titleText,
-        titleTrans: readTitleTranslation(article.title),
+        titleTrans: readTitleTranslation(article.title, titleProbe),
         author: article.byline || "",
         publishedTime: article.publishedTime || "",
         excerpt: excerptText,
@@ -565,6 +575,8 @@
     payload.debug = {
       source: "readability",
       title: article.title || "",
+      titleTrans: payload.titleTrans || "",
+      titleTransProbe: titleProbe,
       byline: article.byline || "",
       publishedTime: article.publishedTime || "",
       excerpt: excerptText,

@@ -3743,13 +3743,19 @@ function openReadabilityDebug() {
   }
   const rows = [
     [t("title"), debug.title],
+    [t("debugTitleTrans"), debug.titleTrans],
+    [t("debugTitleTransProbe"), (debug.titleTransProbe || []).length
+      ? debug.titleTransProbe
+          .map((b) => `${b.same ? "✓" : "×"} ${b.host}${b.cls ? "." + String(b.cls).split(" ")[0] : ""} | ${b.src} → ${b.dst}`)
+          .join("\n")
+      : ""],
     [t("debugByline"), debug.byline],
     [t("debugDate"), debug.publishedTime],
     [t("debugExcerpt"), debug.excerpt],
     [t("debugFallback"), debug.excerptFallback ? t("debugYes") : t("debugNo")],
   ].filter(([, value]) => String(value || "").trim());
   const metaHtml = rows
-    .map(([key, value]) => `<div><span>${esc(key)}</span>${esc(value)}</div>`)
+    .map(([key, value]) => `<div><span class="k">${esc(key)}</span><span class="v">${esc(value)}</span></div>`)
     .join("");
   const doc = `<!doctype html>
 <html lang="${state.lang === "en" ? "en" : "zh-CN"}">
@@ -3761,6 +3767,7 @@ function openReadabilityDebug() {
   .meta { max-width: 760px; margin: 0 auto 18px; padding: 12px 16px; border-radius: 10px; background: #fff; box-shadow: 0 2px 10px rgba(15,23,42,.08); }
   .meta div { display: flex; gap: 10px; padding: 3px 0; }
   .meta span { flex: 0 0 auto; min-width: 56px; white-space: nowrap; color: #64748b; }
+  .meta .v { flex: 1 1 auto; min-width: 0; white-space: pre-wrap; color: #16233a; }
   main { max-width: 760px; margin: 0 auto; padding: 22px 26px; border-radius: 12px; background: #fff; box-shadow: 0 2px 12px rgba(15,23,42,.08); }
   main img { max-width: 100%; }
 </style>

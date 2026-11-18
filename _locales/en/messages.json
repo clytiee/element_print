@@ -173,6 +173,8 @@
   "debugPopupBlocked": { "message": "The debug window was blocked by the browser" },
   "debugTitle": { "message": "Readability debug" },
   "debugByline": { "message": "Author" },
+  "debugTitleTrans": { "message": "Title translation" },
+  "debugTitleTransProbe": { "message": "Title translation candidates" },
   "debugDate": { "message": "Date" },
   "debugExcerpt": { "message": "Excerpt" },
   "debugFallback": { "message": "Excerpt fallback" },

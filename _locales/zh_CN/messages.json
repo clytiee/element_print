@@ -173,6 +173,8 @@
   "debugPopupBlocked": { "message": "调试弹窗被浏览器拦截" },
   "debugTitle": { "message": "Readability 调试" },
   "debugByline": { "message": "作者" },
+  "debugTitleTrans": { "message": "标题译文" },
+  "debugTitleTransProbe": { "message": "标题译文候选" },
   "debugDate": { "message": "日期" },
   "debugExcerpt": { "message": "摘要" },
   "debugFallback": { "message": "摘要兜底" },
