@@ -37,7 +37,10 @@
 
   function transMarks(el) {
     const attrRe = /^(data[-_](deep)?translat|data[-_]trans$)/i;
-    const classRe = /(^|\s)(translated|translation|deep-trans|trans-text)\b/i;
+    // 与 extract.js 保持一致：Edge 版 DeepTranslate 把译文装在 bt-copied-node-wrapper /
+    // bt-target-wrapper 里，外层 bt-translate-status 那个元素原译文都在，不能当标记
+    const classRe =
+      /(^|\s)(translated|translation|deep-trans|trans-text|bt-copied-node-wrapper|bt-target-wrapper|bt-target-block)\b/i;
     const out = [];
     const walk = (node) => {
       Array.from(node.children || []).forEach((child) => {
@@ -72,6 +75,53 @@
     return "";
   }
 
+  // 页面上的导语/副标题（dek）：比 meta description 更适合当摘要——meta 文字翻译插件
+  // 不会翻译，永远没有译文；页面上的导语能跟着译文一起取到。
+  // 类名不一定可靠（不少站是 styled-components 哈希类名），所以按位置找：
+  // 标题之后、正文第一段之前的第一个短句块。
+  const DECK_CLASS_RE =
+    /(dek|subhead|subheading|standfirst|stand-first|summary|excerpt|lead|intro|description)/i;
+  const DECK_SKIP_CLASS_RE = /(byline|author|meta|time|date|share|tag|credit|nav|breadcrumb)/i;
+  const DECK_DATE_RE = /(\b(19|20)\d\d\b)|(月)|(日)|(\d{1,2}:\d{2})/;
+  const DECK_INLINE_TAGS = /^(A|B|I|EM|STRONG|SPAN|FONT|BR|SMALL|U|SUP|SUB|TIME)$/;
+
+  function deckText(node) {
+    const kids = Array.from(node.children || []);
+    if (kids.some((k) => !DECK_INLINE_TAGS.test(k.tagName))) return "";
+    const full = normText(node.textContent);
+    if (!full || full.length < 12 || full.length > 260) return "";
+    const marks = transMarks(node);
+    const dst = marks.length ? normText(marks.map((m) => m.textContent).join(" ")) : "";
+    return dst ? normText(full.replace(dst, "")) : full;
+  }
+
+  function readVisibleDeck(title) {
+    const api = window.ElementPrintExtract;
+    if (!api || typeof api.findTitleNode !== "function") return "";
+    const titleEl = api.findTitleNode(title || "");
+    if (!titleEl) return "";
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, null);
+    walker.currentNode = titleEl;
+    let node = titleEl;
+    let seen = 0;
+    while ((node = walker.nextNode()) && seen < 300) {
+      if (titleEl.contains(node)) continue;
+      seen += 1;
+      // 碰到正文第一段就停：标题区已经走完了
+      if (/^(P|BLOCKQUOTE)$/.test(node.tagName) && normText(node.textContent).length >= 40) break;
+      if (!/^(P|DIV|SPAN|H2|H3|H4|SECTION)$/.test(node.tagName)) continue;
+      const txt = deckText(node);
+      if (!txt) continue;
+      if (DECK_DATE_RE.test(txt)) continue;
+      if (/^(by|posted|updated|published|written)\b/i.test(txt)) continue;
+      const cls = String(node.className || "") + " " + String(node.id || "");
+      if (DECK_SKIP_CLASS_RE.test(cls)) continue;
+      // 有导语类名的最可信，直接收；没有类名的短句（如摘要副题）只在紧跟标题时收
+      if (DECK_CLASS_RE.test(cls) || seen <= 12) return txt;
+    }
+    return "";
+  }
+
   function sameText(src, wanted) {
     if (!src || !wanted) return false;
     if (src === wanted || src.includes(wanted) || wanted.includes(src)) return true;
@@ -86,7 +136,7 @@
   function readAbstractTranslation() {
     const scopes = Array.from(
       document.querySelectorAll(
-        ".hlFld-Abstract, .abstractSection, .abstractInFull, [class*=abstract], [class*=excerpt], [class*=summary]"
+        ".hlFld-Abstract, .abstractSection, .abstractInFull, [class*=abstract], [class*=excerpt], [class*=summary], [class*=dek], [class*=standfirst]"
       )
     );
     for (const el of scopes) {
@@ -120,7 +170,7 @@
       const marks = transMarks(el);
       if (!marks.length) continue;
       const dst = normText(marks.map((m) => m.textContent).join(" "));
-      const src = normText(el.textContent.replace(dst, ""));
+      const src = normText(normText(el.textContent).replace(dst, ""));
       if (!src.length) continue;
       const lenRatio = Math.max(src.length, wanted.length) / Math.min(src.length, wanted.length);
       if (lenRatio <= 2 && sameText(src, wanted)) return dst;
@@ -148,6 +198,17 @@
       cls: Array.from(el.classList || []).slice().sort().join("."),
       text: normText(el.textContent),
     };
+  }
+
+  // 正文里第一段实义文字之前已有图片，就认为首图已经在了，不再补题图
+  function hasLeadMedia(root) {
+    const media = root.querySelector("figure, img, picture");
+    if (!media) return false;
+    const firstP = Array.from(root.querySelectorAll("p")).find(
+      (p) => normText(p.textContent).length >= 40
+    );
+    if (!firstP) return true;
+    return Boolean(media.compareDocumentPosition(firstP) & Node.DOCUMENT_POSITION_FOLLOWING);
   }
 
   // Readability 副本脱离原文档后读不到外部 CSS；回原页面实时元素取计算样式并打标记
@@ -430,6 +491,24 @@
 
     const holder = document.createElement("div");
     holder.innerHTML = article.content;
+    // Readability 会丢掉正文容器之外的首图（标题上方的题图及图注），这里补回正文开头。
+    // 正文本身已经有靠前的图就不动，避免重复。
+    let contentHtml = article.content || "";
+    try {
+      if (!hasLeadMedia(holder)) {
+        const leadHtml = window.ElementPrintExtract.leadImage(
+          article.title || document.title || ""
+        );
+        // 同一张图正文里已有（文件名相同）就不重复插入
+        const leadName = (/src="[^"]*\/([^"\/?#]+)/.exec(leadHtml || "") || [])[1];
+        if (leadHtml && (!leadName || !contentHtml.includes(leadName))) {
+          holder.insertAdjacentHTML("afterbegin", leadHtml);
+          contentHtml = leadHtml + contentHtml;
+        }
+      }
+    } catch (err) {
+      /* 补图失败不影响正文提取 */
+    }
     // 脱离文档树时 getComputedStyle 只能拿到默认 block；临时挂到离屏位置，保留页面原始 inline 显示方式
     holder.style.cssText =
       "position:fixed;left:-99999px;top:0;visibility:hidden;pointer-events:none;";
@@ -464,7 +543,11 @@
       /* 解析失败就只用启发式 */
     }
     // Readability 在缺少 meta/JSON-LD 摘要时会用正文首段兜底；这类首段不作为摘要，避免和正文重复
-    const excerptText = article.excerptFallback ? "" : article.excerpt || "";
+    const metaExcerpt = article.excerptFallback ? "" : article.excerpt || "";
+    // 页面上的导语块（副标题/dek）比 meta description 更值得当摘要：
+    // meta 里的文字翻译插件不会翻译，永远没有译文；页面上的导语则能跟着译文一起取到
+    const deckExcerpt = readVisibleDeck(article.title || titleText);
+    const excerptText = deckExcerpt || metaExcerpt;
     let payload;
     try {
       payload = await window.ElementPrintExtract.extract(holder, {
@@ -493,7 +576,7 @@
       publishedTime: article.publishedTime || "",
       excerpt: excerptText,
       excerptFallback: Boolean(article.excerptFallback),
-      html: article.content || "",
+      html: contentHtml,
     };
 
     await window.ElementPrintExtract.savePayload(payload);

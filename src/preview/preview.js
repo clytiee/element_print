@@ -494,11 +494,30 @@ function syncTitleTrans() {
 }
 
 // 摘要译文：跟标题译文一样，只在对照 / 串行翻译视图里出现
+// 摘要往往只是 meta description（翻译插件不会翻译 meta），这种没有译文的摘要
+// 在翻译视图里保留原文，末尾附一条不醒目的「无译文」提示（打印时隐藏）
 function syncExcerptTrans() {
   const el = $("excerptTrans");
+  const src = $("excerpt");
   const text = (state.payload && state.payload.excerptTrans) || "";
+  const srcText = (state.payload && state.payload.excerpt) || "";
+  const paired = biActive() || serialActive();
   el.textContent = text;
-  el.hidden = !text || !(biActive() || serialActive());
+  el.hidden = !text || !paired;
+  if (!src) return;
+  src.hidden = !srcText;
+  let note = src.querySelector(".ep-excerpt-note");
+  if (paired && !text) {
+    if (!note) {
+      note = document.createElement("span");
+      note.className = "ep-excerpt-note";
+      src.appendChild(note);
+    }
+    note.textContent = t("excerptNoTrans");
+    note.hidden = false;
+  } else if (note) {
+    note.hidden = true;
+  }
 }
 
 function updateDocumentTitle() {
@@ -1484,7 +1503,10 @@ function restoreEditSnapshot() {
   if (state.payload) {
     state.payload.author = $("metaAuthor").textContent.replace(/\s+/g, " ").trim();
     state.payload.publishedTime = $("metaPubDate").textContent.replace(/\s+/g, " ").trim();
-    state.payload.excerpt = $("excerpt").textContent.replace(/\s+/g, " ").trim();
+    state.payload.excerpt = $("excerpt")
+      .textContent.replace(t("excerptNoTrans"), "")
+      .replace(/\s+/g, " ")
+      .trim();
     state.payload.titleTrans = $("titleTrans").textContent.replace(/\s+/g, " ").trim();
     state.payload.excerptTrans = $("excerptTrans").textContent.replace(/\s+/g, " ").trim();
     $("metaAuthor").hidden = !state.payload.author;

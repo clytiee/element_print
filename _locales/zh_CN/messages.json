@@ -222,6 +222,7 @@
   "missingPayloadId": { "message": "缺少 payload id" },
 
   "baseHint": { "message": "右侧设置即时生效" },
+  "excerptNoTrans": { "message": "（无译文）" },
   "editHint": { "message": "可直接改字，格式用下方图标 · Esc 取消（不保存）" },
   "trimHint": { "message": "点击要删除的块 · ↑ 选上级 / ↓ 回到指针 · Esc 退出删减" },
   "titleHint": { "message": "点击要用作标题的块 · Esc 退出" },

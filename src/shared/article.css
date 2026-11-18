@@ -224,6 +224,21 @@
   word-break: break-word;
 }
 
+/* 摘要没有译文时的提示：不抢眼，只在翻译视图里出现，打印不带 */
+.ep-excerpt-note {
+  margin-left: 0.2em;
+  font-size: 0.82em;
+  font-style: normal;
+  opacity: 0.62;
+  white-space: nowrap;
+}
+
+@media print {
+  .ep-excerpt-note {
+    display: none !important;
+  }
+}
+
 .ep-rule {
   display: none; /* 分隔线改到页眉下，标题下不再画线 */
   height: 0;
@@ -407,6 +422,11 @@
   margin: var(--ep-para-before) 0 var(--ep-para-after);
   break-inside: avoid;
   page-break-inside: avoid;
+}
+
+/* 题图（正文容器之外补回的首图）紧贴标题，不占段前留白 */
+.ep-body figure.ep-lead-figure {
+  margin-top: 0;
 }
 
 .ep-body figcaption {

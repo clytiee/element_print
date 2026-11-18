@@ -1055,6 +1055,152 @@
     return document.querySelector("h1") || document.querySelector("h2") || null;
   }
 
+  // 题图兜底：Readability 只输出它选中的正文容器，标题上方的题图（常带图注）在容器之外，
+  // 会整块丢掉。这里按标题节点向上找邻近的 figure/img，挑一张像题图的拼成 figure 片段，
+  // 由调用方前置到正文开头；找不到就返回空串，不做任何改动。
+  const LEAD_SKIP_RE =
+    /(logo|avatar|icon|badge|sprite|share|social|button|advert|sponsor|banner|promo|thumb|related)/i;
+  const LEAD_MIN_W = 320;
+  const LEAD_SKIP_TAGS = /^(NAV|FOOTER|ASIDE|FORM|TABLE)$/;
+
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function imgSrc(img) {
+    const direct = img.currentSrc || img.getAttribute("src") || "";
+    if (direct && !/^data:/i.test(direct)) return direct;
+    for (const attr of ["data-src", "data-original", "data-lazy-src", "data-url"]) {
+      const v = img.getAttribute(attr);
+      if (v) return v;
+    }
+    const srcset = img.getAttribute("srcset") || img.getAttribute("data-srcset") || "";
+    if (srcset) return pickLargestFromSrcset(srcset);
+    const noscript = img.parentElement && img.parentElement.querySelector("noscript");
+    if (noscript) {
+      const m = /src=["']([^"']+)["']/.exec(noscript.textContent || "");
+      if (m) return m[1];
+    }
+    return direct;
+  }
+
+  // 尺寸尽量不读布局（getBoundingClientRect 会强制回流，整页图扫一遍会明显拖慢提取）：
+  // 先用已加载的 naturalWidth/Height，再退到 width/height 属性，最后才量一次矩形
+  function leadSize(img) {
+    const nw = img.naturalWidth || 0;
+    const nh = img.naturalHeight || 0;
+    if (nw && nh) return { w: nw, h: nh };
+    const aw = Number(img.getAttribute("width")) || 0;
+    const ah = Number(img.getAttribute("height")) || 0;
+    if (aw && ah) return { w: aw, h: ah };
+    const rect = img.getBoundingClientRect();
+    return { w: rect.width, h: rect.height };
+  }
+
+  function looksLikeLeadImage(img, box) {
+    if (!img || !img.isConnected) return false;
+    let walker = img.parentElement;
+    for (let i = 0; walker && i < 3; i += 1) {
+      if (LEAD_SKIP_TAGS.test(walker.tagName)) return false;
+      walker = walker.parentElement;
+    }
+    const cls = [
+      String(box && box.id),
+      String(box && box.className),
+      String(img.id),
+      String(img.className),
+    ]
+      .join(" ")
+      .trim();
+    if (cls && LEAD_SKIP_RE.test(cls)) return false;
+    if (img.getAttribute("role") === "presentation") return false;
+    const { w, h } = leadSize(img);
+    if (!w || w < LEAD_MIN_W) return false;
+    if (h && (h / w > 3 || h / w < 0.35)) return false;
+    return true;
+  }
+
+  function leadCaption(box, img) {
+    if (box && box.querySelector) {
+      const fc = box.querySelector("figcaption");
+      const txt = fc ? normText(fc.textContent) : "";
+      if (txt) return txt;
+    }
+    // 图下一两张说明块：只认带 caption/credit/photo 字样的，避免把导语当成图注
+    let node = (box && box !== img ? box : img).nextElementSibling;
+    for (let i = 0; node && i < 3; i += 1, node = node.nextElementSibling) {
+      const cls = String(node.className || "");
+      if (!/^(P|DIV|SPAN|SMALL|FIGCAPTION)$/.test(node.tagName)) continue;
+      const txt = normText(node.textContent);
+      if (!txt || txt.length > 400) continue;
+      if (/(caption|credit|photo|source|fig)/i.test(cls)) return txt;
+    }
+    return "";
+  }
+
+  function leadImage(title) {
+    const titleEl = findTitleNode(title);
+    if (!titleEl) return "";
+    const base = location.href;
+    const ogRaw =
+      metaContent('meta[property="og:image"]', "content") ||
+      metaContent('meta[property="og:image:url"]', "content") ||
+      metaContent('meta[name="twitter:image"]', "content");
+    const og = ogRaw ? absUrl(ogRaw, base).replace(/[?#].*$/, "") : "";
+
+    let picked = null;
+    // 优先：src 与 og:image 同源的那张（只比对 URL，命中了才量尺寸）
+    if (og) {
+      const imgs = Array.from(document.querySelectorAll("img")).slice(0, 120);
+      for (const img of imgs) {
+        const src = absUrl(imgSrc(img), base).replace(/[?#].*$/, "");
+        if (src !== og) continue;
+        if (!looksLikeLeadImage(img, img.closest("figure"))) continue;
+        picked = { img, box: img.closest("figure") || img };
+        break;
+      }
+    }
+    if (!picked) {
+      // 其次：标题上方、由近及远（最多向上 4 层）的最后一张合格图片。
+      // 先按文档顺序收候选（纯 DOM 读，不触发布局），再从末尾起验证，通常只量 1–2 张
+      let scope = titleEl.parentElement;
+      for (let depth = 0; scope && depth < 4; depth += 1, scope = scope.parentElement) {
+        const raw = [];
+        scope.querySelectorAll("figure, img").forEach((el) => {
+          const img = el.tagName === "IMG" ? el : el.querySelector("img");
+          if (!img || !imgSrc(img)) return;
+          // 只取文档顺序在标题之前的图
+          const rel = el.compareDocumentPosition(titleEl);
+          if (!(rel & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+          raw.push({ el, img });
+        });
+        for (let i = raw.length - 1; i >= 0 && i >= raw.length - 6; i -= 1) {
+          const item = raw[i];
+          const box = item.el.tagName === "FIGURE" ? item.el : item.img.closest("figure");
+          if (!looksLikeLeadImage(item.img, box)) continue;
+          picked = { img: item.img, box: box || item.img };
+          break;
+        }
+        if (picked) break;
+      }
+    }
+    if (!picked) return "";
+    const src = imgSrc(picked.img);
+    if (!src) return "";
+    const alt = normText(picked.img.getAttribute("alt") || "");
+    const cap = leadCaption(picked.box, picked.img);
+    return (
+      '<figure class="ep-lead-figure">' +
+      `<img src="${escHtml(absUrl(src, base))}" alt="${escHtml(alt)}">` +
+      (cap ? `<figcaption>${escHtml(cap)}</figcaption>` : "") +
+      "</figure>"
+    );
+  }
+
   // 段落候选里可能有导语、图片说明、推广语；按「字数最多的字号/行距组合」定正文样式
   const PAGE_SKIP_CLASS_RE =
     /(newsletter|subscribe|signup|caption|credit|byline|promo|advert|sponsor|related|comment|share|footer|breadcrumb|cookie|consent|toolbar|nav)/i;
@@ -1559,5 +1705,5 @@
     return id;
   }
 
-  window.ElementPrintExtract = { extract, savePayload };
+  window.ElementPrintExtract = { extract, savePayload, leadImage, findTitleNode };
 })();

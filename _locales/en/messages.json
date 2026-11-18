@@ -222,6 +222,7 @@
   "missingPayloadId": { "message": "Missing payload id" },
 
   "baseHint": { "message": "Settings on the right apply immediately" },
+  "excerptNoTrans": { "message": " (no translation)" },
   "editHint": { "message": "Edit text directly; use the format icons below · Esc to cancel" },
   "trimHint": { "message": "Click a block to remove it · ↑ parent / ↓ pointer · Esc to exit" },
   "titleHint": { "message": "Click a block to use as the title · Esc to exit" },
