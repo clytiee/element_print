@@ -806,6 +806,11 @@
       /\b\d{1,2}\/\d{1,2}\/\d{4}(?:\s+\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))?(?:\s+[A-Z]{2,5})?/
     );
     if (usNumeric) return usNumeric[0];
+    // 日-月-年（英式）：27 Jan 2026。必须先匹配，否则下面的「月+日」会把年份前两位当成日
+    const dayFirst = s.match(
+      new RegExp("\\b\\d{1,2}\\s+(?:" + DATE_MONTH + ")\\s+\\d{4}\\b", "i")
+    );
+    if (dayFirst) return dayFirst[0];
     const en = s.match(new RegExp("(?:" + DATE_MONTH + ")\\s+\\d{1,2},?\\s+\\d{4}", "i"));
     if (en) return en[0];
     const weekdayMonthDay = s.match(
@@ -817,7 +822,7 @@
     );
     if (weekdayMonthDay) return weekdayMonthDay[0];
     const monthDay = s.match(
-      new RegExp("(?:" + DATE_MONTH + ")\\s+" + DATE_ORDINAL, "i")
+      new RegExp("(?:" + DATE_MONTH + ")\\s+" + DATE_ORDINAL + "(?!\\d)", "i")
     );
     if (monthDay) return monthDay[0];
     const iso = s.match(/\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}[^\s]*)?\b/);
@@ -837,7 +842,8 @@
       ),
       ""
     );
-    s = s.replace(new RegExp("(?:" + DATE_MONTH + ")\\s+" + DATE_ORDINAL, "gi"), "");
+    s = s.replace(new RegExp("\\b\\d{1,2}\\s+(?:" + DATE_MONTH + ")\\s+\\d{4}\\b", "gi"), "");
+    s = s.replace(new RegExp("(?:" + DATE_MONTH + ")\\s+" + DATE_ORDINAL + "(?!\\d)", "gi"), "");
     s = s.replace(/\b\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}[^\s]*)?\b/g, "");
     s = s.replace(/\s*[·,|]\s*$/, "").trim();
     return s;
