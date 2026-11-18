@@ -848,6 +848,14 @@
   .ep-body a {
     text-decoration: none;
   }
+
+  /* 屏幕上的 antialiased 只适合看，打印/导出 PDF 时会让笔画变细发灰；
+     打印一律按几何精度栅格化，笔画更实 */
+  .ep-sheet,
+  .ep-sheet .ep-body {
+    -webkit-font-smoothing: auto;
+    text-rendering: geometricPrecision;
+  }
 }
 
 /* ---------- 西文排版：正文以拉丁字母为主时由 preview.js 打上 data-lang="en" ---------- */
