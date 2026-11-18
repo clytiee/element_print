@@ -131,8 +131,10 @@
         if (!BLOCK_TAGS.has(clone.tagName)) return;
         // 整页提取时 holder 是 Readability 重建的离屏容器；优先按 id 回原页面取计算样式
         let source = orig;
-        if (styleRoot && orig.id) {
-          const matched = styleRoot.getElementById(orig.id);
+        // styleRoot 可能是 Document，也可能是手动选取时的普通元素节点（没有 getElementById）
+        const doc = styleRoot && styleRoot.ownerDocument ? styleRoot.ownerDocument : styleRoot;
+        if (doc && orig.id && typeof doc.getElementById === "function") {
+          const matched = doc.getElementById(orig.id);
           if (matched) source = matched;
         }
         const display = getComputedStyle(source).display;
