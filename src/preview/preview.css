@@ -505,6 +505,12 @@ body {
 .ep-app.is-reading .ep-viewport {
   padding: 0;
   overflow: hidden;
+  background: var(--ep-read-paper, #fff);
+}
+
+/* 阅读模式换配色时纸张颜色跟着走（文章样式里写死了 #fff） */
+.ep-app.is-reading .ep-read-sheet {
+  background: var(--ep-read-paper, #fff);
 }
 
 /* 阅读模式下正文按视口高度切页：原纸张隐藏，改成一块块屏幕大小的页面 */
@@ -542,7 +548,7 @@ body {
   gap: 4px;
   font-size: 11px;
   letter-spacing: 0.04em;
-  color: #8b929b;
+  color: var(--ep-read-sub, #8b929b);
   pointer-events: none;
 }
 
@@ -578,6 +584,66 @@ body {
 
 .ep-read-exit[hidden] {
   display: none;
+}
+
+/* 阅读模式右上角：退出 + 配色 */
+.ep-read-theme {
+  position: absolute;
+  top: 12px;
+  right: 54px;
+  z-index: 41;
+}
+
+.ep-read-theme[hidden] {
+  display: none;
+}
+
+.ep-read-theme__btn {
+  position: static;
+}
+
+.ep-read-theme__btn.is-on {
+  opacity: 1;
+}
+
+.ep-read-theme__panel {
+  position: absolute;
+  top: 34px;
+  right: 0;
+  padding: 8px;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.ep-read-theme__panel[hidden] {
+  display: none;
+}
+
+.ep-read-theme__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 74px);
+  grid-auto-rows: 42px;
+  gap: 6px;
+}
+
+.ep-read-theme__swatch {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 6px;
+  padding: 0;
+  font: inherit;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ep-read-theme__swatch.is-on {
+  box-shadow: 0 0 0 2px var(--ep-accent);
 }
 
 .ep-sheet {

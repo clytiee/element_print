@@ -94,6 +94,7 @@ function applyStaticI18n() {
     imgBtn: "imgOnTitle",
     readBtn: "readModeTitle",
     readExit: "readModeExitTitle",
+    readThemeBtn: "readPaletteTitle",
     origBtn: "sourceViewTitle",
     mixBtn: "mixedViewTitle",
     biBtn: "biViewTitle",
@@ -2481,6 +2482,9 @@ function setReadingMode(on) {
   if (app) app.classList.toggle("is-reading", readingMode);
   const exit = $("readExit");
   if (exit) exit.hidden = !readingMode;
+  const theme = $("readTheme");
+  if (theme) theme.hidden = !readingMode;
+  if (!readingMode) closeReadThemePanel();
   const btn = $("readBtn");
   if (btn) btn.classList.toggle("is-on", readingMode);
   if (readingMode) {
@@ -2491,6 +2495,113 @@ function setReadingMode(on) {
   // 画布宽度变了，重新缩放纸张；宽表格也要重新量一次
   fit();
   scheduleWideTables();
+}
+
+/* ---------- 阅读模式：纸墨配色 ---------- */
+
+// 纸色 + 墨色；灰层次（副文本、分隔线）由这两色按比例混出来，避免再手配三四套色
+const READ_PALETTES = [
+  { key: "light", name: "Light", bg: "#ffffff", ink: "#16181c" },
+  { key: "nord", name: "Nord", bg: "#eceff4", ink: "#2e3440" },
+  { key: "sepia", name: "Sepia", bg: "#f4ecd8", ink: "#3a3128" },
+  { key: "solarized", name: "Solarized", bg: "#fdf6e3", ink: "#586e75" },
+  { key: "dark", name: "Dark", bg: "#1c1f23", ink: "#e6e8ea" },
+  { key: "nord-dark", name: "Nord", bg: "#2e3440", ink: "#d8dee9" },
+  { key: "groove", name: "Groove", bg: "#262220", ink: "#ece6de" },
+  { key: "solarized-dark", name: "Solarized", bg: "#002b36", ink: "#93a1a1" },
+];
+
+const READ_PALETTE_KEY = "ep:readPalette";
+let readPalette = READ_PALETTES[0];
+
+function readPaletteOf(key) {
+  return READ_PALETTES.find((p) => p.key === key) || READ_PALETTES[0];
+}
+
+// 配色只作用在阅读模式：把纸色和墨色写进 .ep-app 的 CSS 变量，纸张与正文一起继承
+function applyReadPalette(key, persist) {
+  readPalette = readPaletteOf(key);
+  const app = document.querySelector(".ep-app");
+  if (app) {
+    app.style.setProperty("--ep-read-paper", readPalette.bg);
+    app.style.setProperty("--ep-ink", readPalette.ink);
+    app.style.setProperty("--ep-title-color", readPalette.ink);
+    app.style.setProperty("--ep-sub", `color-mix(in srgb, ${readPalette.ink} 62%, ${readPalette.bg})`);
+    app.style.setProperty("--ep-rule", `color-mix(in srgb, ${readPalette.ink} 85%, ${readPalette.bg})`);
+    app.style.setProperty("--ep-read-sub", `color-mix(in srgb, ${readPalette.ink} 55%, ${readPalette.bg})`);
+  }
+  const grid = $("readThemeGrid");
+  if (grid) {
+    Array.from(grid.children).forEach((btn) => {
+      btn.classList.toggle("is-on", btn.dataset.key === readPalette.key);
+    });
+  }
+  if (persist) {
+    try {
+      localStorage.setItem(READ_PALETTE_KEY, readPalette.key);
+    } catch {
+      /* 存不了也无所谓，下次还是默认 Light */
+    }
+  }
+}
+
+function buildReadThemeGrid() {
+  const grid = $("readThemeGrid");
+  if (!grid || grid.children.length) return;
+  READ_PALETTES.forEach((p) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ep-read-theme__swatch";
+    btn.dataset.key = p.key;
+    btn.textContent = p.name;
+    btn.style.background = p.bg;
+    btn.style.color = p.ink;
+    btn.addEventListener("click", () => {
+      applyReadPalette(p.key, true);
+      closeReadThemePanel();
+    });
+    grid.appendChild(btn);
+  });
+}
+
+function openReadThemePanel() {
+  buildReadThemeGrid();
+  const panel = $("readThemePanel");
+  if (panel) panel.hidden = false;
+  const btn = $("readThemeBtn");
+  if (btn) btn.classList.add("is-on");
+}
+
+function closeReadThemePanel() {
+  const panel = $("readThemePanel");
+  if (panel) panel.hidden = true;
+  const btn = $("readThemeBtn");
+  if (btn) btn.classList.remove("is-on");
+}
+
+function toggleReadThemePanel() {
+  const panel = $("readThemePanel");
+  if (panel && !panel.hidden) closeReadThemePanel();
+  else openReadThemePanel();
+}
+
+function initReadPalette() {
+  let saved = "";
+  try {
+    saved = localStorage.getItem(READ_PALETTE_KEY) || "";
+  } catch {
+    saved = "";
+  }
+  buildReadThemeGrid();
+  applyReadPalette(saved || READ_PALETTES[0].key, false);
+  const btn = $("readThemeBtn");
+  if (btn) btn.addEventListener("click", toggleReadThemePanel);
+  document.addEventListener("pointerdown", (e) => {
+    const wrap = $("readTheme");
+    if (!wrap || wrap.hidden) return;
+    if (wrap.contains(e.target)) return;
+    closeReadThemePanel();
+  });
 }
 
 /* ---------- 阅读模式：按视口高度分页，一次一页 ---------- */
@@ -3915,6 +4026,7 @@ function bindControls() {
   $("imgBtn").addEventListener("click", () => setImagesHidden(!hideImages));
   $("readBtn").addEventListener("click", () => setReadingMode(!readingMode));
   $("readExit").addEventListener("click", () => setReadingMode(false));
+  initReadPalette();
   initImageResize();
 
   // 阅读模式：滚轮翻页（带节流），触控板的小幅滑动不会连翻好几页
