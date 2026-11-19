@@ -501,16 +501,33 @@ body {
   display: none !important;
 }
 
-/* 阅读模式的页面就是整块画布：不留外边距，宽度贴满可视区 */
+/* 阅读模式的页面就是整块画布：未最大化时贴满，最大化后两侧露出背景 */
 .ep-app.is-reading .ep-viewport {
   padding: 0;
   overflow: hidden;
   background: var(--ep-read-paper, #fff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 只有最大化、两侧真有留白时才画背景，否则露出一绺很难看 */
+.ep-app.is-reading .ep-viewport.is-read-wide {
+  background-color: var(--ep-read-bg, #e9dcc3);
+  background-image: var(--ep-read-bg-image, none);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 /* 阅读模式换配色时纸张颜色跟着走（文章样式里写死了 #fff） */
 .ep-app.is-reading .ep-read-sheet {
   background: var(--ep-read-paper, #fff);
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.1),
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 18px 40px rgba(15, 23, 42, 0.22);
 }
 
 /* 阅读模式下正文按视口高度切页：原纸张隐藏，改成一块块屏幕大小的页面 */
@@ -598,6 +615,30 @@ body {
   display: none;
 }
 
+/* 全屏按钮排在配色按钮左边 */
+.ep-read-fs {
+  position: absolute;
+  top: 12px;
+  right: 94px;
+  z-index: 41;
+}
+
+.ep-read-fs[hidden] {
+  display: none;
+}
+
+/* 全屏态不给蓝色高亮：阅读时右上一块蓝太抢眼，和旁边两个按钮一样就行 */
+.ep-read-fs.is-on {
+  background: #fff;
+  border-color: #dfe3e9;
+  color: #3b4450;
+}
+
+.ep-read-fs.is-on:hover {
+  background: #eef1f5;
+  border-color: #cfd5de;
+}
+
 .ep-read-theme__btn {
   position: static;
 }
@@ -644,6 +685,60 @@ body {
 
 .ep-read-theme__swatch.is-on {
   box-shadow: 0 0 0 2px var(--ep-accent);
+}
+
+/* 背景一行：几个纯色圆点 + 选图片 / 清除 */
+.ep-read-theme__bg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #eceff3;
+}
+
+.ep-read-theme__bglabel {
+  font-size: 11.5px;
+  color: #7a828d;
+  margin-right: 2px;
+}
+
+.ep-read-theme__dot {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid rgba(15, 23, 42, 0.16);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.ep-read-theme__dot.is-on {
+  box-shadow: 0 0 0 2px var(--ep-accent);
+}
+
+.ep-read-theme__file {
+  appearance: none;
+  border: 1px solid #dfe3e9;
+  border-radius: 6px;
+  background: #fff;
+  color: #3b4450;
+  font: inherit;
+  font-size: 11.5px;
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ep-read-theme__file:hover {
+  background: #eef1f5;
+  border-color: #cfd5de;
+}
+
+.ep-read-theme__file.is-on {
+  border-color: var(--ep-accent);
+  color: var(--ep-accent);
+  background: rgba(47, 111, 235, 0.08);
 }
 
 .ep-sheet {

@@ -2476,6 +2476,38 @@ function setImagesHidden(on) {
 
 let readingMode = false;
 
+// 阅读模式里的全屏按钮：和 F11 一样把浏览器官栏一起收起来，由用户点按钮触发
+function enterReadFullscreen() {
+  try {
+    if (!document.fullscreenElement) {
+      const p = document.documentElement.requestFullscreen();
+      if (p && p.catch) p.catch(() => {});
+    }
+  } catch {
+    /* 被拒绝就保持普通窗口，不影响阅读模式本身 */
+  }
+}
+
+function leaveReadFullscreen() {
+  if (!document.fullscreenElement) return;
+  try {
+    const p = document.exitFullscreen();
+    if (p && p.catch) p.catch(() => {});
+  } catch {
+    /* 退出失败就留在全屏，用户可再按 F11 */
+  }
+}
+
+function syncReadFullscreenBtn() {
+  const btn = $("readFsBtn");
+  if (!btn) return;
+  const on = Boolean(document.fullscreenElement);
+  btn.classList.toggle("is-on", on);
+  const tip = on ? t("readFullscreenExitTitle") : t("readFullscreenTitle");
+  btn.title = tip;
+  btn.setAttribute("aria-label", tip);
+}
+
 function setReadingMode(on) {
   readingMode = Boolean(on);
   const app = document.querySelector(".ep-app");
@@ -2484,17 +2516,117 @@ function setReadingMode(on) {
   if (exit) exit.hidden = !readingMode;
   const theme = $("readTheme");
   if (theme) theme.hidden = !readingMode;
+  const fsBtn = $("readFsBtn");
+  if (fsBtn) fsBtn.hidden = !readingMode;
   if (!readingMode) closeReadThemePanel();
   const btn = $("readBtn");
   if (btn) btn.classList.toggle("is-on", readingMode);
   if (readingMode) {
     buildReadPages();
+    syncReadFullscreenBtn();
   } else {
     clearReadPages();
+    leaveReadFullscreen();
   }
   // 画布宽度变了，重新缩放纸张；宽表格也要重新量一次
   fit();
   scheduleWideTables();
+}
+
+/* ---------- 阅读模式：书页背景 ---------- */
+
+// 背景是书页外面的那圈地方：默认为一张纸纹图（随插件打包，不内嵌），也可换成纯色或自选图片
+const READ_BG_DEFAULT = { type: "image", value: "paper-bg.jpg" };
+const READ_BG_KEY = "ep:readBg";
+let readBg = { ...READ_BG_DEFAULT };
+
+function readBgCssValue(bg) {
+  if (!bg || !bg.value) return "none";
+  if (bg.type !== "image") return "none";
+  // 打包里的纸纹是相对路径，自选图片是 dataURL，两种都直接当 url() 用
+  return `url("${bg.value}")`;
+}
+
+function applyReadBg(bg, persist) {
+  readBg = bg && bg.value ? bg : { ...READ_BG_DEFAULT };
+  const app = document.querySelector(".ep-app");
+  if (app) {
+    if (readBg.type === "image") {
+      app.style.setProperty("--ep-read-bg", "#e9dcc3");
+      app.style.setProperty("--ep-read-bg-image", readBgCssValue(readBg));
+    } else {
+      app.style.setProperty("--ep-read-bg", readBg.value);
+      app.style.setProperty("--ep-read-bg-image", "none");
+    }
+  }
+  document.querySelectorAll(".ep-read-theme__dot").forEach((dot) => {
+    dot.classList.toggle("is-on", readBg.type === "color" && dot.dataset.bg === readBg.value);
+  });
+  const pick = $("readBgPick");
+  if (pick) pick.classList.toggle("is-on", readBg.type === "image" && readBg.value !== READ_BG_DEFAULT.value);
+  if (persist) {
+    try {
+      localStorage.setItem(READ_BG_KEY, JSON.stringify(readBg));
+    } catch {
+      /* 图片太大存不下就只影响下次打开，当前这次照样生效 */
+    }
+  }
+}
+
+// 背景图先缩到 1920 宽再存：原图动辄几 MB，localStorage 放不下
+function shrinkBackground(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const max = 1920;
+      const scale = Math.min(1, max / Math.max(img.width, 1));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image decode failed"));
+    };
+    img.src = url;
+  });
+}
+
+function initReadBackground() {
+  document.querySelectorAll(".ep-read-theme__dot").forEach((dot) => {
+    dot.addEventListener("click", () => applyReadBg({ type: "color", value: dot.dataset.bg }, true));
+  });
+  const pick = $("readBgPick");
+  const file = $("readBgFile");
+  if (pick && file) {
+    pick.addEventListener("click", () => file.click());
+    file.addEventListener("change", async () => {
+      const f = file.files && file.files[0];
+      file.value = "";
+      if (!f) return;
+      try {
+        const data = await shrinkBackground(f);
+        applyReadBg({ type: "image", value: data }, true);
+      } catch {
+        window.alert(t("readBgFailed"));
+      }
+    });
+  }
+  const clear = $("readBgClear");
+  if (clear) clear.addEventListener("click", () => applyReadBg({ ...READ_BG_DEFAULT }, true));
+
+  let saved = null;
+  try {
+    saved = JSON.parse(localStorage.getItem(READ_BG_KEY) || "null");
+  } catch {
+    saved = null;
+  }
+  applyReadBg(saved || READ_BG_DEFAULT, false);
 }
 
 /* ---------- 阅读模式：纸墨配色 ---------- */
@@ -2607,6 +2739,7 @@ function initReadPalette() {
 /* ---------- 阅读模式：按视口高度分页，一次一页 ---------- */
 
 const READ_CONTAINERS = ["body", "bilingual", "mixed", "serial"];
+const READ_MAX_W = 1024; // 阅读区最大宽度，再宽就不利于读
 const READ_WHEEL_GAP = 330; // 两次滚轮翻页的最小间隔（毫秒）
 let readPageCount = 0;
 let readIndex = 0;
@@ -2693,11 +2826,15 @@ function buildReadPages() {
   const source = readSourceContainer();
   if (!host || !vp || !sheet || !source) return;
 
-  const vpStyle = getComputedStyle(vp);
-  const padX = parseFloat(vpStyle.paddingLeft) + parseFloat(vpStyle.paddingRight);
-  const padY = parseFloat(vpStyle.paddingTop) + parseFloat(vpStyle.paddingBottom);
-  const pageW = Math.max(320, Math.round(vp.clientWidth - padX));
-  const pageH = Math.max(320, Math.round(vp.clientHeight - padY));
+  // 阅读区宽度有上限：窗口没最大化时贴满，最大化后不再变宽，两边留出背景
+  const vpW = vp.clientWidth;
+  const vpH = vp.clientHeight;
+  const capped = vpW > READ_MAX_W;
+  const pageW = capped ? READ_MAX_W : Math.max(320, vpW);
+  // 只在左右留白，上下始终贴满：上下露一绺背景很难看
+  const pageH = Math.max(320, vpH);
+  // 背景只在「最大化后两侧留白」时才有意义；没最大化时整屏就是纸，露一绺背景反而难看
+  vp.classList.toggle("is-read-wide", capped);
 
   host.innerHTML = "";
   const page = sheet.cloneNode(false);
@@ -4026,7 +4163,16 @@ function bindControls() {
   $("imgBtn").addEventListener("click", () => setImagesHidden(!hideImages));
   $("readBtn").addEventListener("click", () => setReadingMode(!readingMode));
   $("readExit").addEventListener("click", () => setReadingMode(false));
+  $("readFsBtn").addEventListener("click", () => {
+    if (document.fullscreenElement) leaveReadFullscreen();
+    else enterReadFullscreen();
+  });
+  document.addEventListener("fullscreenchange", () => {
+    syncReadFullscreenBtn();
+    scheduleReadPages(200);
+  });
   initReadPalette();
+  initReadBackground();
   initImageResize();
 
   // 阅读模式：滚轮翻页（带节流），触控板的小幅滑动不会连翻好几页
