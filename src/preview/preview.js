@@ -92,6 +92,8 @@ function applyStaticI18n() {
     trimBtn: "trimTitle",
     titleBtn: "titleTitle",
     imgBtn: "imgOnTitle",
+    readBtn: "readModeTitle",
+    readExit: "readModeExitTitle",
     origBtn: "sourceViewTitle",
     mixBtn: "mixedViewTitle",
     biBtn: "biViewTitle",
@@ -1050,6 +1052,8 @@ function applySettings() {
   fit();
   scheduleWideTables();
   syncBiHint();
+  // 阅读模式下改字号、栏数、边距都要重新切页
+  scheduleReadPages();
 }
 
 /* ---------- 双栏时宽表格跨栏 ---------- */
@@ -1452,6 +1456,8 @@ function showTypePane(name) {
 let fitFrame = 0;
 
 function fit() {
+  // 阅读模式下原纸张是隐藏的（offsetWidth 为 0），页面尺寸由 buildReadPages 自己算
+  if (readingMode) return;
   if (fitFrame) cancelAnimationFrame(fitFrame);
   fitFrame = requestAnimationFrame(() => {
     fitFrame = 0;
@@ -2317,6 +2323,192 @@ function setImagesHidden(on) {
   $("imgBtn").title = imgTip;
   $("imgBtn").setAttribute("aria-label", imgTip);
   fit();
+}
+
+/* ---------- 阅读模式：隐藏右栏设置与顶部工具条，只看版面 ---------- */
+
+let readingMode = false;
+
+function setReadingMode(on) {
+  readingMode = Boolean(on);
+  const app = document.querySelector(".ep-app");
+  if (app) app.classList.toggle("is-reading", readingMode);
+  const exit = $("readExit");
+  if (exit) exit.hidden = !readingMode;
+  const btn = $("readBtn");
+  if (btn) btn.classList.toggle("is-on", readingMode);
+  if (readingMode) {
+    buildReadPages();
+  } else {
+    clearReadPages();
+  }
+  // 画布宽度变了，重新缩放纸张；宽表格也要重新量一次
+  fit();
+  scheduleWideTables();
+}
+
+/* ---------- 阅读模式：按视口高度分页，一次一页 ---------- */
+
+const READ_CONTAINERS = ["body", "bilingual", "mixed", "serial"];
+const READ_WHEEL_GAP = 330; // 两次滚轮翻页的最小间隔（毫秒）
+let readPageCount = 0;
+let readIndex = 0;
+let readPagesTimer = 0;
+let readWheelAt = 0;
+let readFlow = null; // 连续多栏的那条流，翻页靠平移它
+let readStep = 0;
+let readAxis = "x";
+
+// 当前在用的正文容器：原文 / 双语对照 / 混排 / 串行。
+// 只按 hidden 属性判断会选到「属性上可见、实际没内容」的空容器（双语对照没翻译时就是空的），
+// 所以要求真的渲染出来且有子节点，再取文字最多的那个
+function readSourceContainer() {
+  const cands = READ_CONTAINERS.map((id) => $(id)).filter(
+    (el) => el && !el.hidden && el.getClientRects().length > 0 && el.children.length > 0
+  );
+  if (!cands.length) return $("body");
+  return cands.reduce((best, el) =>
+    (el.textContent || "").length > (best.textContent || "").length ? el : best
+  );
+}
+
+function clearReadPages() {
+  const host = $("readPages");
+  if (host) {
+    host.innerHTML = "";
+    host.hidden = true;
+  }
+  readFlow = null;
+  readPageCount = 0;
+  readIndex = 0;
+  readStep = 0;
+  const pager = $("readPager");
+  if (pager) pager.hidden = true;
+}
+
+function scheduleReadPages(delay = 120) {
+  if (!readingMode) return;
+  clearTimeout(readPagesTimer);
+  readPagesTimer = setTimeout(() => buildReadPages(), delay);
+}
+
+function stripCloneIds(node) {
+  if (node.nodeType !== Node.ELEMENT_NODE) return;
+  node.removeAttribute("id");
+  Array.from(node.children).forEach(stripCloneIds);
+}
+
+function showReadPage(index) {
+  const pager = $("readPager");
+  if (!readFlow) {
+    if (pager) pager.hidden = true;
+    return;
+  }
+  readIndex = Math.max(0, Math.min(readPageCount - 1, index));
+  readFlow.style.transform =
+    readAxis === "x"
+      ? `translateX(${-readIndex * readStep}px)`
+      : `translateY(${-readIndex * readStep}px)`;
+  if (pager) {
+    pager.hidden = readPageCount <= 1;
+    const label = pager.querySelector(".ep-read-pager__text");
+    if (label) label.textContent = `${readIndex + 1} / ${readPageCount}`;
+    const bar = pager.querySelector(".ep-read-pager__bar");
+    if (bar) bar.style.width = `${((readIndex + 1) / readPageCount) * 100}%`;
+  }
+  const vp = $("viewport");
+  if (vp) vp.scrollTop = 0;
+}
+
+function stepReadPage(delta) {
+  if (!readingMode || readPageCount <= 1) return;
+  showReadPage(readIndex + delta);
+}
+
+// 阅读模式分页：正文排成一条「高度固定、栏数照旧」的连续多栏流，
+// 每页窗口只露出一屏（双栏就是一屏两栏），翻页时把这条流整体平移一屏。
+// 让 CSS 自己把段落、表格在图流里拆进各栏，比按块切页可靠得多。
+function buildReadPages() {
+  if (!readingMode) return;
+  const host = $("readPages");
+  const vp = $("viewport");
+  const sheet = $("sheet");
+  const source = readSourceContainer();
+  if (!host || !vp || !sheet || !source) return;
+
+  const vpStyle = getComputedStyle(vp);
+  const padX = parseFloat(vpStyle.paddingLeft) + parseFloat(vpStyle.paddingRight);
+  const padY = parseFloat(vpStyle.paddingTop) + parseFloat(vpStyle.paddingBottom);
+  const pageW = Math.max(320, Math.round(vp.clientWidth - padX));
+  const pageH = Math.max(320, Math.round(vp.clientHeight - padY));
+
+  host.innerHTML = "";
+  const page = sheet.cloneNode(false);
+  stripCloneIds(page);
+  page.classList.add("ep-read-sheet");
+  page.style.width = `${pageW}px`;
+  page.style.height = `${pageH}px`;
+  page.style.minHeight = "0";
+  page.style.boxSizing = "border-box";
+  // 纸张常态是按窗口缩放的（--ep-scale），克隆过来的缩放会让右边和下边空出一块
+  page.style.transform = "none";
+  host.appendChild(page);
+  host.hidden = false;
+
+  const pageStyle = getComputedStyle(page);
+  const contentW = Math.max(
+    200,
+    pageW - parseFloat(pageStyle.paddingLeft) - parseFloat(pageStyle.paddingRight)
+  );
+  const contentH = Math.max(120, pageH - parseFloat(pageStyle.paddingTop) - parseFloat(pageStyle.paddingBottom));
+
+  const body = source.cloneNode(true);
+  stripCloneIds(body);
+  body.hidden = false;
+  body.removeAttribute("style");
+  body.removeAttribute("id");
+
+  // 大标题只在第一页出现：放进流的最前面，它自然只会落在第一栏
+  const headNode = sheet.querySelector(".ep-head");
+  if (headNode) {
+    const head = headNode.cloneNode(true);
+    stripCloneIds(head);
+    body.insertBefore(head, body.firstChild);
+  }
+  // 再套一层和版心等宽的裁剪框：纸张的 overflow 只裁到纸边（含页边距），
+  // 下一页的第一栏会从页边距里露出一点，所以必须按版心宽度裁
+  const clip = document.createElement("div");
+  clip.className = "ep-read-clip";
+  clip.style.width = `${contentW}px`;
+  clip.style.height = `${contentH}px`;
+  clip.appendChild(body);
+  page.appendChild(clip);
+
+  body.style.width = `${contentW}px`;
+  body.style.height = `${contentH}px`;
+  body.style.maxHeight = "none";
+  body.style.columnFill = "auto";
+  body.style.transformOrigin = "top left";
+
+  const bodyStyle = getComputedStyle(body);
+  const gap = parseFloat(bodyStyle.columnGap) || 0;
+  const cols = Math.max(1, Math.round(parseFloat(bodyStyle.columnCount) || 1));
+  readFlow = body;
+
+  if (cols > 1) {
+    const colW = Math.max(40, (contentW - gap * (cols - 1)) / cols);
+    const totalCols = Math.max(cols, Math.round((body.scrollWidth + gap) / (colW + gap)));
+    readAxis = "x";
+    readStep = cols * (colW + gap);
+    readPageCount = Math.max(1, Math.ceil(totalCols / cols));
+  } else {
+    // 单栏：内容纵向溢出，一屏一页往下移
+    readAxis = "y";
+    readStep = contentH;
+    readPageCount = Math.max(1, Math.ceil(body.scrollHeight / contentH));
+  }
+
+  showReadPage(0);
 }
 
 /* ---------- 双语对照（左原文 / 右译文，逐段成对） ---------- */
@@ -3575,12 +3767,41 @@ function bindControls() {
     setPickingTitle(!pickingTitle);
   });
   $("imgBtn").addEventListener("click", () => setImagesHidden(!hideImages));
+  $("readBtn").addEventListener("click", () => setReadingMode(!readingMode));
+  $("readExit").addEventListener("click", () => setReadingMode(false));
+
+  // 阅读模式：滚轮翻页（带节流），触控板的小幅滑动不会连翻好几页
+  $("viewport").addEventListener(
+    "wheel",
+    (e) => {
+      if (!readingMode || readPageCount <= 1) return;
+      if (Math.abs(e.deltaY) < 6) return;
+      e.preventDefault();
+      const now = Date.now();
+      if (now - readWheelAt < READ_WHEEL_GAP) return;
+      readWheelAt = now;
+      stepReadPage(e.deltaY > 0 ? 1 : -1);
+    },
+    { passive: false }
+  );
 
   document.addEventListener("keydown", (e) => {
     if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "d") {
       e.preventDefault();
       openReadabilityDebug();
       return;
+    }
+    if (readingMode) {
+      if (e.key === "PageDown" || e.key === "ArrowDown" || (e.key === " " && !e.shiftKey)) {
+        e.preventDefault();
+        stepReadPage(1);
+        return;
+      }
+      if (e.key === "PageUp" || e.key === "ArrowUp" || (e.key === " " && e.shiftKey)) {
+        e.preventDefault();
+        stepReadPage(-1);
+        return;
+      }
     }
     if (trimming && e.key === "ArrowUp") {
       e.preventDefault();
@@ -3598,7 +3819,10 @@ function bindControls() {
       return;
     }
     if (e.key !== "Escape") return;
-    if (trimming) {
+    if (readingMode) {
+      e.preventDefault();
+      setReadingMode(false);
+    } else if (trimming) {
       e.preventDefault();
       setTrimming(false);
     } else if (pickingTitle) {
@@ -3615,6 +3839,10 @@ function bindControls() {
   });
 
   window.addEventListener("resize", () => {
+    if (readingMode) {
+      scheduleReadPages(180);
+      return;
+    }
     fit();
     scheduleWideTables();
   });
@@ -3623,9 +3851,14 @@ function bindControls() {
       .then(() => {
         fit();
         scheduleWideTables();
+        scheduleReadPages();
       })
       .catch(() => {});
   }
+
+  // 切换原文 / 混排 / 翻译时容器显隐会变，阅读模式要按新的正文重新切页
+  const viewWatcher = new MutationObserver(() => scheduleReadPages(200));
+  viewWatcher.observe($("sheet"), { subtree: true, attributes: true, attributeFilter: ["hidden"] });
 }
 
 /* ---------- 导出单文件 HTML ---------- */

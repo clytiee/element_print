@@ -482,6 +482,96 @@ body {
   margin: 0 auto;
 }
 
+/* ---------- 阅读模式：只留纸张 ---------- */
+
+/* 隐藏右栏设置与顶部工具条，画布占满整屏 */
+.ep-app.is-reading .ep-panel,
+.ep-app.is-reading .ep-hint,
+.ep-app.is-reading .ep-format,
+.ep-app.is-reading .ep-replace,
+.ep-app.is-reading .ep-biHint {
+  display: none !important;
+}
+
+/* 阅读模式的页面就是整块画布：不留外边距，宽度贴满可视区 */
+.ep-app.is-reading .ep-viewport {
+  padding: 0;
+  overflow: hidden;
+}
+
+/* 阅读模式下正文按视口高度切页：原纸张隐藏，改成一块块屏幕大小的页面 */
+.ep-app.is-reading .ep-sheetWrap {
+  display: none;
+}
+
+.ep-read-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ep-read-sheet {
+  flex: 0 0 auto;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* 按版心宽度裁剪，下一页的第一栏不会从页边距里露出来 */
+.ep-read-clip {
+  overflow: hidden;
+  position: relative;
+}
+
+/* 页码指示：右下角一条细进度，鼠标不挡内容 */
+.ep-read-pager {
+  position: absolute;
+  right: 20px;
+  bottom: 12px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: #8b929b;
+  pointer-events: none;
+}
+
+.ep-read-pager__text {
+  font-variant-numeric: tabular-nums;
+}
+
+.ep-read-pager__bar {
+  display: block;
+  width: 46px;
+  height: 2px;
+  background: #2f6feb;
+  opacity: 0.55;
+  transition: width 140ms ease;
+}
+
+.ep-read-pager[hidden] {
+  display: none;
+}
+
+.ep-read-exit {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 40;
+  opacity: 0.55;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+}
+
+.ep-read-exit:hover {
+  opacity: 1;
+}
+
+.ep-read-exit[hidden] {
+  display: none;
+}
+
 .ep-sheet {
   transform: scale(var(--ep-scale));
   transform-origin: top left;

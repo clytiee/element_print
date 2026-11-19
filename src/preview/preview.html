@@ -28,6 +28,9 @@
           <button type="button" id="imgBtn" class="ep-mini ep-mini--icon" title="切换图片显示：无图时图片不参与排版与打印" aria-label="有图">
             <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.9" y="2.6" width="12.2" height="10.4" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="5.4" cy="6" r="1.3" fill="currentColor" opacity=".55"/><path d="M2.6 11.6 6.6 8.2l3 2.5 2.3-1.9 1.5 1.2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
+          <button type="button" id="readBtn" class="ep-mini ep-mini--icon" title="阅读模式：隐藏右栏设置与顶部工具条，只看版面" aria-label="阅读模式">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 12h2M16 8h2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
           <div class="ep-bi-switch">
             <button type="button" id="origBtn" class="ep-mini ep-mini--soft ep-mini--seg" title="回到单栏原文视图">原文</button>
             <span class="ep-bi-switch__sep" id="origMixSep"></span>
@@ -37,6 +40,10 @@
           </div>
         </div>
       </div>
+      <!-- 阅读模式的退出按钮：阅读模式下顶部工具条隐藏，这个浮在右上角 -->
+      <button type="button" id="readExit" class="ep-mini ep-mini--icon ep-read-exit" title="退出阅读模式" aria-label="退出阅读模式" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 12h2M16 8h2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
       <!-- 编辑时的格式栏：作用于当前选区，全部为图标按钮，悬停显示名称 -->
       <div class="ep-format" id="formatBar" hidden>
         <button type="button" class="ep-fmt" data-cmd="fontDown" title="缩小字号" aria-label="缩小字号">
@@ -146,6 +153,8 @@
             </div>
           </div>
         </div>
+        <div class="ep-read-pager" id="readPager" hidden><span class="ep-read-pager__text"></span><i class="ep-read-pager__bar"></i></div>
+        <div class="ep-read-pages" id="readPages" hidden></div>
         <div class="ep-error" id="error" hidden></div>
       </div>
     </main>

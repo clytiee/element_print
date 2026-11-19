@@ -132,6 +132,8 @@
   "imgOnTitle": { "message": "切换图片显示：无图时图片不参与排版与打印" },
   "imgOffTitle": { "message": "当前隐藏图片：再点恢复显示图片" },
   "sourceViewTitle": { "message": "回到原文视图" },
+  "readModeTitle": { "message": "阅读模式：隐藏右栏设置与顶部工具条，只看版面（Esc 退出）" },
+  "readModeExitTitle": { "message": "退出阅读模式" },
   "mixedViewTitle": { "message": "按原网页的中英混排方式显示" },
   "biViewTitle": { "message": "A4/电纸书左右对照；手机自动按原文/译文串行排列" },
   "ereaderTitle": { "message": "10寸左右的大屏电纸书" },
