@@ -143,7 +143,8 @@ body {
   position: relative;
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  /* 第三列按按钮的真实宽度兜底：字数统计变长时挤的是提示文字，不会压到按钮上 */
+  grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr);
   align-items: center;
   gap: 12px;
   padding: 6px 12px 6px 18px;
@@ -212,11 +213,18 @@ body {
   display: flex;
   gap: 6px;
   justify-self: end;
+  flex-wrap: nowrap;
+}
+
+/* 按钮永远不压缩：中文可以在字与字之间断行，被挤窄了就会竖着摞成两行 */
+.ep-hint__actions > * {
+  flex: 0 0 auto;
 }
 
 .ep-mini {
   appearance: none;
   border: 1px solid #dfe3e9;
+  white-space: nowrap;
   border-radius: 6px;
   padding: 3px 12px;
   background: #fff;
@@ -1092,4 +1100,27 @@ input[type="range"] {
   .ep-count {
     display: none;
   }
+}
+/* 编辑模式：图片右下角的尺寸把手 */
+.ep-img-handle {
+  position: fixed;
+  z-index: 60;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: var(--ep-accent);
+  box-shadow: 0 0 0 2px #fff, 0 1px 3px rgba(15, 23, 42, 0.28);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.ep-img-handle.is-dragging {
+  background: var(--ep-accent-hover);
+}
+
+img.ep-img-selected {
+  outline: 2px solid var(--ep-accent);
+  outline-offset: 2px;
 }

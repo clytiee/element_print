@@ -134,6 +134,7 @@
   "sourceViewTitle": { "message": "Return to the source view" },
   "readModeTitle": { "message": "Reading mode: hide the settings panel and the top toolbar to see the page only (Esc to exit)" },
   "readModeExitTitle": { "message": "Exit reading mode" },
+  "imageResizeTitle": { "message": "Drag to resize the image; double-click it to restore its original size" },
   "mixedViewTitle": { "message": "Show the original mixed source and translation layout" },
   "biViewTitle": { "message": "Side-by-side on A4/e-reader; stacked on mobile" },
   "ereaderTitle": { "message": "Large-screen e-reader around 10 inches" },

@@ -134,6 +134,7 @@
   "sourceViewTitle": { "message": "回到原文视图" },
   "readModeTitle": { "message": "阅读模式：隐藏右栏设置与顶部工具条，只看版面（Esc 退出）" },
   "readModeExitTitle": { "message": "退出阅读模式" },
+  "imageResizeTitle": { "message": "拖动调整图片宽度，双击图片还原原始尺寸" },
   "mixedViewTitle": { "message": "按原网页的中英混排方式显示" },
   "biViewTitle": { "message": "A4/电纸书左右对照；手机自动按原文/译文串行排列" },
   "ereaderTitle": { "message": "10寸左右的大屏电纸书" },

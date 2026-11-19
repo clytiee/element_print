@@ -1615,7 +1615,153 @@ function setEditing(on) {
   if (!on && bi) refreshBilingual();
   // 进入编辑不主动落光标：没有选区就是没有选区，格式栏全部熄灭，点正文之后才跟段落走
   if (on) syncFormatState();
+  // 图片：编辑时关掉浏览器自带的拖拽，改用右下角的把手调宽度
+  if (on) {
+    editRoot().querySelectorAll("img").forEach((img) => {
+      img.draggable = false;
+    });
+  } else {
+    clearImageSelection();
+  }
   fit();
+}
+
+/* ---------- 编辑：图片尺寸 ---------- */
+
+const IMG_MIN_W = 48;
+let imgSelected = null; // 当前选中的图片
+let imgHandle = null; // 右下角的拖拽把手（挂在 body 上，定位用屏幕坐标）
+let imgDrag = null;
+
+function imageHandle() {
+  if (imgHandle) return imgHandle;
+  imgHandle = document.createElement("button");
+  imgHandle.type = "button";
+  imgHandle.className = "ep-img-handle";
+  imgHandle.title = t("imageResizeTitle");
+  imgHandle.setAttribute("aria-label", t("imageResizeTitle"));
+  imgHandle.hidden = true;
+  document.body.appendChild(imgHandle);
+  imgHandle.addEventListener("pointerdown", startImageDrag);
+  return imgHandle;
+}
+
+function placeImageHandle() {
+  const handle = imageHandle();
+  if (!imgSelected || !imgSelected.isConnected || !imgSelected.getClientRects().length) {
+    handle.hidden = true;
+    return;
+  }
+  const r = imgSelected.getBoundingClientRect();
+  handle.hidden = false;
+  handle.style.left = `${Math.round(r.right - 8)}px`;
+  handle.style.top = `${Math.round(r.bottom - 8)}px`;
+}
+
+function selectImage(img) {
+  if (imgSelected === img) {
+    placeImageHandle();
+    return;
+  }
+  clearImageSelection();
+  imgSelected = img;
+  imgSelected.draggable = false;
+  imgSelected.classList.add("ep-img-selected");
+  placeImageHandle();
+}
+
+function clearImageSelection() {
+  if (imgSelected) imgSelected.classList.remove("ep-img-selected");
+  imgSelected = null;
+  if (imgHandle) imgHandle.hidden = true;
+}
+
+// 图片能用到的最宽空间：多栏时不能超过一栏的宽度，否则会盖住邻栏的文字
+function imageMaxWidth(img) {
+  const root = editRoot();
+  const rootStyle = getComputedStyle(root);
+  const cols = Math.max(1, Math.round(parseFloat(rootStyle.columnCount) || 1));
+  const gap = parseFloat(rootStyle.columnGap) || 0;
+  const rootW = root.clientWidth || root.getBoundingClientRect().width;
+  const colW = cols > 1 ? (rootW - gap * (cols - 1)) / cols : rootW;
+  // 图片外面还可能套着 figure 之类，再取一层父级的可用宽度
+  const parent = img.parentElement;
+  const parentW = parent && parent !== root ? parent.clientWidth : colW;
+  return Math.max(IMG_MIN_W, Math.min(colW, parentW || colW));
+}
+
+// 拖拽时宽度按纸张的缩放折算回排版像素；高度跟着比例走（height: auto）
+function startImageDrag(e) {
+  if (!imgSelected) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const rect = imgSelected.getBoundingClientRect();
+  const layoutW = imgSelected.offsetWidth || rect.width;
+  const scale = layoutW ? rect.width / layoutW : 1;
+  imgDrag = { x: e.clientX, startW: layoutW, scale: scale || 1, maxW: imageMaxWidth(imgSelected) };
+  imageHandle().classList.add("is-dragging");
+  window.addEventListener("pointermove", moveImageDrag);
+  window.addEventListener("pointerup", endImageDrag, { once: true });
+}
+
+function moveImageDrag(e) {
+  if (!imgDrag || !imgSelected) return;
+  const raw = imgDrag.startW + (e.clientX - imgDrag.x) / imgDrag.scale;
+  const w = Math.min(imgDrag.maxW, Math.max(IMG_MIN_W, raw));
+  imgSelected.style.width = `${Math.round(w)}px`;
+  imgSelected.style.height = "auto";
+  imgSelected.style.maxWidth = `${Math.round(imgDrag.maxW)}px`;
+  placeImageHandle();
+}
+
+function endImageDrag() {
+  window.removeEventListener("pointermove", moveImageDrag);
+  if (imgHandle) imgHandle.classList.remove("is-dragging");
+  imgDrag = null;
+  // 双语对照时改的是左栏克隆，直接改样式不触发 input，手动回写一次
+  if (imgSelected && biActive()) {
+    const col = imgSelected.closest(".ep-bi__src");
+    const row = col && col.firstElementChild ? col.firstElementChild.__epRow : null;
+    if (row && row.node && row.node.isConnected) row.node.innerHTML = col.firstElementChild.innerHTML;
+  }
+}
+
+// 双击图片还原原始尺寸
+function resetImageSize(img) {
+  if (!img) return;
+  img.style.width = "";
+  img.style.height = "";
+  img.style.maxWidth = "";
+  placeImageHandle();
+  if (biActive()) {
+    const col = img.closest(".ep-bi__src");
+    const row = col && col.firstElementChild ? col.firstElementChild.__epRow : null;
+    if (row && row.node && row.node.isConnected) row.node.innerHTML = col.firstElementChild.innerHTML;
+  }
+}
+
+// 编辑态下点图片即选中它，点别处取消；滚轮滚动、窗口变化时把手跟着走
+function initImageResize() {
+  document.addEventListener("pointerdown", (e) => {
+    if (!editing) return;
+    const target = e.target;
+    if (imgHandle && target === imgHandle) return;
+    if (target && target.tagName === "IMG" && editRoot().contains(target)) {
+      selectImage(target);
+      return;
+    }
+    clearImageSelection();
+  });
+  document.addEventListener("dblclick", (e) => {
+    if (!editing) return;
+    const target = e.target;
+    if (target && target.tagName === "IMG" && editRoot().contains(target)) {
+      e.preventDefault();
+      resetImageSize(target);
+    }
+  });
+  $("viewport").addEventListener("scroll", placeImageHandle, { passive: true });
+  window.addEventListener("resize", placeImageHandle);
 }
 
 // 光标所在的段落块（正文里的 p / div / li 等）
@@ -3769,6 +3915,7 @@ function bindControls() {
   $("imgBtn").addEventListener("click", () => setImagesHidden(!hideImages));
   $("readBtn").addEventListener("click", () => setReadingMode(!readingMode));
   $("readExit").addEventListener("click", () => setReadingMode(false));
+  initImageResize();
 
   // 阅读模式：滚轮翻页（带节流），触控板的小幅滑动不会连翻好几页
   $("viewport").addEventListener(
