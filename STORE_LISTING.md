@@ -208,15 +208,15 @@ The extension does not collect browsing history on a server, does not upload con
 | 素材 | 规格 | 数量 | 状态 |
 | --- | --- | --- | --- |
 | 商店图标 | 128×128 PNG | 1 | 已有 `icons/icon128.png`（必要时另出 128×128 独立图） |
-| 截图 | 1280×800 或 640×400，PNG / JPG，最多 5 张 | 1–5 | 待出 |
-| 小型宣传图（Small promo tile） | 440×280，PNG / JPG | 1 | 待出 |
+| 截图 | 1280×800 或 640×400，PNG / JPG，最多 5 张 | 1–5 | 已出 5 张：`store/screenshot/final/01–05`，模板 `store/shots.html`，源图在 `store/screenshot/` |
+| 小型宣传图（Small promo tile） | 440×280，PNG / JPG | 1 | 模板 `store/promo-440x280.html` |
 | 大型宣传图（Marquee，参与推荐时才需要） | 1400×560 | 0–1 | 待出 |
 | 演示视频 | 仅 YouTube 链接 | 0–1 | 可选 |
 
 截图建议顺序（每张只表达一个卖点）：
 
 1. 选取状态：页面上元素被蓝色描边、标签显示 `标签.类名 尺寸`，右侧带操作提示。
-2. 原版版式预览 + 右侧设置面板：A4 纸、单栏、标题下横线。
+2. 原版（Original）版式预览 + 右侧设置面板：跟随网页原字体、字号与间距，只剩栏宽与纸张不同。
 3. 学术期刊双栏 + 首行缩进 + 栏间细线，或公文仿宋固定行距。
 4. 双语对照：左原文右译文，或手机/电纸书上下串行。
 5. 导出 HTML 或历史记录页。

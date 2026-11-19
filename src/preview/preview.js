@@ -3119,6 +3119,11 @@ function themeLabel(theme) {
 // 这样下一页照样跟随新网页的字体、字号、间距
 function rememberCurrentProfile() {
   const key = profileKey(state.settings.theme, state.settings.pageFormat);
+  // 原版跟随网页时，基准要含本页网页值；取不到网页版式（payload 没到 / 该页没有样式样本）时
+  // 基准退化成套装默认值，会把整份排版都算成「用户改过」写回档案，进而让每页的重置按钮常亮
+  if ((state.settings.theme || "paper") === "paper" && state.settings.bodyFont === "page") {
+    if (!state.payload || !pageLayoutValues()) return;
+  }
   const baseline = getBaseline();
   const layout = pickLayout(state.settings);
   const diff = {};

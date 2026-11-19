@@ -388,7 +388,7 @@ const THEMES = Object.keys(THEME_PRESETS);
 
 const STORAGE_KEY = "ep:settings";
 // 版式档案的存储版本：只有存「用户改过的项」的档案才沿用，旧版整份排版的档案视为无效
-const PROFILE_VERSION = 2;
+const PROFILE_VERSION = 3;
 
 function clamp(value, min, max, fallback) {
   return Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
