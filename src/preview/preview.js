@@ -2598,11 +2598,15 @@ function setReadingMode(on) {
   syncReadFullscreenBtn();
   if (readingMode) {
     buildReadPages();
+    // 配色与背景的变量只在阅读模式挂上，退出时清掉，免得顶掉「纯黑」等版面设置
+    applyReadPalette(readPalette.key, false);
+    applyReadBg(readBg, false);
     // 右栏开关「阅读模式直接全屏」：进来就顺带全屏（点按钮属于用户手势，可以直接申请）
     if (state.settings && state.settings.readAutoFullscreen && !document.fullscreenElement) {
       enterReadFullscreen();
     }
   } else {
+    clearReadVars();
     clearReadPages();
     leaveReadFullscreen();
   }
@@ -2618,6 +2622,24 @@ const READ_BG_DEFAULT = { type: "image", value: "paper-bg.jpg" };
 const READ_BG_KEY = "ep:readBg";
 let readBg = { ...READ_BG_DEFAULT };
 
+// 阅读用的这几个变量只在阅读模式挂到 .ep-app 上：挂常了会把「纯黑」等版面设置顶掉
+const READ_VARS = [
+  "--ep-read-paper",
+  "--ep-ink",
+  "--ep-title-color",
+  "--ep-sub",
+  "--ep-rule",
+  "--ep-read-sub",
+  "--ep-read-bg",
+  "--ep-read-bg-image",
+];
+
+function clearReadVars() {
+  const app = document.querySelector(".ep-app");
+  if (!app) return;
+  READ_VARS.forEach((name) => app.style.removeProperty(name));
+}
+
 function readBgCssValue(bg) {
   if (!bg || !bg.value) return "none";
   if (bg.type !== "image") return "none";
@@ -2628,7 +2650,7 @@ function readBgCssValue(bg) {
 function applyReadBg(bg, persist) {
   readBg = bg && bg.value ? bg : { ...READ_BG_DEFAULT };
   const app = document.querySelector(".ep-app");
-  if (app) {
+  if (app && readingMode) {
     if (readBg.type === "image") {
       app.style.setProperty("--ep-read-bg", "#e9dcc3");
       app.style.setProperty("--ep-read-bg-image", readBgCssValue(readBg));
@@ -2732,7 +2754,7 @@ function readPaletteOf(key) {
 function applyReadPalette(key, persist) {
   readPalette = readPaletteOf(key);
   const app = document.querySelector(".ep-app");
-  if (app) {
+  if (app && readingMode) {
     app.style.setProperty("--ep-read-paper", readPalette.bg);
     app.style.setProperty("--ep-ink", readPalette.ink);
     app.style.setProperty("--ep-title-color", readPalette.ink);
