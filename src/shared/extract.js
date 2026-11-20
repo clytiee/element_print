@@ -1182,6 +1182,21 @@
         if (picked) break;
       }
     }
+    if (!picked) {
+      // 再者：标题所在 header 里的图。不少站点把大图放在标题「后面」（标题在上、题图在下），
+      // 上面的「只取标题之前」会漏掉，这里放宽到整个 header，仍用同一套合格判断
+      const header = titleEl.closest("header");
+      if (header) {
+        const nodes = Array.from(header.querySelectorAll("img"));
+        for (const img of nodes.slice(0, 6)) {
+          if (!imgSrc(img)) continue;
+          const box = img.closest("figure");
+          if (!looksLikeLeadImage(img, box)) continue;
+          picked = { img, box: box || img };
+          break;
+        }
+      }
+    }
     if (!picked) return "";
     const src = imgSrc(picked.img);
     if (!src) return "";
