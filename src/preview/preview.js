@@ -15,6 +15,7 @@ import {
   loadSettings,
   saveSettings,
   flushSettings,
+  forgetProfile,
 } from "../shared/settings.js";
 import { QUOTES, QUOTES_EN } from "../shared/quotes.js";
 
@@ -196,6 +197,8 @@ window.__epDebug = {
   get state() { return state; },
   get payload() { return state.payload; },
   get locale() { return chrome.i18n.getUILanguage(); },
+  // 阅读模式的基线网格与分页实测值（没进过阅读模式时为 null）
+  get readGrid() { return readMetrics; },
 };
 
 // 当前是否处于左右对照视图
@@ -1054,6 +1057,7 @@ function applySettings() {
   scheduleWideTables();
   syncBiHint();
   // 阅读模式下改字号、栏数、边距都要重新切页
+  applyReadRhythm();
   scheduleReadPages();
 }
 
@@ -2572,6 +2576,7 @@ const ICON_READ = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v14
 // 进入阅读模式后一律改用 undo-2（弯回箭头），表示「退回普通排版」
 const ICON_UNDO2 = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const ICON_MAXIMIZE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_HOME = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 9.5V21h13V9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 function setBtnIcon(btn, svg) {
   if (!btn) return;
@@ -2590,13 +2595,17 @@ function setReadingMode(on) {
   if (theme) theme.hidden = !readingMode;
   const fsBtn = $("readFsBtn");
   if (fsBtn) fsBtn.hidden = !readingMode;
+  const typeWrap = $("readType");
+  if (typeWrap) typeWrap.hidden = !readingMode;
   if (!readingMode) closeReadThemePanel();
+  if (!readingMode) closeReadTypePanel();
   const btn = $("readBtn");
   if (btn) btn.classList.toggle("is-on", readingMode);
   // 工具条上的阅读按钮始终是书页图标；右上角那组按钮的图标随全屏状态切换
   setBtnIcon(btn, ICON_READ);
   syncReadFullscreenBtn();
   if (readingMode) {
+    applyReadRhythm();
     buildReadPages();
     // 配色与背景的变量只在阅读模式挂上，退出时清掉，免得顶掉「纯黑」等版面设置
     applyReadPalette(readPalette.key, false);
@@ -2632,6 +2641,8 @@ const READ_VARS = [
   "--ep-read-sub",
   "--ep-read-bg",
   "--ep-read-bg-image",
+  // 阅读模式自己的字号（退出时清掉，免得顶掉版式的字号）
+  "--ep-font-size",
 ];
 
 function clearReadVars() {
@@ -2699,6 +2710,8 @@ function shrinkBackground(file) {
 
 function initReadBackground() {
   document.querySelectorAll(".ep-read-theme__dot").forEach((dot) => {
+    // 圆点本身就是那个背景色的样张：色值只写在 data-bg 里，这里直接刷到背景上
+    if (dot.dataset.bg) dot.style.background = dot.dataset.bg;
     dot.addEventListener("click", () => applyReadBg({ type: "color", value: dot.dataset.bg }, true));
   });
   const pick = $("readBgPick");
@@ -2836,6 +2849,339 @@ function initReadPalette() {
   });
 }
 
+/* ---------- 阅读模式：字号与行距（图标加减，无滑杆） ---------- */
+
+const READ_FONT_MIN = 9;
+const READ_FONT_MAX = 20;
+const READ_FONT_STEP = 1;
+const READ_LINE_MIN = 1.2;
+const READ_LINE_MAX = 2.4;
+
+// 行距格 U 是字号和行距的唯一出口：U = round(字号 × 行距)（行距固定磅值时只看磅值）。
+// 真正需要夹住的是 U，字号/行距都从 U 反算，面板上显示的数才对得上网格
+const READ_U_MIN = 20;
+const READ_U_MAX = 44;
+
+function unitOfSettings(s) {
+  const fontPx = ptToPx(s.fontSize);
+  const box = s.lineHeightMode === "fixed" ? ptToPx(s.lineHeightFixed) : fontPx * s.lineHeight;
+  return Math.max(8, Math.round(box));
+}
+
+// 阅读模式有自己的字号与行高格：存 settings.readFontPt / readUnitPx（跨版式共享、不参与「已修改」判定），
+// 为 0 时跟随版式的字号与行距；改它不再写 fontSize/lineHeight，预览与打印都不受影响
+function readFontPtOf(s = state.settings) {
+  const v = Number(s.readFontPt);
+  return v > 0 ? v : s.fontSize;
+}
+
+function readUnitOf(s = state.settings) {
+  const v = Number(s.readUnitPx);
+  return v > 0 ? Math.round(v) : unitOfSettings(s);
+}
+
+// 上限还要受版心约束：一屏至少要排 8 行
+function maxReadUnit() {
+  const h = (readMetrics && readMetrics.contentH) || 0;
+  return h ? Math.min(READ_U_MAX, Math.floor(h / 8)) : READ_U_MAX;
+}
+
+function clampReadUnit(u) {
+  return Math.min(maxReadUnit(), Math.max(READ_U_MIN, Math.round(u)));
+}
+
+// 加减到两端的按钮置灰，点了也不会没反应
+function syncReadTypeButtons() {
+  const s = state.settings;
+  const fontPt = readFontPtOf(s);
+  const u = clampReadUnit(readUnitOf(s));
+  const fontAtMin = fontPt <= READ_FONT_MIN + 1e-6 || u <= READ_U_MIN;
+  const fontAtMax = fontPt >= READ_FONT_MAX - 1e-6 || u >= maxReadUnit();
+  const lineAtMin = u <= READ_U_MIN;
+  const lineAtMax = u >= maxReadUnit();
+  const set = (id, off) => {
+    const btn = $(id);
+    if (btn) btn.disabled = off;
+  };
+  set("readFontDown", fontAtMin);
+  set("readFontUp", fontAtMax);
+  set("readLineDown", lineAtMin);
+  set("readLineUp", lineAtMax);
+  // 顺手把两个数值显示出来：字号是实际像素，行高就是网格 U
+  const fv = $("readFontVal");
+  if (fv) fv.textContent = String(Math.round(ptToPx(fontPt)));
+  const lv = $("readLineVal");
+  if (lv) lv.textContent = String(u);
+}
+
+// 阅读模式的字号/行高格只写 readFontPt / readUnitPx，不碰版式设置：
+// 预览、打印、重置按钮都不受影响；改完立刻重排阅读页
+function commitReadTypography(patch) {
+  Object.assign(state.settings, patch);
+  saveSettings(state.settings, state.profiles);
+  syncReadTypeButtons();
+  if (!readingMode) return;
+  clearTimeout(readPagesTimer);
+  readPagesTimer = 0;
+  applyReadRhythm();
+  buildReadPages();
+}
+
+function stepReadFont(delta) {
+  const s = state.settings;
+  const cur = readFontPtOf(s);
+  const target = Math.min(READ_FONT_MAX, Math.max(READ_FONT_MIN, cur + delta * READ_FONT_STEP));
+  if (Math.abs(target - cur) < 1e-6) return;
+  const targetPx = ptToPx(target);
+  const u0 = clampReadUnit(readUnitOf(s));
+  // 字号变了但还装得进当前这一格（行盒里留 20% 余量）就不动 U，只让字贴近格顶；
+  // 装不进时才把 U 抬一格，避免字号一大整篇行距跟着跳
+  let u = targetPx > u0 * 0.8 ? clampReadUnit(Math.ceil(targetPx / 0.8)) : u0;
+  const line = u / targetPx;
+  // 行距还要留在合理区间：太松/太紧就回头调 U
+  if (line > READ_LINE_MAX) u = clampReadUnit(Math.round(targetPx * READ_LINE_MAX));
+  if (line < READ_LINE_MIN) u = clampReadUnit(Math.round(targetPx * READ_LINE_MIN));
+  commitReadTypography({ readFontPt: Math.round(target * 100) / 100, readUnitPx: u });
+}
+
+function stepReadLine(delta) {
+  // 面板上的「行高」就是网格的 U，一次一格（1px）
+  const u0 = clampReadUnit(readUnitOf());
+  const u = clampReadUnit(u0 + delta);
+  if (u === u0) return;
+  const fontPx = ptToPx(readFontPtOf());
+  const line = u / fontPx;
+  if (line < READ_LINE_MIN - 1e-6 || line > READ_LINE_MAX + 1e-6) return;
+  commitReadTypography({ readUnitPx: u });
+}
+
+function openReadTypePanel() {
+  const panel = $("readTypePanel");
+  if (panel) panel.hidden = false;
+  const btn = $("readTypeBtn");
+  if (btn) btn.classList.add("is-on");
+  syncReadTypeButtons();
+}
+
+function closeReadTypePanel() {
+  const panel = $("readTypePanel");
+  if (panel) panel.hidden = true;
+  const btn = $("readTypeBtn");
+  if (btn) btn.classList.remove("is-on");
+}
+
+function toggleReadTypePanel() {
+  const panel = $("readTypePanel");
+  if (panel && !panel.hidden) closeReadTypePanel();
+  else {
+    closeReadThemePanel(); // 两个面板互斥，同时开着会重叠
+    openReadTypePanel();
+  }
+}
+
+function initReadType() {
+  const btn = $("readTypeBtn");
+  if (btn) btn.addEventListener("click", toggleReadTypePanel);
+  $("readFontDown").addEventListener("click", () => stepReadFont(-1));
+  $("readFontUp").addEventListener("click", () => stepReadFont(1));
+  $("readLineDown").addEventListener("click", () => stepReadLine(-1));
+  $("readLineUp").addEventListener("click", () => stepReadLine(1));
+  document.addEventListener("pointerdown", (e) => {
+    const wrap = $("readType");
+    if (!wrap || wrap.hidden) return;
+    if (wrap.contains(e.target)) return;
+    closeReadTypePanel();
+  });
+  syncReadTypeButtons();
+}
+
+/* ---------- 阅读模式：基线网格 ---------- */
+// 阅读区按「行距格」排：正文行盒 = U px（整数），段间距、标题行盒与段前段后都取 U 的整数倍，
+// 版心高再取 floor(可用高 / U) × U。这样翻页一定落在两行之间，不会切出半行
+let readUnit = 0;
+// 最近一次分页的实测值，调试面板与 __epDebug.readGrid 都读它
+let readMetrics = null;
+
+function applyReadRhythm() {
+  const app = document.querySelector(".ep-app");
+  if (!app || !readingMode) return;
+  const s = state.settings;
+  // 阅读模式用自己那套字号/行高格（为 0 时跟随版式），与预览、打印互不影响
+  const fontPt = readFontPtOf(s);
+  const fontPx = ptToPx(fontPt);
+  // 真正夹住的是 U：行高格只在 20~44 之间、且一屏至少排 8 行的范围内生效
+  const U = clampReadUnit(readUnitOf(s));
+  readUnit = U;
+  app.style.setProperty("--ep-font-size", fontPt + "pt");
+  // 段间距取最近的整数格（小于半格就归零，中文段落本来就不留白）；
+  // 标题的间距至少留一格，否则标题会贴住上下文
+  const gap = (v, minOne) => {
+    if (!(v > 0)) return 0;
+    const k = Math.round(v / U);
+    return (minOne ? Math.max(1, k) : k) * U;
+  };
+  const box = (v) => Math.max(U, Math.ceil(v / U) * U);
+  const titleBox = s.titleLineMode === "fixed" ? ptToPx(s.titleLineFixed) : ptToPx(s.titleSize) * s.titleLine;
+  const h1Box = s.h1LineMode === "fixed" ? ptToPx(s.h1LineFixed) : ptToPx(s.h1Size) * s.h1Line;
+  app.style.setProperty("--ep-read-u", U + "px");
+  app.style.setProperty("--ep-read-lh", U + "px");
+  app.style.setProperty("--ep-read-para-gap", gap(s.paraBefore + s.paraAfter, false) + "px");
+  app.style.setProperty("--ep-read-title-lh", box(titleBox) + "px");
+  app.style.setProperty("--ep-read-title-mt", gap(s.titleMt, true) + "px");
+  app.style.setProperty("--ep-read-title-mb", gap(s.titleMb, true) + "px");
+  app.style.setProperty("--ep-read-h1-lh", box(h1Box) + "px");
+  app.style.setProperty("--ep-read-h1-mt", gap(s.h1Mt, true) + "px");
+  app.style.setProperty("--ep-read-h1-mb", gap(s.h1Mb, true) + "px");
+  // 三到六级标题：行盒一整格，段前段后取整数格，间距按原规则里的 0.5em / 0.45em 折算
+  app.style.setProperty("--ep-read-sub-head-mt", gap(s.paraBefore + fontPx * 0.5, true) + "px");
+  app.style.setProperty("--ep-read-sub-head-mb", gap(fontPx * 0.45, false) + "px");
+}
+
+/* ---------- 阅读模式：把非文字块也拽回网格上 ---------- */
+// 标题块整体已经用 padding 补到整数格，标题译文、引言、作者日期行本身是多是少都不影响后面；
+// 真正会破格的剩下两类：引文（行高与内外边距是 em/mm 的零碎值）和图片/视频/表格（高度不可控）
+function normalizeReadBlocks(root, U, pageH) {
+  const near = (v) => (v > 0 ? Math.round(v / U) * U : 0);
+  // 行盒：网页原样常是 16px×1.9=30.4px 这种带小数的行高，每行多出的零头会一路累积把分页点顶偏，
+  // 所以所有文字块的行高一律写成 U 的整数值（px），不再用倍数
+  Array.from(root.querySelectorAll("p, .ep-para, li, dd, dt, blockquote, figcaption, .ep-bi__tgt, .ep-bi__text")).forEach(
+    (el) => {
+      // 标题元素的行盒由 CSS 里的 --ep-read-h1-lh / --ep-read-lh 变量决定，
+      // 这里不能写死成 U：28.8px 的 h2 塞进 30px 行盒会被裁掉上下一截
+      if (/^H[1-6]$/.test(el.tagName)) return;
+      el.style.lineHeight = `${U}px`;
+    }
+  );
+  // 图注的段前是 0.35em 这种零碎值，同样归格；图注本身按整格行高排
+  Array.from(root.querySelectorAll("figcaption")).forEach((el) => {
+    el.style.marginTop = `${near(parseFloat(getComputedStyle(el).marginTop) || 0)}px`;
+    el.style.marginBottom = "0px";
+  });
+  // 标题：行盒固定一整格 U。字号大到格子里塞不下时（行距会挤在一起）就等比缩小字号，
+  // 保证标题也落在同一个网格上，翻页切点永远不会劈开标题行
+  Array.from(root.querySelectorAll("h1, h2, h3, h4, h5, h6")).forEach((el) => {
+    const cs = getComputedStyle(el);
+    const fs = parseFloat(cs.fontSize) || U;
+    const maxFs = Math.max(U * 0.6, U * 0.78);
+    if (fs > maxFs) el.style.fontSize = `${Math.floor(maxFs)}px`;
+    el.style.lineHeight = `${U}px`;
+  });
+
+  // 段距同样只留 U 的整数倍（不足半格的零头归零）
+  Array.from(root.querySelectorAll("p, .ep-para")).forEach((el) => {
+    const cs = getComputedStyle(el);
+    el.style.marginTop = "0px";
+    el.style.marginBottom = `${near(parseFloat(cs.marginBottom) || 0)}px`;
+  });
+  // 对照行：行间距是 buildBilingual 里 takeRowSpacing 按网页原段距写到行上的
+  // （比如 24px），同样归到整数格
+  Array.from(root.querySelectorAll(".ep-bi__row")).forEach((el) => {
+    const mt = parseFloat(getComputedStyle(el).marginTop) || 0;
+    el.style.marginTop = `${near(mt)}px`;
+  });
+  // 引文：上下留白取到整数格
+  const quotes = Array.from(root.querySelectorAll("blockquote"));
+  quotes.forEach((el) => {
+    const cs = getComputedStyle(el);
+    el.style.paddingTop = `${near(parseFloat(cs.paddingTop) || 0)}px`;
+    el.style.paddingBottom = `${near(parseFloat(cs.paddingBottom) || 0)}px`;
+    el.style.marginTop = `${near(parseFloat(cs.marginTop) || 0)}px`;
+    el.style.marginBottom = `${near(parseFloat(cs.marginBottom) || 0)}px`;
+  });
+  // 图片、视频、表格：先说「一个格子装得下」这件事——比版心高的图在 CSS 里必然被切开，
+  // 所以超过一栏能容纳的高度就先等比缩小（缩到 ≤ 版心高的最大整格），
+  // 再由 break-inside: avoid-column 把它整块推到下一栏，不被栏边界切断
+  const fitH = pageH ? Math.max(U, Math.floor(pageH / U) * U) : 0;
+  // 光靠 break-inside: avoid-column 挡不住：多栏流里图片常被切成「上一页下半截 + 下一页完整一张」。
+  // 可靠的办法是把图放进原子级内联块（inline-block 建立 BFC，浏览器不会在栏边界拆开它），
+  // 于是它要么整块留在本栏，要么整块挪到下一栏
+  const makeAtomic = (el) => {
+    const fig = el.closest("figure");
+    if (fig) {
+      fig.style.display = "inline-block";
+      fig.style.width = "100%";
+      fig.style.verticalAlign = "top";
+      return;
+    }
+    if (el.parentElement && el.parentElement.closest(".ep-atomic")) return;
+    const box = document.createElement("span");
+    box.className = "ep-atomic";
+    box.style.display = "inline-block";
+    box.style.width = "100%";
+    box.style.verticalAlign = "top";
+    box.style.lineHeight = "0";
+    el.parentNode.insertBefore(box, el);
+    box.appendChild(el);
+  };
+  Array.from(root.querySelectorAll("img, video, table")).forEach((el) => {
+    makeAtomic(el);
+    const mt = near(parseFloat(getComputedStyle(el).marginTop) || 0);
+    el.style.marginTop = `${mt}px`;
+    if (fitH) {
+      const box = el.getBoundingClientRect();
+      const avail = fitH - mt;
+      if (box.height > avail && avail > 0) {
+        const k = avail / box.height;
+        el.style.maxWidth = "100%";
+        el.style.width = `${Math.max(1, Math.floor(box.width * k))}px`;
+        el.style.height = "auto";
+      }
+    }
+    const h = el.getBoundingClientRect().height;
+    const rem = Math.round((mt + h) % U);
+    el.style.marginBottom = rem ? `${U - rem}px` : "0px";
+  });
+  // 表格：行高按「半格」排（表格字号通常比正文小，整格太松），
+  // 行高与单元格内边距都归到 U/2 的整数倍；最后再把整个表格的高度补成 U 的整数倍，
+  // 这样表格内部的横向参考线是半格、表格外部的段落仍落在整格上
+  Array.from(root.querySelectorAll("table")).forEach((tbl) => {
+    const half = U / 2;
+    const nearHalf = (v) => (v > 0 ? Math.round(v / half) * half : 0);
+    Array.from(tbl.querySelectorAll("th, td")).forEach((cell) => {
+      cell.style.lineHeight = `${half}px`;
+      const cs = getComputedStyle(cell);
+      cell.style.paddingTop = `${nearHalf(parseFloat(cs.paddingTop) || 0)}px`;
+      cell.style.paddingBottom = `${nearHalf(parseFloat(cs.paddingBottom) || 0)}px`;
+    });
+    // 表格自身的上下外边距也归到整格，否则「表格 + 外边距」总高还是带零头
+    const tcs = getComputedStyle(tbl);
+    tbl.style.marginTop = `${near(parseFloat(tcs.marginTop) || 0)}px`;
+    tbl.style.marginBottom = `${near(parseFloat(tcs.marginBottom) || 0)}px`;
+    Array.from(tbl.querySelectorAll("tr")).forEach((tr) => {
+      const h = tr.getBoundingClientRect().height;
+      const rem = Math.round(h % half);
+      if (rem > 0.3) {
+        Array.from(tr.children).forEach((cell) => {
+          const base = parseFloat(getComputedStyle(cell).paddingBottom) || 0;
+          cell.style.paddingBottom = `${base + half - rem}px`;
+        });
+      }
+    });
+    // 总高补到整格：算上表格自己的上下外边距，补在原子块容器的 padding-bottom 上
+    const tcs2 = getComputedStyle(tbl);
+    const tblH =
+      tbl.getBoundingClientRect().height +
+      (parseFloat(tcs2.marginTop) || 0) +
+      (parseFloat(tcs2.marginBottom) || 0);
+    const remT = Math.round(tblH % U);
+    if (remT > 0.6) {
+      const wrap = tbl.parentElement && tbl.parentElement.classList.contains("ep-atomic") ? tbl.parentElement : tbl;
+      const base = parseFloat(getComputedStyle(wrap).paddingBottom) || 0;
+      wrap.style.paddingBottom = `${Math.round(base + U - remT)}px`;
+    }
+  });
+  // 图 + 图注整体也是个整块，高度不一定是整格（图注的行数、段前留白都会带零头），
+  // 这里按整个 figure 补一次，保证它下面那一行仍然落在格上
+  Array.from(root.querySelectorAll("figure")).forEach((el) => {
+    const h = el.getBoundingClientRect().height;
+    const rem = Math.round(h % U);
+    if (rem > 0.6) {
+      const padBase = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+      el.style.paddingBottom = `${Math.round(padBase + U - rem)}px`;
+    }
+  });
+}
+
 /* ---------- 阅读模式：按视口高度分页，一次一页 ---------- */
 
 const READ_CONTAINERS = ["body", "bilingual", "mixed", "serial"];
@@ -2911,6 +3257,15 @@ function showReadPage(index) {
     if (label) label.textContent = `${readIndex + 1} / ${readPageCount}`;
     const bar = pager.querySelector(".ep-read-pager__bar");
     if (bar) bar.style.width = `${((readIndex + 1) / readPageCount) * 100}%`;
+    const home = $("readPagerHome");
+    if (home) {
+      setBtnIcon(home, ICON_HOME);
+      home.disabled = readIndex === 0;
+      if (!home.dataset.bound) {
+        home.dataset.bound = "1";
+        home.addEventListener("click", () => showReadPage(0));
+      }
+    }
   }
   const vp = $("viewport");
   if (vp) vp.scrollTop = 0;
@@ -2931,7 +3286,7 @@ function buildReadPages() {
   const sheet = $("sheet");
   const source = readSourceContainer();
   if (!host || !vp || !sheet || !source) return;
-  // 双语对照 / 手机串行：整块是「一条一对」的竖排行，不能按栏切
+  // 双语对照 / 手机串行：竖排一条很高的流，一页页往下平移（不做多栏横排）
   const pairFlow = source.id === "bilingual" || source.id === "serial";
   const srcId = source.id;
 
@@ -2941,7 +3296,8 @@ function buildReadPages() {
   const capped = vpW > READ_MAX_W;
   const pageW = capped ? READ_MAX_W : Math.max(320, vpW);
   // 只在左右留白，上下始终贴满：上下露一绺背景很难看
-  const pageH = Math.max(320, vpH);
+  // 纸高也取整数格：视口高常是 851.625 这类小数，向下取整后页面四边全落在格上
+  const pageH = readUnit > 0 ? Math.max(readUnit, Math.floor(Math.max(320, vpH) / readUnit) * readUnit) : Math.max(320, vpH);
   // 背景只在「最大化后两侧留白」时才有意义；没最大化时整屏就是纸，露一绺背景反而难看
   vp.classList.toggle("is-read-wide", capped);
 
@@ -2959,11 +3315,24 @@ function buildReadPages() {
   host.hidden = false;
 
   const pageStyle = getComputedStyle(page);
-  const contentW = Math.max(
+  let contentW = Math.max(
     200,
     pageW - parseFloat(pageStyle.paddingLeft) - parseFloat(pageStyle.paddingRight)
   );
-  const contentH = Math.max(120, pageH - parseFloat(pageStyle.paddingTop) - parseFloat(pageStyle.paddingBottom));
+  const contentH0 = Math.max(120, pageH - parseFloat(pageStyle.paddingTop) - parseFloat(pageStyle.paddingBottom));
+  // 版心高取整数格：页面底边才落在两行之间
+  const contentH = readUnit > 0 ? Math.max(readUnit, Math.floor(contentH0 / readUnit) * readUnit) : contentH0;
+  readMetrics = {
+    unit: readUnit,
+    pageH,
+    padTop: parseFloat(pageStyle.paddingTop) || 0,
+    padBottom: parseFloat(pageStyle.paddingBottom) || 0,
+    contentH0: Math.round(contentH0 * 10) / 10,
+    contentH,
+    pageW: Math.round(pageW),
+    contentW: Math.round(contentW),
+    src: srcId,
+  };
 
   const body = source.cloneNode(true);
   stripCloneIds(body);
@@ -2994,9 +3363,78 @@ function buildReadPages() {
   body.style.transformOrigin = "top left";
 
   const bodyStyle = getComputedStyle(body);
-  const gap = parseFloat(bodyStyle.columnGap) || 0;
+  let gap = parseFloat(bodyStyle.columnGap) || 0;
   const cols = Math.max(1, Math.round(parseFloat(bodyStyle.columnCount) || 1));
   readFlow = body;
+  if (readMetrics) {
+    readMetrics.disp = bodyStyle.display;
+    readMetrics.colCount = bodyStyle.columnCount;
+    readMetrics.overflowY = bodyStyle.overflow;
+  }
+
+  // 栏距与栏宽统一取整数像素，并让「版心宽 + 栏距」正好被栏数整除。
+  // 原来 columnGap 是 1em、版心宽带 mm 小数时，每栏的栏距都是 379.xxx 这种值，
+  // 翻一页平移一次就偏零点几像素，翻到二十几页就能看出首行和版心上边没对齐
+  if (cols > 1) {
+    const gapI = Math.round(gap);
+    const pitch = Math.floor((Math.floor(contentW) + gapI) / cols);
+    if (gapI > 0 && pitch > gapI) {
+      contentW = cols * pitch - gapI;
+      gap = gapI;
+      body.style.columnGap = `${gapI}px`;
+      body.style.width = `${contentW}px`;
+      clip.style.width = `${contentW}px`;
+    }
+  }
+
+  // 引文与图片/表格也整到格上，再往下量栏数和停靠点。
+  // 必须放在「栏宽取整」之后：版心宽一变，图片（max-width:100%）的渲染高度也会变，
+  // 先补白再改宽，补出来的 padding 就白算了
+  if (readUnit > 0) normalizeReadBlocks(body, readUnit, contentH);
+
+  // 兜底体检：把流里高度不在整格上的块列出来（类名 + 实测高），
+  // 哪个元素还没吃到网格一眼就能看出来
+  if (readUnit > 0 && readMetrics) {
+    const off = [];
+    Array.from(body.children).forEach((el) => {
+      const h = el.getBoundingClientRect().height;
+      if (!h) return;
+      const rem = Math.abs(Math.round(h / readUnit) * readUnit - h);
+      if (rem > 1 && rem < readUnit - 1) {
+        const cls = el.className ? `.${String(el.className).trim().replace(/\s+/g, ".")}` : "";
+        off.push(`${el.tagName.toLowerCase()}${cls} ${Math.round(h * 100) / 100}`);
+      }
+    });
+    readMetrics.offGrid = off.slice(0, 8);
+  }
+
+  // 留一份实测值：正文实际行高与段距，和 U 对不上就说明还有元素没吃到网格
+  if (readMetrics) {
+    const probe = body.querySelector("p, .ep-para");
+    if (probe) {
+      const cs = getComputedStyle(probe);
+      readMetrics.lh = cs.lineHeight;
+      readMetrics.gap = cs.marginBottom;
+    }
+  }
+
+  // 标题块（含副标题、来源行、摘要）的 padding / margin 也是 3mm、1.2mm 这种零碎值，
+  // 先各自归格，再把整块高度补到整数格，否则正文第一行的顶边就落在半个格里
+  if (readUnit > 0 && body.firstElementChild && body.firstElementChild.classList.contains("ep-head")) {
+    const headEl = body.firstElementChild;
+    const hp = getComputedStyle(headEl);
+    const snap = (v) => (v > 0 ? Math.round(v / readUnit) * readUnit : 0);
+    headEl.style.marginTop = "0px";
+    headEl.style.marginBottom = "0px";
+    headEl.style.paddingTop = `${snap(parseFloat(hp.paddingTop) || 0)}px`;
+    headEl.style.paddingBottom = `${snap(parseFloat(hp.paddingBottom) || 0)}px`;
+    const headH = headEl.getBoundingClientRect().height;
+    const rem = headH % readUnit;
+    if (rem > 0.6) {
+      const padBase = parseFloat(getComputedStyle(headEl).paddingBottom) || 0;
+      headEl.style.paddingBottom = `${Math.round(padBase + readUnit - rem)}px`;
+    }
+  }
 
   if (pairFlow) {
     // 双语对照是 flex 竖排：高度锁死后行会被压扁到一屏里（看起来像没正文）。
@@ -3006,46 +3444,75 @@ function buildReadPages() {
     body.style.maxHeight = "none";
     body.style.columnCount = "1";
     body.style.overflow = "visible";
+    // 竖排一条很高的流，一页页往下平移。切点默认是 contentH 的整数倍，
+    // 但标题的行盒是 2U（28.8px 的 h2 要 60px），切在 30 的倍数上会正好劈开一行；
+    // 图、表格同理。所以先把这些「原子块」的位置记下来，切点落进去就整体前移到它上沿
     readAxis = "y";
-    readStep = contentH;
     const baseTop = body.getBoundingClientRect().top;
-    const stops = [];
-    let start = 0;
-    Array.from(body.children).forEach((el) => {
-      const rect = el.getBoundingClientRect();
-      const top = rect.top - baseTop;
-      const bottom = rect.bottom - baseTop;
-      const h = rect.height || 0;
-      if (!h) return;
-      // 这一行放不进当前页，且本页已经有内容，就从这一行的顶部另起一页
-      if (bottom - start > contentH + 1 && top > start) {
-        stops.push(start);
-        start = top;
-      }
+    const zones = [];
+    body.querySelectorAll("figure, table, .ep-atomic").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.height > 0) zones.push({ top: r.top - baseTop, bottom: r.bottom - baseTop });
     });
-    stops.push(start);
+    const stops = [0];
+    let cur = 0;
+    const totalH = body.scrollHeight;
+    while (cur + contentH < totalH) {
+      let next = cur + contentH;
+      const hit = zones.find((z) => z.top > cur + 0.5 && z.top < next - 0.5 && z.bottom > next + 0.5);
+      if (hit) next = hit.top;
+      if (next <= cur + 0.5) next = cur + contentH;
+      stops.push(next);
+      cur = next;
+    }
     readStops = stops;
-    readPageCount = Math.max(1, stops.length);
+    readStep = contentH;
+    readPageCount = stops.length;
     window.__epRead = {
       src: srcId,
       pair: true,
-      stops,
       count: readPageCount,
+      axis: "y",
+      step: readStep,
       scrollH: body.scrollHeight,
       kids: body.children.length,
       contentH,
     };
+    Object.assign(readMetrics, {
+      pair: true,
+      count: readPageCount,
+      step: readStep,
+      axis: "y",
+      scrollH: body.scrollHeight,
+      kids: body.children.length,
+      gap,
+      cols,
+    });
     showReadPage(0);
     return;
   }
 
   if (cols > 1) {
     const colW = Math.max(40, (contentW - gap * (cols - 1)) / cols);
-    const totalCols = Math.max(cols, Math.round((body.scrollWidth + gap) / (colW + gap)));
+    // 双语对照改块级 + 浮动之后，浮动子元素不一定计入 scrollWidth，
+    // 用 scrollWidth 换算总栏数会算成「只有一页」。改量「单栏纵排时的自然高度」再除以版心高
+    const keepH = body.style.height;
+    const keepCols = body.style.columnCount;
+    body.style.height = "auto";
+    body.style.columnCount = "1";
+    const naturalH = body.scrollHeight;
+    body.style.height = keepH;
+    body.style.columnCount = keepCols || `${cols}`;
+    const totalCols = Math.max(
+      cols,
+      Math.ceil((naturalH + 1) / contentH),
+      Math.round((body.scrollWidth + gap) / (colW + gap))
+    );
     readAxis = "x";
     readStops = null;
     readStep = cols * (colW + gap);
     readPageCount = Math.max(1, Math.ceil(totalCols / cols));
+    if (readMetrics) readMetrics.naturalH = naturalH;
   } else {
     // 单栏：内容纵向溢出，一屏一页往下移
     readAxis = "y";
@@ -3067,6 +3534,17 @@ function buildReadPages() {
     contentH,
     contentW,
   };
+  Object.assign(readMetrics, {
+    pair: false,
+    count: readPageCount,
+    axis: readAxis,
+    cols,
+    step: readStep,
+    scrollH: body.scrollHeight,
+    scrollW: body.scrollWidth,
+    kids: body.children.length,
+    gap,
+  });
   showReadPage(0);
 }
 
@@ -4095,7 +4573,11 @@ function loadThemeProfile(theme, pageFormat, reset = false) {
 function switchTheme(theme, reset = false) {
   if (!reset) rememberCurrentProfile();
   if (!loadThemeProfile(theme, state.settings.pageFormat, reset)) return;
-  if (reset) delete state.profiles[profileKey(theme, state.settings.pageFormat)];
+  if (reset) {
+    const key = profileKey(theme, state.settings.pageFormat);
+    delete state.profiles[key];
+    forgetProfile(key); // 落盘时会与存储里的旧档案合并，得显式记下删除
+  }
   syncControls();
   applySettings();
   saveSettings(state.settings, state.profiles);
@@ -4463,6 +4945,7 @@ function bindControls() {
   });
   initReadPalette();
   initReadBackground();
+  initReadType();
   initImageResize();
   initPreviewLinks();
 
@@ -4711,6 +5194,27 @@ function openReadabilityDebug() {
     return;
   }
   const rows = [
+    [t("debugReadGrid"), (() => {
+      const rm = readMetrics;
+      if (!rm) return t("debugReadGridNone");
+      const lines = [
+        `U ${rm.unit}px`,
+        `纸张 ${rm.pageW}×${rm.pageH}px（上 ${rm.padTop} / 下 ${rm.padBottom}）`,
+        `版心 ${rm.contentH}px ← 可用 ${rm.contentH0}px`,
+        `栏数 ${rm.cols || 1}${rm.gap ? ` · 栏距 ${rm.gap}px` : ""}`,
+      ];
+      if (rm.pair) {
+        lines.push(`双语按行分页 · ${rm.count} 页 · ${rm.kids} 行`);
+        lines.push(`停靠点 ${(rm.stops || []).map((v) => Math.round(v)).join(", ")}`);
+      } else {
+        lines.push(`${rm.axis === "x" ? "横向" : "纵向"}平移 · 每页 ${Math.round(rm.step || 0)}px · ${rm.count} 页`);
+        lines.push(`流尺寸 ${rm.scrollW}×${rm.scrollH}px`);
+      }
+      if (rm.offGrid && rm.offGrid.length) {
+        lines.push(`破格 ${rm.offGrid.join(" · ")}`);
+      }
+      return lines.join("\n");
+    })()],
     [t("debugTiming"), (() => {
       const tm = (state.payload && state.payload.timing) || {};
       return ["readabilityMs", "fontsMs", "imagesMs", "totalMs"]

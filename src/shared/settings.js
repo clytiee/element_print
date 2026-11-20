@@ -97,6 +97,9 @@ export const DEFAULT_SETTINGS = {
   showQuote: true, // 页脚左下角随机显示一句名言
   inkBlack: false, // 文字用纯黑（深色 #16181c 换成 #000），适合颜料墨打印
   hideBiBadge: false, // 隐藏译文角标（「页面」「缓存」这些提示），与版式组合无关
+  // 阅读模式自己的字号与行高格：0 表示跟随版式，改过之后只作用于阅读模式，不动版式也不点亮「重置版式」
+  readFontPt: 0,
+  readUnitPx: 0,
   pageFormat: "a4", // a4 | ereader（10.3″ 4:3 电纸书）| mobile（手机竖屏）
   bilingual: false, // 双语对照：左原文 / 右译文（逐段对齐）
   biSplit: 57, // 原文列宽（%），中西文宽度差明显，默认原文略宽
@@ -225,6 +228,8 @@ const SHARED_KEYS = [
   "closeAfterPrint",
   "inkBlack",
   "hideBiBadge",
+  "readFontPt",
+  "readUnitPx",
 ];
 
 export function profileKey(theme, pageFormat) {
@@ -411,6 +416,13 @@ function normalizeShared(raw, base) {
   if (raw.imgSize === "small" || raw.imgSize === "mid" || raw.imgSize === "full") {
     base.imgSize = raw.imgSize;
   }
+  // 阅读模式字号(pt)与行高格(px)：0 或越界一律回到「跟随版式」
+  base.readFontPt = Number.isFinite(raw.readFontPt) && raw.readFontPt > 0
+    ? Math.min(20, Math.max(9, Math.round(raw.readFontPt * 100) / 100))
+    : 0;
+  base.readUnitPx = Number.isFinite(raw.readUnitPx) && raw.readUnitPx > 0
+    ? Math.min(44, Math.max(20, Math.round(raw.readUnitPx)))
+    : 0;
   if (typeof raw.deeplKey === "string") base.deeplKey = raw.deeplKey.trim().slice(0, 200);
   if (typeof raw.deeplFree === "boolean") base.deeplFree = raw.deeplFree;
   if (raw.engine === "baidu" || raw.engine === "deepl") base.engine = raw.engine;
@@ -532,6 +544,13 @@ export async function loadSettings() {
 let saveTimer = 0;
 let lastSettings = null;
 let lastProfiles = null;
+// 「重置版式」会删掉组合档案；但落盘时是与存储里的旧档案合并，不显式记下删除就会被复活
+const removedProfiles = new Set();
+
+export function forgetProfile(key) {
+  if (!key) return;
+  removedProfiles.add(key);
+}
 
 async function persistSettings(settings, profiles) {
   try {
@@ -544,6 +563,8 @@ async function persistSettings(settings, profiles) {
         mergedProfiles[key] = value;
       });
     }
+    removedProfiles.forEach((key) => delete mergedProfiles[key]);
+    removedProfiles.clear();
     // 档案由 rememberCurrentProfile() 维护，只存用户改过的项；这里不再用整份排版覆盖
     const out = {
       ...pickShared(settings),

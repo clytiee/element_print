@@ -67,6 +67,34 @@
           </div>
         </div>
       </div>
+      <!-- 阅读模式的字号与行距：图标加减，没有滑杆和输入框 -->
+      <div class="ep-read-theme ep-read-type" id="readType" hidden>
+        <button type="button" id="readTypeBtn" class="ep-mini ep-mini--icon ep-read-exit ep-read-theme__btn" title="字号与行高" aria-label="字号与行高">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="4 7 4 4 20 4 20 7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="4" x2="12" y2="20" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><line x1="9" y1="20" x2="15" y2="20" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        </button>
+        <div class="ep-read-theme__panel ep-read-type__panel" id="readTypePanel" hidden>
+          <div class="ep-read-type__row">
+            <span class="ep-read-type__label" data-i18n="bodyFontSize">字号</span>
+            <span class="ep-read-type__value" id="readFontVal">16</span>
+            <button type="button" class="ep-read-type__step" id="readFontDown" title="字号减小" aria-label="字号减小">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+            </button>
+            <button type="button" class="ep-read-type__step" id="readFontUp" title="字号增大" aria-label="字号增大">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <div class="ep-read-type__row">
+            <span class="ep-read-type__label" data-i18n="readLineUnit">行高</span>
+            <span class="ep-read-type__value" id="readLineVal">30</span>
+            <button type="button" class="ep-read-type__step" id="readLineDown" title="行高减小" aria-label="行高减小">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+            </button>
+            <button type="button" class="ep-read-type__step" id="readLineUp" title="行高增大" aria-label="行高增大">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
       <!-- 编辑时的格式栏：作用于当前选区，全部为图标按钮，悬停显示名称 -->
       <div class="ep-format" id="formatBar" hidden>
         <button type="button" class="ep-fmt" data-cmd="fontDown" title="缩小字号" aria-label="缩小字号">
@@ -176,7 +204,7 @@
             </div>
           </div>
         </div>
-        <div class="ep-read-pager" id="readPager" hidden><span class="ep-read-pager__text"></span><i class="ep-read-pager__bar"></i></div>
+        <div class="ep-read-pager" id="readPager" hidden><button class="ep-read-pager__home" id="readPagerHome" type="button" data-i18n-title="readBackHome"></button><span class="ep-read-pager__text"></span><i class="ep-read-pager__bar"></i></div>
         <div class="ep-read-pages" id="readPages" hidden></div>
         <div class="ep-error" id="error" hidden></div>
       </div>

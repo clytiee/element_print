@@ -553,6 +553,137 @@ body {
   position: relative;
 }
 
+/* 阅读模式的基线网格：正文行盒 = U，段间距与标题行盒都取 U 的整数倍。
+   版心高在 JS 里同样取整数格，翻页就落在两行之间，不会切出半行。
+   这些变量只在阅读模式挂上，导出打印仍按原来的排版 */
+.ep-app.is-reading .ep-read-sheet .ep-body {
+  line-height: var(--ep-read-lh, var(--ep-line-height));
+}
+
+.ep-app.is-reading .ep-read-sheet .ep-body p,
+.ep-app.is-reading .ep-read-sheet .ep-body .ep-para {
+  margin-top: 0;
+  margin-bottom: var(--ep-read-para-gap, var(--ep-para-after));
+}
+
+.ep-app.is-reading .ep-read-sheet .ep-body h1,
+.ep-app.is-reading .ep-read-sheet .ep-body h2 {
+  line-height: var(--ep-read-h1-lh, var(--ep-h1-line, 1.35));
+  margin-top: var(--ep-read-h1-mt, 0px);
+  margin-bottom: var(--ep-read-h1-mb, 0px);
+}
+
+/* 引文：行高与正文取同一个整数格，不再用网页引文自带的行距比例 */
+.ep-app.is-reading .ep-read-sheet .ep-body blockquote {
+  line-height: var(--ep-read-lh);
+}
+
+/* 译文列原来按「原文字号折算」比例行高（--ep-line-height / 0.94），
+   在阅读模式里和网格 U 对不上，整列行盒会比 U 高一截；这里统一回 U */
+.ep-app.is-reading .ep-read-sheet .ep-body .ep-bi__tgt {
+  line-height: var(--ep-read-lh);
+}
+
+/* 双语对照的每一行是 grid 容器，基准样式里有 page-break-inside: avoid，
+   会让整行装不下就整块跳到下一栏、栏尾留一大片空白。阅读模式改回 auto，
+   允许一行按文字行正常跨栏（注意：Chrome 切 grid 时偶尔会把行头几行在上一栏
+   预演一遍，真出现重影就得把行改成 block + 定宽两列） */
+.ep-app.is-reading .ep-read-sheet .ep-body .ep-bi__row {
+  break-inside: auto;
+  page-break-inside: auto;
+}
+
+/* 阅读模式下把双语对照降级成「普通块级流 + 左浮动两列」：
+   原来每行是 grid/flex 容器，浏览器对这类容器的跨栏分片支持不完整
+   （会出现「本页露几行 + 下页整段重排」或整行被劈开）；
+   变成块级之后，分片按文字行正常进行，长段落自然跨栏，不重复也不丢行。
+   列宽仍用 --ep-split，两列之间各让半个间隔，合计 1em */
+.ep-app.is-reading .ep-read-sheet .ep-body.ep-bilingual {
+  display: block;
+}
+
+.ep-app.is-reading .ep-read-sheet .ep-body .ep-bi__row {
+  display: block;
+}
+
+/* 浮动元素不撑父高，这里手动清除，行高才等于两列里较高的那一列 */
+.ep-app.is-reading .ep-read-sheet .ep-body .ep-bi__row::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+
+.ep-app.is-reading .ep-read-sheet .ep-body .ep-bi__row > .ep-bi__src {
+  float: left;
+  width: var(--ep-split, 57%);
+  box-sizing: border-box;
+  padding-right: 0.5em;
+}
+
+.ep-app.is-reading .ep-read-sheet .ep-body .ep-bi__row > .ep-bi__tgt {
+  margin-left: var(--ep-split, 57%);
+  box-sizing: border-box;
+  padding-left: 0.5em;
+}
+
+/* 图片、表格这种整块内容不翻译，单列铺满整行 */
+.ep-app.is-reading .ep-read-sheet .ep-body .ep-bi__row.is-wide > .ep-bi__src {
+  float: none;
+  width: auto;
+  padding-right: 0;
+}
+
+/* 上下标：默认的 vertical-align: super/sub 会把行盒撑高（多出 4~5px），破掉行距格。
+   改成「行高 0 + 相对定位」：视觉上照样上下移动，但不参与行盒高度计算 */
+.ep-app.is-reading .ep-read-sheet .ep-body sup,
+.ep-app.is-reading .ep-read-sheet .ep-body sub {
+  font-size: 0.72em;
+  line-height: 0;
+  vertical-align: baseline;
+  position: relative;
+}
+
+.ep-app.is-reading .ep-read-sheet .ep-body sup {
+  top: -0.5em;
+}
+
+.ep-app.is-reading .ep-read-sheet .ep-body sub {
+  top: 0.25em;
+}
+
+/* 表格单元格文字垂直居中：行高按半格排后，上下 padding 往往不等，靠对齐来居中 */
+.ep-app.is-reading .ep-read-sheet .ep-body table th,
+.ep-app.is-reading .ep-read-sheet .ep-body table td {
+  vertical-align: middle;
+}
+
+/* 图片、视频、表格：整块不跨栏。多栏流里替换元素经常无视 break-inside: avoid，
+   必须显式写 avoid-column，它才会整体挪到下一栏，而不是被栏边界切一半 */
+.ep-app.is-reading .ep-read-sheet .ep-body img,
+.ep-app.is-reading .ep-read-sheet .ep-body video,
+.ep-app.is-reading .ep-read-sheet .ep-body table,
+.ep-app.is-reading .ep-read-sheet .ep-body figure {
+  break-inside: avoid;
+  break-inside: avoid-column;
+  page-break-inside: avoid;
+}
+
+/* 三到六级标题字号接近正文，行盒取一整格就够，段前段后同样取整数格 */
+.ep-app.is-reading .ep-read-sheet .ep-body h3,
+.ep-app.is-reading .ep-read-sheet .ep-body h4,
+.ep-app.is-reading .ep-read-sheet .ep-body h5,
+.ep-app.is-reading .ep-read-sheet .ep-body h6 {
+  line-height: var(--ep-read-lh);
+  margin-top: var(--ep-read-sub-head-mt, 0px);
+  margin-bottom: var(--ep-read-sub-head-mb, 0px);
+}
+
+.ep-app.is-reading .ep-read-sheet .ep-title {
+  line-height: var(--ep-read-title-lh, var(--ep-title-line, 1.22));
+  margin-top: var(--ep-read-title-mt, 0px);
+  margin-bottom: var(--ep-read-title-mb, 0px);
+}
+
 /* 页码指示：右下角一条细进度，鼠标不挡内容 */
 .ep-read-pager {
   position: absolute;
@@ -571,6 +702,39 @@ body {
 
 .ep-read-pager__text {
   font-variant-numeric: tabular-nums;
+}
+
+/* 返回首页：只有它可点（父级 pointer-events: none） */
+.ep-read-pager__home {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-bottom: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.72;
+  transition: opacity 120ms ease;
+}
+
+.ep-read-pager__home svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ep-read-pager__home:hover:not(:disabled) {
+  opacity: 1;
+}
+
+.ep-read-pager__home:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 .ep-read-pager__bar {
@@ -615,11 +779,11 @@ body {
   display: none;
 }
 
-/* 全屏按钮排在配色按钮左边 */
+/* 全屏按钮在最左，右边依次是字号行距、配色、退出 */
 .ep-read-fs {
   position: absolute;
   top: 12px;
-  right: 94px;
+  right: 134px;
   z-index: 41;
 }
 
@@ -628,6 +792,18 @@ body {
 }
 
 /* 全屏按钮不区分状态：点击前后样式完全一样，避免右上角多出一块高亮 */
+
+/* 字号与行距面板紧挨全屏按钮右边 */
+.ep-read-type {
+  position: absolute;
+  top: 12px;
+  right: 94px;
+  z-index: 41;
+}
+
+.ep-read-type[hidden] {
+  display: none;
+}
 
 .ep-read-theme__btn {
   position: static;
@@ -729,6 +905,76 @@ body {
   border-color: var(--ep-accent);
   color: var(--ep-accent);
   background: rgba(47, 111, 235, 0.08);
+}
+
+/* 字号 / 行距：每行一个标签 + 两个图标按钮 */
+.ep-read-type__panel {
+  padding: 6px;
+}
+
+.ep-read-type__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 2px;
+}
+
+.ep-read-type__row + .ep-read-type__row {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid #eceff3;
+}
+
+.ep-read-type__label {
+  min-width: 46px;
+  padding-left: 4px;
+  font-size: 11.5px;
+  color: #7a828d;
+  white-space: nowrap;
+}
+
+/* 右侧数值：字号是像素，行高就是网格 U */
+.ep-read-type__value {
+  min-width: 20px;
+  margin-right: 2px;
+  text-align: right;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: #7a828d;
+  opacity: 0.9;
+}
+
+.ep-read-type__step {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #dfe3e9;
+  border-radius: 6px;
+  background: #fff;
+  color: #3b4450;
+  cursor: pointer;
+}
+
+.ep-read-type__step:hover {
+  background: #eef1f5;
+  border-color: #cfd5de;
+}
+
+.ep-read-type__step svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+/* 点到头就置灰，免得点了没反应 */
+.ep-read-type__step:disabled {
+  opacity: 0.4;
+  cursor: default;
+  background: #fff;
 }
 
 .ep-sheet {
