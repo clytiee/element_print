@@ -475,6 +475,9 @@
         ppb: ps ? px(ps.paddingBottom) : 0,
         pmt: ps ? px(ps.marginTop) : 0,
         pmb: ps ? px(ps.marginBottom) : 0,
+        // 网页的引文缩进常落在段落上（blockquote 无 padding、p 有 margin-left），左右也要记
+        pml: ps ? px(ps.marginLeft) : 0,
+        pmr: ps ? px(ps.marginRight) : 0,
       };
     }
     return { body, title: titleFont, heads, quote: computed(quotePara), quoteStyle };

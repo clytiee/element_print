@@ -465,11 +465,13 @@
   color: inherit;
 }
 
+/* 网页的引文缩进多在里面的段落上（blockquote 本身没 padding 只有 p 有 margin-left），
+   所以左右也按抓下来的值；缺这些值时退回 0，不叠加默认的 0.9em 缩进 */
 .ep-sheet[data-quote-page="1"] .ep-body blockquote p,
 .ep-sheet[data-quote-page="1"] .ep-body blockquote .ep-para {
   padding: var(--ep-quote-ppad, 0);
   background: var(--ep-quote-pbg, transparent);
-  margin: var(--ep-quote-pmt, 0) 0 var(--ep-quote-pmb, 0);
+  margin: var(--ep-quote-pmt, 0) var(--ep-quote-pmr, 0) var(--ep-quote-pmb, 0) var(--ep-quote-pml, 0);
   color: inherit;
 }
 

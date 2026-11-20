@@ -874,6 +874,10 @@ function quoteBoxVars(data, style) {
       ["--ep-quote-bg", "transparent"],
       ["--ep-quote-pbg", "transparent"],
       ["--ep-quote-ppad", "0"],
+      ["--ep-quote-pmt", "0"],
+      ["--ep-quote-pmb", "0"],
+      ["--ep-quote-pml", "0"],
+      ["--ep-quote-pmr", "0"],
     ];
   }
   const st = style || {};
@@ -895,6 +899,9 @@ function quoteBoxVars(data, style) {
     ["--ep-quote-ppad", `${st.ppt || 0}px ${st.ppr || 0}px ${st.ppb || 0}px ${st.ppl || 0}px`],
     ["--ep-quote-pmt", (st.pmt || 0) + "px"],
     ["--ep-quote-pmb", (st.pmb || 0) + "px"],
+    // 网页的引文缩进往往在段落上（p 的 margin-left），不是 blockquote 的 padding
+    ["--ep-quote-pml", (st.pml || 0) + "px"],
+    ["--ep-quote-pmr", (st.pmr || 0) + "px"],
   ];
 }
 
