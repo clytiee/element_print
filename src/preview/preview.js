@@ -1601,6 +1601,15 @@ function setEditing(on) {
   });
   if (on && bi) $("bilingual").addEventListener("input", syncBiEdit);
   $("sheet").classList.toggle("is-editing", on);
+  // 退出编辑时把图片的选中框一并收掉，别把蓝框留在版面上
+  // 双语时图片在左栏克隆里，克隆可能被重排过，按类名全量清一遍更稳
+  if (!on) {
+    document.querySelectorAll("img.ep-img-selected").forEach((el) => {
+      el.classList.remove("ep-img-selected");
+      el.style.cursor = "";
+    });
+    clearImageSelection();
+  }
   $("formatBar").hidden = !on;
   if (!on) closeReplacePanel();
   setHint(on ? t("editHint") : baseHint());
@@ -1725,6 +1734,8 @@ function endImageDrag() {
     const row = col && col.firstElementChild ? col.firstElementChild.__epRow : null;
     if (row && row.node && row.node.isConnected) row.node.innerHTML = col.firstElementChild.innerHTML;
   }
+  // 松开鼠标就收掉选中框：蓝框留着像还没改完
+  clearImageSelection();
 }
 
 // 双击图片还原原始尺寸
@@ -1741,8 +1752,43 @@ function resetImageSize(img) {
   }
 }
 
+// 编辑时图片常被包在 <a> 里（整块外链或放大看图），一点就把预览跳到图片本身。
+// 编辑态下拦掉这些链接的跳转，让点击只用来选图/拖尺寸。
+function blockImageLinks(e) {
+  if (!editing) return;
+  const target = e.target;
+  const anchor = target && target.closest ? target.closest("a") : null;
+  if (!anchor || !editRoot().contains(anchor)) return;
+  if (!anchor.querySelector("img")) return;
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+// 预览页里的正文外链：一律另开一个标签，别让预览自己被目标网页顶掉
+// （预览页是扩展页，被顶掉后既回不来，也没法后退）
+function initPreviewLinks() {
+  document.addEventListener("click", (e) => {
+    if (editing) return; // 编辑态由 blockImageLinks 负责
+    if (e.button !== 0) return;
+    const a = e.target && e.target.closest ? e.target.closest("a[href]") : null;
+    if (!a) return;
+    const href = a.href || "";
+    if (!/^https?:/i.test(href)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      if (chrome && chrome.tabs && chrome.tabs.create) chrome.tabs.create({ url: href });
+      else window.open(href, "_blank", "noopener,noreferrer");
+    } catch {
+      window.open(href, "_blank", "noopener,noreferrer");
+    }
+  });
+}
+
 // 编辑态下点图片即选中它，点别处取消；滚轮滚动、窗口变化时把手跟着走
 function initImageResize() {
+  document.addEventListener("click", blockImageLinks, true);
+  document.addEventListener("auxclick", blockImageLinks, true);
   document.addEventListener("pointerdown", (e) => {
     if (!editing) return;
     const target = e.target;
@@ -2501,8 +2547,8 @@ function leaveReadFullscreen() {
 function syncReadFullscreenBtn() {
   const btn = $("readFsBtn");
   if (!btn) return;
+  // 只换 title，不加状态类：点击前后外观保持一致
   const on = Boolean(document.fullscreenElement);
-  btn.classList.toggle("is-on", on);
   const tip = on ? t("readFullscreenExitTitle") : t("readFullscreenTitle");
   btn.title = tip;
   btn.setAttribute("aria-label", tip);
@@ -2748,17 +2794,21 @@ let readWheelAt = 0;
 let readFlow = null; // 连续多栏的那条流，翻页靠平移它
 let readStep = 0;
 let readAxis = "x";
+let readStops = null; // 非等距翻页的停靠点（双语对照按「对」分页时用）
 
 // 当前在用的正文容器：原文 / 双语对照 / 混排 / 串行。
-// 只按 hidden 属性判断会选到「属性上可见、实际没内容」的空容器（双语对照没翻译时就是空的），
-// 所以要求真的渲染出来且有子节点，再取文字最多的那个
+// 阅读模式下原纸张整块被 CSS 隐藏，容器都量不到布局盒，所以先按当前视图直接选；
+// 视图判定不准时才退回到「可见且有内容、文字最多」的旧办法
 function readSourceContainer() {
-  const cands = READ_CONTAINERS.map((id) => $(id)).filter(
-    (el) => el && !el.hidden && el.getClientRects().length > 0 && el.children.length > 0
+  const id = biActive() ? "bilingual" : mixedActive() ? "mixed" : serialActive() ? "serial" : "body";
+  const el = $(id);
+  if (el && el.children.length) return el;
+  const cands = READ_CONTAINERS.map((cid) => $(cid)).filter(
+    (node) => node && node.children.length > 0 && (!node.hidden || node.getClientRects().length > 0)
   );
   if (!cands.length) return $("body");
-  return cands.reduce((best, el) =>
-    (el.textContent || "").length > (best.textContent || "").length ? el : best
+  return cands.reduce((best, node) =>
+    (node.textContent || "").length > (best.textContent || "").length ? node : best
   );
 }
 
@@ -2772,6 +2822,7 @@ function clearReadPages() {
   readPageCount = 0;
   readIndex = 0;
   readStep = 0;
+  readStops = null;
   const pager = $("readPager");
   if (pager) pager.hidden = true;
 }
@@ -2795,10 +2846,11 @@ function showReadPage(index) {
     return;
   }
   readIndex = Math.max(0, Math.min(readPageCount - 1, index));
+  // 双语对照按「对」翻，每页高度不等，用停靠点；普通正文仍是等距平移
+  const offset =
+    readStops && readStops[readIndex] != null ? readStops[readIndex] : readIndex * readStep;
   readFlow.style.transform =
-    readAxis === "x"
-      ? `translateX(${-readIndex * readStep}px)`
-      : `translateY(${-readIndex * readStep}px)`;
+    readAxis === "x" ? `translateX(${-offset}px)` : `translateY(${-offset}px)`;
   if (pager) {
     pager.hidden = readPageCount <= 1;
     const label = pager.querySelector(".ep-read-pager__text");
@@ -2825,6 +2877,9 @@ function buildReadPages() {
   const sheet = $("sheet");
   const source = readSourceContainer();
   if (!host || !vp || !sheet || !source) return;
+  // 双语对照 / 手机串行：整块是「一条一对」的竖排行，不能按栏切
+  const pairFlow = source.id === "bilingual" || source.id === "serial";
+  const srcId = source.id;
 
   // 阅读区宽度有上限：窗口没最大化时贴满，最大化后不再变宽，两边留出背景
   const vpW = vp.clientWidth;
@@ -2889,20 +2944,189 @@ function buildReadPages() {
   const cols = Math.max(1, Math.round(parseFloat(bodyStyle.columnCount) || 1));
   readFlow = body;
 
+  if (pairFlow) {
+    // 双语对照是 flex 竖排：高度锁死后行会被压扁到一屏里（看起来像没正文）。
+    // 这里改成块级连续流，再按「行边界」找停靠点，保证一对原文/译文不被拆到两页。
+    body.style.display = "block";
+    body.style.height = "auto";
+    body.style.maxHeight = "none";
+    body.style.columnCount = "1";
+    body.style.overflow = "visible";
+    readAxis = "y";
+    readStep = contentH;
+    const baseTop = body.getBoundingClientRect().top;
+    const stops = [];
+    let start = 0;
+    Array.from(body.children).forEach((el) => {
+      const rect = el.getBoundingClientRect();
+      const top = rect.top - baseTop;
+      const bottom = rect.bottom - baseTop;
+      const h = rect.height || 0;
+      if (!h) return;
+      // 这一行放不进当前页，且本页已经有内容，就从这一行的顶部另起一页
+      if (bottom - start > contentH + 1 && top > start) {
+        stops.push(start);
+        start = top;
+      }
+    });
+    stops.push(start);
+    readStops = stops;
+    readPageCount = Math.max(1, stops.length);
+    window.__epRead = {
+      src: srcId,
+      pair: true,
+      stops,
+      count: readPageCount,
+      scrollH: body.scrollHeight,
+      kids: body.children.length,
+      contentH,
+    };
+    showReadPage(0);
+    return;
+  }
+
   if (cols > 1) {
     const colW = Math.max(40, (contentW - gap * (cols - 1)) / cols);
     const totalCols = Math.max(cols, Math.round((body.scrollWidth + gap) / (colW + gap)));
     readAxis = "x";
+    readStops = null;
     readStep = cols * (colW + gap);
     readPageCount = Math.max(1, Math.ceil(totalCols / cols));
   } else {
     // 单栏：内容纵向溢出，一屏一页往下移
     readAxis = "y";
+    readStops = null;
     readStep = contentH;
     readPageCount = Math.max(1, Math.ceil(body.scrollHeight / contentH));
   }
 
+  window.__epRead = {
+    src: srcId,
+    pair: false,
+    count: readPageCount,
+    axis: readAxis,
+    cols,
+    step: readStep,
+    scrollH: body.scrollHeight,
+    scrollW: body.scrollWidth,
+    kids: body.children.length,
+    contentH,
+    contentW,
+  };
   showReadPage(0);
+}
+
+/* ---------- 外链图片：预览加载完后再回填进存档 ---------- */
+
+const IMG_INLINE_MAX = 40;
+const IMG_INLINE_BYTES = 4 * 1024 * 1024;
+const IMG_INLINE_TOTAL = 24 * 1024 * 1024;
+let inlineTimer = 0;
+
+function blobToDataUrlLite(blob) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(blob);
+  });
+}
+
+// 抓一张图转成 dataURL：预览这里已经加载过同一张图，多数请求直接命中 HTTP 缓存
+async function imageToDataUrl(url) {
+  if (!url || /^data:/i.test(url) || !/^https?:/i.test(url)) return "";
+  try {
+    const res = await fetch(url, { credentials: "omit" });
+    if (!res.ok) return "";
+    const blob = await res.blob();
+    if (!/^image\//i.test(blob.type) || blob.size > IMG_INLINE_BYTES) return "";
+    return await blobToDataUrlLite(blob);
+  } catch {
+    return "";
+  }
+}
+
+// 把 root 里还是外链的图换成 dataURL；onDone(src, dataUrl) 用来同步替换存档里的字符串。
+// 浏览器里没加载成功的图直接跳过，留着外链
+async function inlineRemoteImages(root, onDone) {
+  const imgs = Array.from(root.querySelectorAll("img")).filter((img) => {
+    const raw = img.getAttribute("src") || "";
+    return /^https?:/i.test(raw) && img.complete && img.naturalWidth > 0;
+  });
+  const uniq = [...new Set(imgs.map((img) => img.getAttribute("src")))].slice(0, IMG_INLINE_MAX);
+  let total = 0;
+  let changed = 0;
+  await Promise.all(
+    uniq.map(async (src) => {
+      if (total > IMG_INLINE_TOTAL) return;
+      const dataUrl = await imageToDataUrl(src);
+      if (!dataUrl) return;
+      total += dataUrl.length;
+      changed += 1;
+      if (onDone) onDone(src, dataUrl);
+      imgs.forEach((img) => {
+        if (img.getAttribute("src") === src) img.setAttribute("src", dataUrl);
+      });
+    })
+  );
+  return changed;
+}
+
+// 导出用：克隆出来的节点是离屏的，图不会真的加载，所以按 URL 直接抓，不依赖 complete
+async function inlineForExport(root) {
+  const urls = [
+    ...new Set(
+      Array.from(root.querySelectorAll("img"))
+        .map((img) => img.getAttribute("src") || "")
+        .filter((src) => /^https?:/i.test(src))
+    ),
+  ].slice(0, IMG_INLINE_MAX);
+  const map = new Map();
+  let total = 0;
+  await Promise.all(
+    urls.map(async (src) => {
+      if (total > IMG_INLINE_TOTAL) return;
+      const dataUrl = await imageToDataUrl(src);
+      if (!dataUrl) return;
+      total += dataUrl.length;
+      map.set(src, dataUrl);
+    })
+  );
+  if (map.size) {
+    root.querySelectorAll("img").forEach((img) => {
+      const src = img.getAttribute("src");
+      if (src && map.has(src)) img.setAttribute("src", map.get(src));
+    });
+  }
+  return map.size;
+}
+
+// 图都加载完（或出错）之后跑一次，把补上的图写回 payload
+function scheduleArchiveInlining() {
+  if (!state.payload || !payloadId) return;
+  const run = async () => {
+    const sheet = $("sheet");
+    if (!sheet) return;
+    const changed = await inlineRemoteImages(sheet, (src, dataUrl) => {
+      // 存档里正文是字符串，按原 src 文本替换，导出与再次打开都能直接拿到内嵌图
+      ["html", "mixedHtml"].forEach((key) => {
+        const txt = state.payload[key];
+        if (typeof txt === "string" && txt.includes(src)) {
+          state.payload[key] = txt.split(src).join(dataUrl);
+        }
+      });
+    });
+    if (changed) {
+      try {
+        await chrome.storage.local.set({ [STORAGE_KEY]: state.payload });
+      } catch {
+        /* 存不下就只影响下次打开，当前预览不受影响 */
+      }
+    }
+  };
+  // 等图片就位：图多、图大时要给足时间，一次扫完就够
+  clearTimeout(inlineTimer);
+  inlineTimer = setTimeout(run, 15000);
 }
 
 /* ---------- 双语对照（左原文 / 右译文，逐段成对） ---------- */
@@ -3422,12 +3646,16 @@ function buildBilingual(rows) {
 
     if (!row.wide) {
       const { key, text, page } = lookupBi(row);
-      // 原文是标题时译文也用同级标题元素，跟着版式的标题样式走，而不是缩成正文小字
+      // 译文格统一是容器 div，内容放在里面的 .ep-bi__text 里：
+      // 这样「译文格的对齐规则」和「引文/标题自己的排版规则」不会挤在同一个元素上抢权重
       const heading = /^H[1-6]$/.test(row.node.tagName);
-      const tgt = document.createElement(targetTag(row));
+      const tgt = document.createElement("div");
       tgt.className = "ep-bi__col ep-bi__tgt" + (heading ? " is-head" : "");
+      const inner = document.createElement(targetTag(row));
+      inner.className = "ep-bi__text";
+      tgt.appendChild(inner);
       if (text) {
-        fillBiTarget(tgt, row, text);
+        fillBiTarget(inner, row, text);
         // 页面自带译文优先标注，其次是本次刚翻出来的、再是缓存命中
         biBadge(
           tgt,
@@ -3585,10 +3813,17 @@ async function refreshBilingual(opts = {}) {
     return;
   }
 
-  let error = null;
+  // 没配翻译引擎是可预期的状态（用户自己还没填 Key），不算失败：
+  // 只把对照层按缓存渲染出来、状态行提示一句，不写控制台、不弹错误
   if (!engineReady(s)) {
-    error = engineMissingText(s);
-  } else {
+    biStatus(engineMissingText(s));
+    renderRows(rows);
+    applySettings();
+    return;
+  }
+
+  let error = null;
+  {
     const miss = texts.length - hit;
     biStatus(t("biTranslating"));
     showToast(miss > 0 ? t("biTranslatingN", [String(miss)]) : t("biTranslating"));
@@ -4174,6 +4409,7 @@ function bindControls() {
   initReadPalette();
   initReadBackground();
   initImageResize();
+  initPreviewLinks();
 
   // 阅读模式：滚轮翻页（带节流），触控板的小幅滑动不会连翻好几页
   $("viewport").addEventListener(
@@ -4380,6 +4616,8 @@ async function buildExportHtml() {
             : biActive();
     if (!keep) node.remove();
   });
+  // 导出是自包含的单文件：这时图片都已经显示过，借浏览器缓存把还剩下的外链图补成 dataURL
+  await inlineForExport(sheetCopy);
   const sheetHtml = sheetCopy.innerHTML;
   const title = state.payload ? state.payload.title : "Element Print";
   const docTitle = er ? `${title} - e-ink` : title;
@@ -4418,6 +4656,13 @@ function openReadabilityDebug() {
     return;
   }
   const rows = [
+    [t("debugTiming"), (() => {
+      const tm = (state.payload && state.payload.timing) || {};
+      return ["readabilityMs", "fontsMs", "imagesMs", "totalMs"]
+        .filter((k) => Number.isFinite(tm[k]))
+        .map((k) => `${k.replace(/Ms$/, "")} ${Math.round(tm[k])}ms`)
+        .join(" · ");
+    })()],
     [t("title"), debug.title],
     [t("debugTitleTrans"), debug.titleTrans],
     [t("debugTitleTransProbe"), (debug.titleTransProbe || []).length
@@ -4449,13 +4694,6 @@ function openReadabilityDebug() {
       (dg.sheets || []).forEach((s) => lines.push("样式表 " + s));
       (dg.remote || []).forEach((s) => lines.push("外链 " + s));
       return lines.join("\n");
-    })()],
-    [t("debugTiming"), (() => {
-      const tm = (state.payload && state.payload.timing) || {};
-      return ["readabilityMs", "fontsMs", "imagesMs", "totalMs"]
-        .filter((k) => Number.isFinite(tm[k]))
-        .map((k) => `${k.replace(/Ms$/, "")} ${Math.round(tm[k])}ms`)
-        .join(" · ");
     })()],
   ].filter(([, value]) => String(value || "").trim());
   const metaHtml = rows
@@ -4660,6 +4898,7 @@ async function init() {
     flashHint(t("imagesExternalHint", [String(payload.imagesExternal)]));
   }
   state.ready = true;
+  scheduleArchiveInlining(); // 图显示出来后再把剩下的外链图回填进存档
   restartHintSweep(); // 进页面先扫一遍
 }
 

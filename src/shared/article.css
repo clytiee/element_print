@@ -654,12 +654,21 @@
 }
 
 /* 译文格子里的标题不带上、下外边距：这段空白由左栏原文的段落间距给，
-   原文是 h3 时它自己的段前段后仍照原样保留，不会算两遍 */
-.ep-sheet .ep-body .ep-bi__row .ep-bi__tgt:is(h1, h2, h3, h4, h5, h6) {
-  margin: 0;
-}
+   原文是 h3 时它自己的段前段后仍照原样保留，不会算两遍。
+   译文格现在是容器 div，标题元素在里面的 .ep-bi__text 上，所以这些都落到内层 */
 .ep-sheet .ep-body .ep-bi__row .ep-bi__tgt > :first-child {
   margin-top: 0;
+}
+.ep-sheet .ep-body .ep-bi__row .ep-bi__tgt.is-head .ep-bi__text {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: inherit;
+}
+/* 普通段落的译文内容层：只保留文字，段落级间距交给行与 .ep-bi__para */
+.ep-sheet .ep-body .ep-bi__row .ep-bi__tgt .ep-bi__text {
+  margin: 0;
+  text-indent: 0;
 }
 .ep-sheet .ep-body .ep-bi__row.is-serial .ep-bi__tgt:not(:is(h1, h2, h3, h4, h5, h6)) {
   margin-top: 0.35em;
@@ -681,6 +690,21 @@
   padding: 0 0 0 0.9em;
   border-left: 2px solid #d5d8dd;
   color: #3c3c3c;
+}
+
+/* 对照行里的引文一律不吃浏览器默认的 1em 上下边距：
+   原文那格已经清零，译文这格（不论是 <blockquote> 本身还是里面套的）也要清，
+   否则译文整体比原文低一截 */
+.ep-bi__row blockquote {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+/* 引文结构样式（页上的引文框）打开时，上面那条 `.ep-sheet[data-quote-page="1"] .ep-body blockquote`
+   选择器权重更高，会把译文的边距顶回引文变量值；这里按同一权重补一条，让译文跟着原文走 */
+.ep-sheet[data-quote-page="1"] .ep-bi__row blockquote {
+  margin-top: var(--ep-quote-mt, 0);
+  margin-bottom: var(--ep-quote-mb, 0);
 }
 
 /* 对照行之间不再额外叠加间距：相邻两行的距离由格子里的段落自己带

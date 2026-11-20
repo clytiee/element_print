@@ -28,7 +28,9 @@
     "data-ep-display",
   ]);
 
-  const IMG_LIMIT = 40;
+  // 抽取前只内嵌开头这几张（题图、正文第一张），其余保留外链，预览打开后由浏览器自己慢慢加载：
+  // 全量内嵌会让「抽取→开预览」等所有图下载完，几十秒都见不到预览页
+  const IMG_EAGER = 3;
   const IMG_MAX_BYTES = 4 * 1024 * 1024;
   const IMG_TOTAL_CHARS = 24 * 1024 * 1024;
 
@@ -691,10 +693,11 @@
   }
 
   // 图片尽力转成 base64 内嵌；取不到就保留绝对 URL（预览时可能裂图，但不丢占位）。
+  // 只内嵌开头几张，其余的留外链让预览页按需加载
   // 返回仍未内嵌的图片数，用于提示「存档里这些图还是外链」
   async function inlineImages(root) {
     const all = Array.from(root.querySelectorAll("img"));
-    const imgs = all.slice(0, IMG_LIMIT);
+    const imgs = all.slice(0, IMG_EAGER);
     let total = 0;
     await Promise.all(
       imgs.map(async (img) => {

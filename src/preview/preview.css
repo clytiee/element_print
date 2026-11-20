@@ -627,17 +627,7 @@ body {
   display: none;
 }
 
-/* 全屏态不给蓝色高亮：阅读时右上一块蓝太抢眼，和旁边两个按钮一样就行 */
-.ep-read-fs.is-on {
-  background: #fff;
-  border-color: #dfe3e9;
-  color: #3b4450;
-}
-
-.ep-read-fs.is-on:hover {
-  background: #eef1f5;
-  border-color: #cfd5de;
-}
+/* 全屏按钮不区分状态：点击前后样式完全一样，避免右上角多出一块高亮 */
 
 .ep-read-theme__btn {
   position: static;
