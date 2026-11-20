@@ -1285,6 +1285,7 @@ function syncControls() {
   $("inkBlack").checked = Boolean(s.inkBlack);
   $("hideBiBadge").checked = Boolean(s.hideBiBadge);
   $("closeAfterPrint").checked = Boolean(s.closeAfterPrint);
+  $("readAutoFullscreen").checked = Boolean(s.readAutoFullscreen);
 
   $("bilingualOn").checked = Boolean(s.bilingual);
   $("deeplKey").value = s.deeplKey || "";
@@ -2546,12 +2547,37 @@ function leaveReadFullscreen() {
 
 function syncReadFullscreenBtn() {
   const btn = $("readFsBtn");
-  if (!btn) return;
-  // 只换 title，不加状态类：点击前后外观保持一致
+  // 只换图标和 title，不加状态类：点击前后外观保持一致
   const on = Boolean(document.fullscreenElement);
-  const tip = on ? t("readFullscreenExitTitle") : t("readFullscreenTitle");
-  btn.title = tip;
-  btn.setAttribute("aria-label", tip);
+  if (btn) {
+    const tip = on ? t("readFullscreenExitTitle") : t("readFullscreenTitle");
+    btn.title = tip;
+    btn.setAttribute("aria-label", tip);
+    setBtnIcon(btn, on ? ICON_UNDO2 : ICON_MAXIMIZE);
+  }
+  // 右上角三个按钮：非全屏是「全屏 · 调色板 · 返回(undo-2)」，
+  // 全屏是「返回(undo-2 退出全屏) · 调色板 · 阅读(退出阅读模式)」
+  const exit = $("readExit");
+  const exitTip = t("readExit");
+  if (exit) {
+    exit.title = exitTip;
+    exit.setAttribute("aria-label", exitTip);
+    setBtnIcon(exit, on ? ICON_READ : ICON_UNDO2);
+  }
+}
+
+/* ---------- 阅读模式：按钮图标 ---------- */
+
+const ICON_READ = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 12h2M16 8h2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+// 进入阅读模式后一律改用 undo-2（弯回箭头），表示「退回普通排版」
+const ICON_UNDO2 = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const ICON_MAXIMIZE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+function setBtnIcon(btn, svg) {
+  if (!btn) return;
+  const old = btn.querySelector("svg");
+  if (old) old.outerHTML = svg;
+  else btn.insertAdjacentHTML("afterbegin", svg);
 }
 
 function setReadingMode(on) {
@@ -2567,9 +2593,15 @@ function setReadingMode(on) {
   if (!readingMode) closeReadThemePanel();
   const btn = $("readBtn");
   if (btn) btn.classList.toggle("is-on", readingMode);
+  // 工具条上的阅读按钮始终是书页图标；右上角那组按钮的图标随全屏状态切换
+  setBtnIcon(btn, ICON_READ);
+  syncReadFullscreenBtn();
   if (readingMode) {
     buildReadPages();
-    syncReadFullscreenBtn();
+    // 右栏开关「阅读模式直接全屏」：进来就顺带全屏（点按钮属于用户手势，可以直接申请）
+    if (state.settings && state.settings.readAutoFullscreen && !document.fullscreenElement) {
+      enterReadFullscreen();
+    }
   } else {
     clearReadPages();
     leaveReadFullscreen();
@@ -4202,6 +4234,7 @@ function bindControls() {
   $("inkBlack").addEventListener("change", (e) => update({ inkBlack: e.target.checked }));
   $("hideBiBadge").addEventListener("change", (e) => update({ hideBiBadge: e.target.checked }));
   $("closeAfterPrint").addEventListener("change", (e) => update({ closeAfterPrint: e.target.checked }));
+  $("readAutoFullscreen").addEventListener("change", (e) => update({ readAutoFullscreen: e.target.checked }));
 
   // 双语对照：开时先退出编辑/删减（改的是原文 #body，对照层只是只读副本）
   $("bilingualOn").addEventListener("change", (e) => {

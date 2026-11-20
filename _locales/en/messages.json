@@ -85,6 +85,8 @@
   "hideBiBadgeNote": { "message": "Hides the Page / Cache source tags" },
   "closeAfterPrint": { "message": "Close after printing" },
   "closeAfterPrintNote": { "message": "Close the preview after the print dialog closes" },
+  "readAutoFullscreen": { "message": "Fullscreen on reading mode" },
+  "readAutoFullscreenNote": { "message": "Enter fullscreen together with reading mode" },
 
   "bilingual": { "message": "Bilingual" },
   "advanced": { "message": "Advanced" },

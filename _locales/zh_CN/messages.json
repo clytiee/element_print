@@ -85,6 +85,8 @@
   "hideBiBadgeNote": { "message": "不显示「页面」「缓存」这类来源角标" },
   "closeAfterPrint": { "message": "打印后自动关闭" },
   "closeAfterPrintNote": { "message": "打印后关闭预览页" },
+  "readAutoFullscreen": { "message": "阅读模式直接全屏" },
+  "readAutoFullscreenNote": { "message": "进阅读模式时同时进入全屏" },
 
   "bilingual": { "message": "双语对照" },
   "advanced": { "message": "高级" },

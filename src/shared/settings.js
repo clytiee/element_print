@@ -111,6 +111,7 @@ export const DEFAULT_SETTINGS = {
   targetLangManual: false, // 用户是否手动选过目标语言；选过就不再按界面语言重置
   view: "source", // source（原文） | mixed（中英混排） | bi（翻译；手机下内部解析为串行）
   closeAfterPrint: false, // 打印对话框关闭后自动关闭预览页
+  readAutoFullscreen: false, // 进阅读模式时同时进入全屏
 };
 
 // 电纸书默认排版；切到该格式时套用，之后仍可单项微调
