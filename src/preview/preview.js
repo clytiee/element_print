@@ -3746,44 +3746,35 @@ function lookupBi(row) {
 }
 
 // 正文顶层块即「段」；每段取纯文本送翻，一样一段
-const BI_MARK_BLOCK = /^(P|DIV|LI|BLOCKQUOTE|H[1-6]|FIGCAPTION|DD|DT|SECTION|ARTICLE)$/;
+// 只是脚注上标的节点（<sup>3,4</sup>）：既不该单独成段，也不该去改上一段的文本
+// （文本一动，译文键就变，缓存命中不到，译文会变空白），所以只在展示层搬动
+function isPureMark(node) {
+  if (!node || !/^(SUP|SUB)$/.test(node.tagName || "")) return false;
+  const text = (node.textContent || "").replace(/\s+/g, " ").trim();
+  return Boolean(text) && text.length <= 24;
+}
 
-// 段落之间的小上标（脚注标记 <sup>3,4</sup>）：页面上它接在上一段末尾，
-// 但抽取后可能成了容器的裸子节点，也可能因为前置的译文 span 被挤到下一段开头。
-// 两种情况都并回上一段末尾，配对译文时不再多出一段
-function absorbBareMarks(root) {
-  const prevBlock = (node) => {
-    let cur = node.previousElementSibling;
-    while (cur) {
-      if (BI_MARK_BLOCK.test(cur.tagName)) return cur;
-      cur = cur.previousElementSibling;
-    }
-    return null;
-  };
-  Array.from(root.querySelectorAll("sup, sub")).forEach((mark) => {
-    const text = (mark.textContent || "").replace(/\s+/g, " ").trim();
-    if (!text || text.length > 24) return;
-    const parent = mark.parentElement;
-    if (parent && BI_MARK_BLOCK.test(parent.tagName)) {
-      const prev = mark.previousElementSibling;
-      if (prev && BI_MARK_BLOCK.test(prev.tagName)) {
-        prev.appendChild(mark);
-        return;
+// 段首的上标（原文里它本该跟在上一段末尾，被前置译文 span 挤到了段首）
+function leadingMark(root) {
+  const block = root.firstElementChild;
+  if (!block) return null;
+  let node = block.firstChild;
+  while (node) {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      if (isPureMark(node)) return node;
+      if (!String(node.textContent || "").trim()) {
+        node = node.firstChild;
+        continue;
       }
+      return null;
     }
-    // 被挤到段首：整块挪回上一段末尾（只搬段首的，句中/句尾不动）
-    let before = mark.previousSibling;
-    while (before && !String(before.textContent || "").trim()) before = before.previousSibling;
-    if (before) return;
-    const block = mark.closest("p, li, blockquote, dd, dt, figcaption, h1, h2, h3, h4, h5, h6");
-    if (!block) return;
-    const owner = prevBlock(block);
-    if (owner) owner.appendChild(mark);
-  });
+    if (String(node.textContent || "").trim()) return null;
+    node = node.nextSibling;
+  }
+  return null;
 }
 
 function collectBiRows() {
-  absorbBareMarks($("body"));
   const rows = [];
   const walk = (node, quoteWrap) => {
     Array.from(node.children).forEach((child) => {
@@ -3801,6 +3792,14 @@ function collectBiRows() {
       if (!hasBlockChild(child)) {
         const text = (child.textContent || "").replace(/\s+/g, " ").trim();
         if (!text) return;
+        // 只有脚注上标的块：不单独成段，挂成上一行的尾巴（展示层，不改上一段的译文键）
+        if (isPureMark(child) && rows.length) {
+          const last = rows[rows.length - 1];
+          if (!last.wide) {
+            last.tail = child;
+            return;
+          }
+        }
         rows.push({ node: child, text, wide: false, quote: quoteWrap });
         return;
       }
@@ -4210,6 +4209,7 @@ function buildBilingual(rows) {
   ensureBiResizer();
   biPending = 0;
   let carry = 0;
+  let prevSrc = null;
   rows.forEach((row) => {
     const line = document.createElement("div");
     line.className = "ep-bi__row" + (row.wide ? " is-wide" : "");
@@ -4218,6 +4218,11 @@ function buildBilingual(rows) {
     src.className = "ep-bi__col ep-bi__src";
     const clone = sourceClone(row);
     src.appendChild(clone);
+    // 段首的脚注上标其实是上一段句尾的：只把标记搬到上一格末尾，文本与译文键都不动
+    const lead = leadingMark(src);
+    if (lead && prevSrc) prevSrc.appendChild(lead);
+    // 单独的脚注上标块同样挂到本段末尾
+    if (row.tail) src.appendChild(trimBrEdges(row.tail.cloneNode(true)));
     line.appendChild(src);
 
     if (!row.wide) {
@@ -4247,6 +4252,7 @@ function buildBilingual(rows) {
     }
     box.appendChild(line);
     carry = takeRowSpacing(line, row, src, carry);
+    prevSrc = src;
   });
   box.hidden = false;
   syncBiButton();
@@ -4268,6 +4274,8 @@ function buildSerial(rows) {
     src.className = "ep-bi__col ep-bi__src";
     const clone = sourceClone(row);
     src.appendChild(clone);
+    // 单独的脚注上标块挂到本段末尾（同对照视图）
+    if (row.tail) src.appendChild(trimBrEdges(row.tail.cloneNode(true)));
     line.appendChild(src);
 
     if (!row.wide) {
