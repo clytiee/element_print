@@ -621,8 +621,29 @@ function render(payload) {
   rankHeads($("mixed"), false);
   markParagraphs($("mixed"));
   seedPageTranslations(payload);
+  const prevLang = state.lang;
   state.lang = detectLang($("body"));
   setSheetLang(state.lang);
+  // 中英体例（缩进 / 段后 / 标题字体）是写在套装默认值里的，init 时语言还没判出来，
+  // 套装先按 zh 套了一遍；这里语言一确定就按该语言重新套一遍，
+  // 否则设置值与基准对不上，「重置版式」会一直亮着（学术版式尤甚）
+  if (prevLang !== state.lang) {
+    // 换语言前那套档案里，凡是等于旧语言套装默认值的项其实都是体例差异被误记下来的，
+    // 先剔掉，再按新语言重套一遍套装
+    const key = profileKey(state.settings.theme, state.settings.pageFormat);
+    const saved = state.profiles[key];
+    if (saved) {
+      const oldBase = localeFitFonts({
+        ...DEFAULT_SETTINGS,
+        ...(langFitPreset(THEME_PRESETS[state.settings.theme] || {}, prevLang) || {}),
+      });
+      Object.keys(saved).forEach((k) => {
+        if (k in oldBase && saved[k] === oldBase[k]) delete saved[k];
+      });
+    }
+    loadThemeProfile(state.settings.theme, state.settings.pageFormat);
+    syncControls();
+  }
   // 双语混排探测器：只做统计并打日志，不影响任何视图与版式，用来在真实站点上定阈值
   state.biProbe = probeBilingualSequence($("body"));
   if (state.biProbe.blocks >= 4) console.info("[ep:bi-probe]", state.biProbe);
