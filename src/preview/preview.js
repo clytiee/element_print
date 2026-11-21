@@ -4596,6 +4596,8 @@ function buildBilingual(rows) {
       const heading = isHead(row.node);
       const tgt = document.createElement("div");
       tgt.className = "ep-bi__col ep-bi__tgt" + (heading ? " is-head" : "");
+      // 译文格是纯容器，自己不带标题角色，靠 data-rank 让 CSS 把原文的标题排印照搬
+      if (heading) tgt.setAttribute("data-rank", String(headLevel(row.node) || 1));
       const inner = document.createElement(targetTag(row));
       inner.className = "ep-bi__text";
       tgt.appendChild(inner);
@@ -4647,6 +4649,7 @@ function buildSerial(rows) {
       const heading = isHead(row.node);
       const tgt = document.createElement(targetTag(row));
       tgt.className = "ep-bi__col ep-bi__tgt" + (heading ? " is-head" : "");
+      if (heading) tgt.setAttribute("data-rank", String(headLevel(row.node) || 1));
       if (text) {
         fillBiTarget(tgt, row, text);
         biBadge(

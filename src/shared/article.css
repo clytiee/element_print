@@ -645,6 +645,28 @@
 .ep-sheet .ep-body .ep-bi__row .ep-bi__tgt > :first-child {
   margin-top: 0;
 }
+/* 译文格是纯文本容器，不会自带段落标题的角色类，
+   这里按 data-rank 把原文那一级的字体、字号、字重、行高照搬过来 */
+.ep-sheet .ep-body .ep-bi__row .ep-bi__tgt.is-head[data-rank="1"] {
+  font-size: var(--ep-h1-size, 1.45em);
+  font-weight: var(--ep-h1-weight, 700);
+  font-family: var(--ep-h1-font, inherit);
+  line-height: var(--ep-h1-line, 1.35);
+}
+.ep-sheet .ep-body .ep-bi__row .ep-bi__tgt.is-head[data-rank="2"] {
+  font-size: var(--ep-h2-size, calc(var(--ep-h1-size, 1.45em) * 0.9));
+  font-weight: var(--ep-h2-weight, var(--ep-h1-weight, 700));
+  font-family: var(--ep-h2-font, inherit);
+  line-height: var(--ep-h1-line, 1.35);
+}
+/* 三级及以下的段落标题在原文里只加粗、跟正文字号 */
+.ep-sheet .ep-body .ep-bi__row .ep-bi__tgt.is-head[data-rank="3"],
+.ep-sheet .ep-body .ep-bi__row .ep-bi__tgt.is-head[data-rank="4"],
+.ep-sheet .ep-body .ep-bi__row .ep-bi__tgt.is-head[data-rank="5"],
+.ep-sheet .ep-body .ep-bi__row .ep-bi__tgt.is-head[data-rank="6"] {
+  font-size: 1em;
+  font-weight: 700;
+}
 .ep-sheet .ep-body .ep-bi__row .ep-bi__tgt.is-head .ep-bi__text {
   margin: 0;
   font-size: inherit;
