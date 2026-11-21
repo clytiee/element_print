@@ -71,7 +71,7 @@
   "showUrl": { "message": "显示网址" },
   "showTimestamp": { "message": "显示时间戳" },
   "showExcerpt": { "message": "显示摘要" },
-  "spanHead": { "message": "一级标题跨栏（双栏时）" },
+  "spanHead": { "message": "小标题跨栏（双栏时）" },
   "allowBreak": { "message": "段落可跨页" },
   "allowBreakNote": { "message": "取消勾选则整段移到下一页" },
   "showHeader": { "message": "显示页眉" },
@@ -160,7 +160,7 @@
   "alignCenterTitle": { "message": "居中" },
   "alignRightTitle": { "message": "右对齐" },
   "indentTitle": { "message": "首行缩进" },
-  "h2Title": { "message": "一级标题" },
+  "h2Title": { "message": "小标题" },
   "h3Title": { "message": "二级标题" },
   "quoteTitle": { "message": "引文块" },
   "olTitle": { "message": "有序列表" },
@@ -292,7 +292,9 @@
   "font": { "message": "字体" },
   "size": { "message": "字号" },
   "tabTitle": { "message": "标题" },
-  "tabHead": { "message": "一级标题" },
+  "tabHead": { "message": "小标题" },
   "tabBody": { "message": "正文" },
-  "h1Note": { "message": "正文里的一级标题，双栏时可跨栏；h2 跟随同一套设置。" }
+  "h2Size": { "message": "h2 字号" },
+  "h2Follow": { "message": "跟随小标题" },
+  "h1Note": { "message": "正文里的小标题（h1/h2），双栏时可跨栏；h3 及以下只加粗。" }
 }

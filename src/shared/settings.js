@@ -43,6 +43,12 @@ export const FONT_PRESETS = {
     label: "无衬线（Segoe / 苹方）",
     stack: '"Segoe UI", -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif',
   },
+  // 标题的兜底字体：网页标题字体抓不到时用它，不用正文那套（西文字重一高就容易变成 Segoe UI Black 那种笨重感）
+  head: {
+    label: "标题黑体（雅黑 / 苹方）",
+    stack:
+      '"Helvetica Neue", Arial, "Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Source Han Sans SC", sans-serif',
+  },
 };
 
 export const BODY_WEIGHTS = {
@@ -67,6 +73,7 @@ export const DEFAULT_SETTINGS = {
   // 正文一级标题（h1，双栏时可跨栏的那级；h2 跟着一起走）
   h1Font: "inherit", // inherit | page | FONT_PRESETS 的 key
   h1Size: 16, // pt
+  h2Size: 0, // pt，0 = 跟随 h1 的 0.9 倍
   h1Weight: "bold",
   h1LineMode: "ratio",
   h1Line: 1.35,
@@ -143,6 +150,7 @@ export const MOBILE_DEFAULTS = {
   titleMb: 2,
   h1Font: "inherit",
   h1Size: 13,
+  h2Size: 0,
   h1Weight: "bold",
   h1LineMode: "ratio",
   h1Line: 1.35,
@@ -180,6 +188,7 @@ export const LAYOUT_KEYS = [
   "titleMb",
   "h1Font",
   "h1Size",
+  "h2Size",
   "h1Weight",
   "h1LineMode",
   "h1Line",
@@ -269,6 +278,7 @@ export const THEME_PRESETS = {
     titleMb: 0,
     h1Font: "page",
     h1Size: 16,
+    h2Size: 0,
     h1Weight: "bold",
     h1LineMode: "ratio",
     h1Line: 1.35,
@@ -311,6 +321,7 @@ export const THEME_PRESETS = {
     titleMb: 0,
     h1Font: "hei",
     h1Size: 11.5,
+    h2Size: 0,
     h1Weight: "bold",
     h1LineMode: "ratio",
     h1Line: 1.35,
@@ -353,6 +364,7 @@ export const THEME_PRESETS = {
     titleMb: 8,
     h1Font: "hei",
     h1Size: 16,
+    h2Size: 0,
     h1Weight: "normal",
     h1LineMode: "fixed",
     h1Line: 1.75,
@@ -456,6 +468,7 @@ function normalizeLayout(raw, base) {
   if (BODY_WEIGHTS[raw.titleWeight]) base.titleWeight = raw.titleWeight;
 
   base.h1Size = clamp(raw.h1Size, 8, 48, base.h1Size);
+  base.h2Size = clamp(raw.h2Size, 0, 48, base.h2Size);
   base.h1Mt = clamp(raw.h1Mt, 0, 40, base.h1Mt);
   base.h1Mb = clamp(raw.h1Mb, 0, 40, base.h1Mb);
   if (raw.h1LineMode === "fixed") base.h1LineMode = "fixed";

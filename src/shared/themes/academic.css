@@ -37,7 +37,7 @@
   text-indent: 0;
 }
 
-/* 一级、二级标题的字体、字号、边距由右栏「一级标题」页签统管，这里只管三级以内的小标题 */
+/* 一级、二级标题的字体、字号、边距由右栏「小标题」页签统管，这里只管三级以内的小标题 */
 .ep-sheet[data-theme="academic"] .ep-body h3,
 .ep-sheet[data-theme="academic"] .ep-body h4,
 .ep-sheet[data-theme="academic"] .ep-body h5,

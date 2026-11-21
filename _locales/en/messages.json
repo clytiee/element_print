@@ -71,7 +71,7 @@
   "showUrl": { "message": "Show URL" },
   "showTimestamp": { "message": "Show timestamp" },
   "showExcerpt": { "message": "Show summary" },
-  "spanHead": { "message": "Span title across columns" },
+  "spanHead": { "message": "Span subhead across columns" },
   "allowBreak": { "message": "Allow paragraph breaks across pages" },
   "allowBreakNote": { "message": "Uncheck to keep the whole paragraph on one page" },
   "showHeader": { "message": "Show header" },
@@ -160,7 +160,7 @@
   "alignCenterTitle": { "message": "Align center" },
   "alignRightTitle": { "message": "Align right" },
   "indentTitle": { "message": "First-line indent" },
-  "h2Title": { "message": "Heading 1" },
+  "h2Title": { "message": "Subhead" },
   "h3Title": { "message": "Heading 2" },
   "quoteTitle": { "message": "Quote block" },
   "olTitle": { "message": "Numbered list" },
@@ -292,7 +292,9 @@
   "font": { "message": "Font" },
   "size": { "message": "Size" },
   "tabTitle": { "message": "Title" },
-  "tabHead": { "message": "H1" },
+  "tabHead": { "message": "Subheads" },
   "tabBody": { "message": "Body" },
-  "h1Note": { "message": "H1 inside the article body; H2 follows the same settings. Spans both columns when two-column." }
+  "h2Size": { "message": "H2 size" },
+  "h2Follow": { "message": "Follow subhead" },
+  "h1Note": { "message": "Subheads are H1/H2; H3 and below are only bolded. Spans both columns when two-column." }
 }

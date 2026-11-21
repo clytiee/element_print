@@ -334,27 +334,29 @@
 }
 
 .ep-body h1 { font-size: var(--ep-h1-size, 1.45em); }
-.ep-body h2 { font-size: calc(var(--ep-h1-size, 1.45em) * 0.9); }
-.ep-body h3 { font-size: 1.14em; }
+.ep-body h2 { font-size: var(--ep-h2-size, calc(var(--ep-h1-size, 1.45em) * 0.9)); }
+/* h3 及以下不管样式，只加粗、跟正文字号 */
+.ep-body h3,
 .ep-body h4,
 .ep-body h5,
-.ep-body h6 { font-size: 1.02em; }
+.ep-body h6 { font-size: 1em; }
 
-/* 一级标题的排印由右栏「一级标题」页签统管，h2 跟着 h1 走 */
+/* 小标题的排印由右栏「小标题」页签统管；h2 的字重可来自网页自己的 */
 .ep-body h1,
 .ep-body h2 {
   font-weight: var(--ep-h1-weight, 700);
   line-height: var(--ep-h1-line, 1.35);
   margin: var(--ep-h1-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h1-mb, 0.45em);
 }
+.ep-body h2 { font-weight: var(--ep-h2-weight, var(--ep-h1-weight, 700)); }
 
-/* 原版：正文里的各级标题跟随网页自己的标题字体；其他版式变量为空时继承正文 */
+/* UA 给 strong/b 的是 font-weight: bolder（相对父级跳一档），标题里再套一层粗体就会
+   从 700 跳到 900。标题里的粗体元素统一继承标题自己的字重，不再往上翻 */
+.ep-body :is(h1, h2, h3, h4, h5, h6) :is(b, strong) { font-weight: inherit; }
+
+/* 原版：正文里的 h1/h2 跟随网页自己的标题字体；h3 及以下继承正文 */
 .ep-body h1 { font-family: var(--ep-h1-font, inherit); }
 .ep-body h2 { font-family: var(--ep-h2-font, inherit); }
-.ep-body h3 { font-family: var(--ep-h3-font, inherit); }
-.ep-body h4 { font-family: var(--ep-h4-font, inherit); }
-.ep-body h5 { font-family: var(--ep-h5-font, inherit); }
-.ep-body h6 { font-family: var(--ep-h6-font, inherit); }
 
 /* 正文用半粗/粗体时，原来的加粗文字靠下划线和正文拉开层级 */
 .ep-sheet[data-body-weight="semibold"] .ep-body b,
@@ -449,12 +451,6 @@
   line-height: var(--ep-quote-lh, inherit);
   text-indent: 0;
 }
-
-/* 原版：标题的上下边距也照网页来（网页常给标题留更宽的段前距） */
-.ep-sheet[data-head-page="1"] .ep-body h3 { margin: var(--ep-h3-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h3-mb, 0.45em); }
-.ep-sheet[data-head-page="1"] .ep-body h4 { margin: var(--ep-h4-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h4-mb, 0.45em); }
-.ep-sheet[data-head-page="1"] .ep-body h5 { margin: var(--ep-h5-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h5-mb, 0.45em); }
-.ep-sheet[data-head-page="1"] .ep-body h6 { margin: var(--ep-h6-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h6-mb, 0.45em); }
 
 /* 原版：引文的结构样式也跟网页——左框线、缩进、底色、段落内边距都按抓下来的值 */
 .ep-sheet[data-quote-page="1"] .ep-body blockquote {

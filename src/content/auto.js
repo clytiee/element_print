@@ -396,12 +396,20 @@
     // 各级标题的字体：拿 Readability 正文里的标题文字回原页面找同一个标题节点；
     // 找不到就退到正文容器内文字最多的同级标题（避开导航、侧栏的小标题样式）
     const heads = {};
-    ["h1", "h2", "h3", "h4", "h5", "h6"].forEach((tag) => {
+    // 文章大标题自己的节点（含包着它的容器、含它文字的那个 h1）不算「章节标题」：
+    // 它的字号是文章标题的字号，拿来当一级标题字号会明显偏大
+    const isTitleLike = (n) => {
+      if (!n) return false;
+      if (n === titleNode) return true;
+      if (titleNode && (titleNode.contains(n) || n.contains(titleNode))) return true;
+      return Boolean(wanted) && normText(n.textContent) === wanted;
+    };
+    ["h1", "h2"].forEach((tag) => {
       const texts = ((headTexts && headTexts[tag]) || [])
         .map((t) => normText(t).slice(0, 40))
         .filter(Boolean);
       const pool = Array.from(document.querySelectorAll(tag)).filter(
-        (n) => n.isConnected && normText(n.textContent)
+        (n) => n.isConnected && normText(n.textContent) && !isTitleLike(n)
       );
       let node = null;
       if (texts.length) {
@@ -412,12 +420,10 @@
           }) || null;
       }
       if (!node) {
-        const inArticle = pool.filter(
-          (n) =>
-            n.closest("article, main, [class*=content], [class*=post], [class*=article]") &&
-            n !== titleNode
+        const inArticle = pool.filter((n) =>
+          n.closest("article, main, [class*=content], [class*=post], [class*=article]")
         );
-        const use = inArticle.length ? inArticle : pool.filter((n) => n !== titleNode);
+        const use = inArticle.length ? inArticle : pool;
         use.sort((a, b) => normText(b.textContent).length - normText(a.textContent).length);
         node = use[0] || null;
       }

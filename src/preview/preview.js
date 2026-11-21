@@ -802,10 +802,11 @@ function titleFontStack(s, lang) {
   return (FONT_PRESETS[s.titleFont] || FONT_PRESETS.auto).stack;
 }
 
-// 一级标题字体：「跟随网页」取网页 h1 的字体栈，「继承」复用正文栈
+// 一级标题字体：「跟随网页」取网页 h1 的字体栈，「继承」复用正文栈；
+// 跟随网页但没抓到（页面没写或提取时取不到）时用标题兜底字体，别落到正文那套
 function h1FontStack(s, lang) {
   if (!s.h1Font || s.h1Font === "inherit") return "";
-  if (s.h1Font === "page") return pageHeadStack("h1");
+  if (s.h1Font === "page") return pageHeadStack("h1") || FONT_PRESETS.head.stack;
   return (FONT_PRESETS[s.h1Font] || FONT_PRESETS.auto).stack;
 }
 
@@ -815,7 +816,25 @@ function pageHeadStack(tag) {
   if (s.bodyFont !== "page") return "";
   const pf = (state.payload && state.payload.pageFont) || {};
   const head = pf.heads && pf.heads[tag];
-  return latinFirstStack((head && head.stack) || "");
+  return headingStack((head && head.stack) || "");
+}
+
+// 网页里该级标题的实测字重（数值），取不到返回 null
+function pageHeadWeight(tag) {
+  const pf = (state.payload && state.payload.pageFont) || {};
+  const head = pf.heads && pf.heads[tag];
+  const w = head && head.weight;
+  return Number.isFinite(w) && w > 0 ? w : null;
+}
+
+// 标题的网页字体栈：网页常用自托管字体（Figtree 之类），预览里没有这个字体文件，
+// 会一路落到栈尾的系统 sans，Windows 上重字重就成了 Segoe UI Black 那种粗黑。
+// 所以栈尾的通用 sans 换成标题兜底字体（Arial / 雅黑 / 苹方），西文中文都有像样的字形
+function headingStack(stack) {
+  const s = String(stack || "").trim();
+  if (!s) return "";
+  if (!/,\s*(sans-serif|system-ui|ui-sans-serif)\s*$/i.test(s)) return latinFirstStack(s);
+  return s.replace(/,\s*(sans-serif|system-ui|ui-sans-serif)\s*$/i, `, ${FONT_PRESETS.head.stack}`);
 }
 
 // 引文块（blockquote）在原版的字体与节奏：字号、行距、上下留白都跟网页；
@@ -825,24 +844,6 @@ function pageQuoteStack() {
   if (s.bodyFont !== "page") return "";
   const pf = (state.payload && state.payload.pageFont) || {};
   return (pf.quote && pf.quote.stack) ? latinFirstStack(pf.quote.stack) : "";
-}
-
-// 各级标题在原版下的上下边距（取自网页对应标题节点）
-function pageHeadGap(tag) {
-  const s = state.settings || {};
-  if (s.bodyFont !== "page") return null;
-  const pf = (state.payload && state.payload.pageFont) || {};
-  const head = pf.heads && pf.heads[tag];
-  if (!head) return null;
-  return { mt: head.paraBefore || 0, mb: head.paraAfter || 0 };
-}
-
-// 标题的段前段后：默认取网页的（原版）或版式默认，一旦用户动过右栏的段前段后，
-// 标题就跟着正文走，重置版式再回到网页值
-function headGapValue(tag) {
-  const s = state.settings || {};
-  if (s.headGapMode === "body") return { mt: s.paraBefore, mb: s.paraAfter };
-  return pageHeadGap(tag);
 }
 
 function pageQuoteData() {
@@ -994,14 +995,21 @@ function applySettings() {
     titleTransEl.style.textAlign = titleTextAlign === "start" ? "" : titleTextAlign;
   }
 
-  // 一级标题（h1，h2 跟随）：字体、字号、字重、行高、段前段后都来自「一级标题」页签
+  // 小标题（h1/h2）：字体、字号、字重、行高、段前段后都来自「小标题」页签
   const h1Stack = h1FontStack(s, state.lang);
-  // 跟随网页时 h2 取网页自己的字体，否则与一级标题同栈
-  const h2Stack = s.h1Font === "page" ? pageHeadStack("h2") : h1Stack;
+  // 跟随网页时 h2 取网页自己的字体，没抓到同样退回标题兜底字体；否则与一级标题同栈
+  const h2Stack = s.h1Font === "page" ? pageHeadStack("h2") || FONT_PRESETS.head.stack : h1Stack;
   root.style.setProperty("--ep-h1-font", h1Stack || "inherit");
   root.style.setProperty("--ep-h2-font", h2Stack || "inherit");
   root.style.setProperty("--ep-h1-size", s.h1Size + "pt");
+  // 0 = 跟随一级标题的 0.9 倍（CSS 里的 fallback）
+  if (Number(s.h2Size) > 0) root.style.setProperty("--ep-h2-size", Number(s.h2Size) + "pt");
+  else root.style.removeProperty("--ep-h2-size");
   root.style.setProperty("--ep-h1-weight", String(BODY_WEIGHTS[s.h1Weight] || 700));
+  // h2 的字重：跟随网页时用它自己的，取不到就落回小标题的字重
+  const h2Weight = s.h1Font === "page" ? pageHeadWeight("h2") : null;
+  if (h2Weight) root.style.setProperty("--ep-h2-weight", String(h2Weight));
+  else root.style.removeProperty("--ep-h2-weight");
   root.style.setProperty(
     "--ep-h1-line",
     s.h1LineMode === "fixed" ? s.h1LineFixed + "pt" : String(s.h1Line)
@@ -1009,21 +1017,7 @@ function applySettings() {
   root.style.setProperty("--ep-h1-mt", s.h1Mt + "px");
   root.style.setProperty("--ep-h1-mb", s.h1Mb + "px");
 
-  // 原版：其余各级标题仍跟随网页自己的字体与段前段后
-  let headGapAny = true;
-  ["h3", "h4", "h5", "h6"].forEach((tag) => {
-    root.style.setProperty(`--ep-${tag}-font`, pageHeadStack(tag) || "inherit");
-    const gap = headGapValue(tag);
-    if (gap) {
-      headGapAny = true;
-      root.style.setProperty(`--ep-${tag}-mt`, gap.mt + "px");
-      root.style.setProperty(`--ep-${tag}-mb`, gap.mb + "px");
-    } else {
-      root.style.removeProperty(`--ep-${tag}-mt`);
-      root.style.removeProperty(`--ep-${tag}-mb`);
-    }
-  });
-  $("sheet").dataset.headPage = headGapAny ? "1" : "0";
+  // h3 及以下不管样式，只加粗（见 article.css），也不再取网页的字体与段前段后
   root.style.setProperty("--ep-quote-font", pageQuoteStack() || "inherit");
   const quoteData = pageQuoteData();
   const quoteStyle = pageQuoteStyle();
@@ -1145,6 +1139,7 @@ const MODIFIED_TARGETS = {
   titleMb: () => fieldOf("titleMb"),
   h1Font: () => fieldOf("h1Font"),
   h1Size: () => fieldOf("h1Size"),
+  h2Size: () => fieldOf("h2Size"),
   h1Weight: () => fieldOf("segH1Weight"),
   h1Line: () => fieldOf("h1Line"),
   h1Mt: () => fieldOf("h1Mt"),
@@ -1312,6 +1307,11 @@ function syncControls() {
   $("vFontSize").textContent = ptToPx(s.fontSize) + "px";
   $("vTitleSize").textContent = ptToPx(s.titleSize) + "px";
   $("vH1Size").textContent = ptToPx(s.h1Size) + "px";
+  $("h2Size").value = String(Number(s.h2Size) || 0);
+  // 0 表示跟随一级标题的 0.9 倍
+  $("vH2Size").textContent = Number(s.h2Size) > 0
+    ? ptToPx(Number(s.h2Size)) + "px"
+    : t("h2Follow") || "跟随小标题";
   $("vLineHeight").textContent = bodyLine.fixed
     ? ptToPx(s.lineHeightFixed) + "px"
     : s.lineHeight.toFixed(2) + "×";
@@ -1453,7 +1453,7 @@ function bindLineControl(cfg) {
   });
 }
 
-// 文字排版三页签：标题 / 一级标题 / 正文
+// 文字排版三页签：标题 / 小标题 / 正文
 function showTypePane(name) {
   const key = name === "head" || name === "body" ? name : "title";
   ["title", "head", "body"].forEach((k) => {
@@ -4581,6 +4581,9 @@ function pageLayoutValues() {
   if (Number.isFinite(h1.paraBefore)) out.h1Mt = clamp(h1.paraBefore, 0, 24);
   if (Number.isFinite(h1.paraAfter)) out.h1Mb = clamp(h1.paraAfter, 0, 24);
   if (Number.isFinite(h1.weight)) out.h1Weight = weightKeyOf(h1.weight);
+  // 网页 h2 有实测字号就单独记下来；没有就保持 0（跟随 h1 的 0.9 倍）
+  const h2 = (pf.heads && pf.heads.h2) || {};
+  if (h2.sizePt) out.h2Size = clamp(h2.sizePt, 8, 48);
   return out;
 }
 
@@ -4755,6 +4758,7 @@ function bindControls() {
   });
   $("titleSize").addEventListener("input", (e) => update({ titleSize: Number(e.target.value) }));
   $("h1Size").addEventListener("input", (e) => update({ h1Size: Number(e.target.value) }));
+  $("h2Size").addEventListener("input", (e) => update({ h2Size: Number(e.target.value) }));
   ["titleMt", "titleMb", "h1Mt", "h1Mb"].forEach((key) => {
     $(key).addEventListener("input", (e) => update({ [key]: Number(e.target.value) }));
   });
@@ -5149,19 +5153,14 @@ async function buildExportHtml() {
     `--ep-h1-font:${h1FontStack(s, state.lang) || "inherit"}`,
     `--ep-h2-font:${s.h1Font === "page" ? pageHeadStack("h2") || "inherit" : h1FontStack(s, state.lang) || "inherit"}`,
     `--ep-h1-size:${s.h1Size}pt`,
+    ...(Number(s.h2Size) > 0 ? [`--ep-h2-size:${Number(s.h2Size)}pt`] : []),
     `--ep-h1-weight:${BODY_WEIGHTS[s.h1Weight] || 700}`,
+    ...(s.h1Font === "page" && pageHeadWeight("h2")
+      ? [`--ep-h2-weight:${pageHeadWeight("h2")}`]
+      : []),
     `--ep-h1-line:${s.h1LineMode === "fixed" ? s.h1LineFixed + "pt" : s.h1Line}`,
     `--ep-h1-mt:${s.h1Mt}px`,
     `--ep-h1-mb:${s.h1Mb}px`,
-    ...["h3", "h4", "h5", "h6"].map(
-      (tag) => `--ep-${tag}-font:${pageHeadStack(tag) || "inherit"}`
-    ),
-    ...["h3", "h4", "h5", "h6"].flatMap((tag) => {
-      const gap = headGapValue(tag);
-      return gap
-        ? [`--ep-${tag}-mt:${gap.mt}px`, `--ep-${tag}-mb:${gap.mb}px`]
-        : [];
-    }),
     `--ep-quote-font:${pageQuoteStack() || "inherit"}`,
     ...quoteBoxVars(pageQuoteData(), pageQuoteStyle()).map(([name, value]) => `${name}:${value}`),
     `--ep-ink:${(() => {
