@@ -213,11 +213,12 @@
   word-break: break-word;
 }
 
-/* 摘要原文与译文成组，对照模式下摘要较长时译文并到右栏 */
+/* 摘要原文与译文成组，对照模式下摘要较长时译文并到右栏。
+   栏宽与栏间距跟正文的双语行一致（--ep-split 由右侧分隔条控制），不另起一套比例 */
 .ep-excerptPair.is-bi {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  column-gap: 5mm;
+  grid-template-columns: var(--ep-split, 57%) minmax(0, 1fr);
+  column-gap: 1em;
   align-items: start;
 }
 
