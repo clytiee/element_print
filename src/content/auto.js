@@ -180,6 +180,47 @@
     return Boolean(media.compareDocumentPosition(firstP) & Node.DOCUMENT_POSITION_FOLLOWING);
   }
 
+  // 小上标（脚注标记 <sup>3,4</sup>）本该跟着上一段：两种走形都要并回去——
+  // 一是它成了容器的裸子节点（前一个兄弟就是上一段），二是翻译插件在它前面插了译文 span，
+  // 浏览器把它挤到下一段的开头（此时它是某个块的首个内容）
+  function absorbBareMarks(holder) {
+    Array.from(holder.querySelectorAll("sup, sub")).forEach((mark) => {
+      const text = normText(mark.textContent);
+      if (!text || text.length > 24) return;
+      // 裸节点：并到前一个块级兄弟的末尾
+      const parent = mark.parentElement;
+      if (parent && BLOCK_TAG_SET.has(parent.tagName)) {
+        const prev = mark.previousElementSibling;
+        if (prev && BLOCK_TAG_SET.has(prev.tagName)) {
+          prev.appendChild(mark);
+          return;
+        }
+      }
+      // 被挤到段首：整块挪回上一段末尾
+      const block = mark.closest(
+        "p, li, blockquote, dd, dt, figcaption, h1, h2, h3, h4, h5, h6"
+      );
+      if (!block || block === mark.parentElement) return;
+      // 只在「它就是这段的第一个内容」时才搬，句中、句尾的上下标不动
+      let before = mark.previousSibling;
+      while (before && !String(before.textContent || "").trim()) before = before.previousSibling;
+      if (before) return;
+      const ownerBlock = previousBlock(block);
+      if (!ownerBlock) return;
+      ownerBlock.appendChild(mark);
+    });
+  }
+
+  // 元素在文档顺序里往前找的最近一个块级兄弟
+  function previousBlock(node) {
+    let cur = node.previousElementSibling;
+    while (cur) {
+      if (BLOCK_TAG_SET.has(cur.tagName)) return cur;
+      cur = cur.previousElementSibling;
+    }
+    return null;
+  }
+
   // Readability 副本脱离原文档后读不到外部 CSS；回原页面实时元素取计算样式并打标记
   function markHolderInlineDisplay(holder) {
     const originals = Array.from(document.body.querySelectorAll("*")).filter(
@@ -528,6 +569,7 @@
     holder.style.cssText =
       "position:fixed;left:-99999px;top:0;visibility:hidden;pointer-events:none;";
     document.body.appendChild(holder);
+    absorbBareMarks(holder);
     markHolderInlineDisplay(holder);
 
     const titleText = article.title || document.title || "";

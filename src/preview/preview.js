@@ -3746,7 +3746,44 @@ function lookupBi(row) {
 }
 
 // 正文顶层块即「段」；每段取纯文本送翻，一样一段
+const BI_MARK_BLOCK = /^(P|DIV|LI|BLOCKQUOTE|H[1-6]|FIGCAPTION|DD|DT|SECTION|ARTICLE)$/;
+
+// 段落之间的小上标（脚注标记 <sup>3,4</sup>）：页面上它接在上一段末尾，
+// 但抽取后可能成了容器的裸子节点，也可能因为前置的译文 span 被挤到下一段开头。
+// 两种情况都并回上一段末尾，配对译文时不再多出一段
+function absorbBareMarks(root) {
+  const prevBlock = (node) => {
+    let cur = node.previousElementSibling;
+    while (cur) {
+      if (BI_MARK_BLOCK.test(cur.tagName)) return cur;
+      cur = cur.previousElementSibling;
+    }
+    return null;
+  };
+  Array.from(root.querySelectorAll("sup, sub")).forEach((mark) => {
+    const text = (mark.textContent || "").replace(/\s+/g, " ").trim();
+    if (!text || text.length > 24) return;
+    const parent = mark.parentElement;
+    if (parent && BI_MARK_BLOCK.test(parent.tagName)) {
+      const prev = mark.previousElementSibling;
+      if (prev && BI_MARK_BLOCK.test(prev.tagName)) {
+        prev.appendChild(mark);
+        return;
+      }
+    }
+    // 被挤到段首：整块挪回上一段末尾（只搬段首的，句中/句尾不动）
+    let before = mark.previousSibling;
+    while (before && !String(before.textContent || "").trim()) before = before.previousSibling;
+    if (before) return;
+    const block = mark.closest("p, li, blockquote, dd, dt, figcaption, h1, h2, h3, h4, h5, h6");
+    if (!block) return;
+    const owner = prevBlock(block);
+    if (owner) owner.appendChild(mark);
+  });
+}
+
 function collectBiRows() {
+  absorbBareMarks($("body"));
   const rows = [];
   const walk = (node, quoteWrap) => {
     Array.from(node.children).forEach((child) => {
