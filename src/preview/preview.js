@@ -93,6 +93,7 @@ function applyStaticI18n() {
     trimBtn: "trimTitle",
     titleBtn: "titleTitle",
     imgBtn: "imgOnTitle",
+    restoreBtn: "restoreTitle",
     readBtn: "readModeTitle",
     readExit: "readModeExitTitle",
     readThemeBtn: "readPaletteTitle",
@@ -321,7 +322,69 @@ const BLOCKISH = new Set([
 ]);
 
 function hasBlockChild(node) {
-  return Array.from(node.children).some((child) => BLOCKISH.has(child.tagName));
+  return Array.from(node.children).some((child) => BLOCKISH.has(child.tagName) || child.classList.contains("ep-hd"));
+}
+
+/* 段落标题：抽取时 h1–h6 已统一成 .ep-hd + data-lvl，这里仍兼容旧载荷里的标签 */
+const HEAD_SEL = ".ep-hd, h1, h2, h3, h4, h5, h6";
+function isHead(node) {
+  return !!node && node.nodeType === 1 && (node.classList.contains("ep-hd") || /^H[1-6]$/.test(node.tagName));
+}
+// 段落标题的级别只作为数据存在：1＝一级段落标题，2＝次级，3 以下只加粗
+function headLevel(node) {
+  if (!node || node.nodeType !== 1) return 0;
+  const rank = Number(node.getAttribute("data-rank"));
+  if (rank >= 1 && rank <= 6) return rank;
+  const cls = /ep-hd--([1-6])/.exec(node.className || "");
+  if (cls) return Number(cls[1]);
+  const tag = /^H([1-6])$/.exec(node.tagName);
+  return tag ? Number(tag[1]) : node.classList.contains("ep-hd") ? 1 : 0;
+}
+
+// 段落标题的级别有两套：data-lvl 是原网页的标签级别（只用于回网页取样，保真），
+// ep-hd--N 是「正文里的第几级段落标题」（排版只认这个）。h1 常被刊头/文章标题占掉，
+// 所以正文里最低的那一级标签要重排成第 1 级，否则第一级样式根本没人用
+function rankHeads(root, isPrimary = true) {
+  const heads = Array.from(root.querySelectorAll(".ep-hd"));
+  if (!heads.length) {
+    if (isPrimary) state.headBase = 1;
+    return;
+  }
+  const levels = Array.from(
+    new Set(heads.map((el) => Number(el.getAttribute("data-lvl")) || 1))
+  ).sort((a, b) => a - b);
+  if (isPrimary) state.headBase = levels[0];
+  heads.forEach((el) => {
+    const lvl = Number(el.getAttribute("data-lvl")) || 1;
+    const rank = Math.max(1, Math.min(6, levels.indexOf(lvl) + 1));
+    for (let i = 1; i <= 6; i += 1) el.classList.remove("ep-hd--" + i);
+    el.classList.add("ep-hd--" + rank);
+    el.setAttribute("data-rank", String(rank));
+  });
+}
+
+// 载荷里正文最低的那一级标签级别（渲染前也能算，供版式取样用）
+function payloadHeadBase() {
+  if (Number(state.headBase) >= 1) return Number(state.headBase);
+  const html = (state.payload && state.payload.html) || "";
+  let min = 0;
+  for (const m of html.matchAll(/data-lvl="([1-6])"/g)) {
+    const v = Number(m[1]);
+    if (!min || v < min) min = v;
+  }
+  return min || 1;
+}
+
+function normalizeHeads(root) {
+  if (!root) return;
+  root.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach((node) => {
+    const level = Number(node.tagName.slice(1)) || 1;
+    const block = document.createElement("div");
+    block.className = ("ep-hd ep-hd--" + level + " " + (node.getAttribute("class") || "")).trim();
+    block.setAttribute("data-lvl", String(level));
+    while (node.firstChild) block.appendChild(node.firstChild);
+    node.replaceWith(block);
+  });
 }
 
 // 段落开头已经手打了 2 字空格（两个全角，或四个半角）的不再加 CSS 缩进
@@ -355,6 +418,8 @@ function dropEmptyBlocks() {
 
 function markParagraphs(root) {
   root.querySelectorAll("p, div, section, article, dd").forEach((node) => {
+    // 段落标题已经是独立角色，不再被当成段落（否则会吃缩进、被段落间距接管）
+    if (isHead(node)) return;
     const isTextBlock = node.tagName === "P" || !hasBlockChild(node);
     if (!isTextBlock || !node.textContent.trim()) return;
     if (node.tagName !== "P") node.classList.add("ep-para");
@@ -373,9 +438,11 @@ function detectLang(root) {
 
 function probeBilingualSequence(root) {
   // 只取“叶子文字块”，避免同一段文字被父子容器重复计入
-  const blocks = Array.from(root.querySelectorAll("p, li, blockquote, h1, h2, h3, h4, h5, h6, .ep-para")).filter(
+  const blocks = Array.from(
+    root.querySelectorAll(`p, li, blockquote, .ep-hd, h1, h2, h3, h4, h5, h6, .ep-para`)
+  ).filter(
     (node) =>
-      !node.querySelector("p, li, blockquote, h1, h2, h3, h4, h5, h6, .ep-para") &&
+      !node.querySelector("p, li, blockquote, .ep-hd, h1, h2, h3, h4, h5, h6, .ep-para") &&
       (node.textContent || "").replace(/\s+/g, "").length >= 8
   );
   const seq = [];
@@ -545,9 +612,13 @@ function render(payload) {
   $("title").textContent = payload.title;
   syncTitleTrans();
   $("body").innerHTML = payload.html;
+  normalizeHeads($("body"));
+  rankHeads($("body"));
   dropEmptyBlocks();
   markParagraphs($("body"));
   $("mixed").innerHTML = payload.mixedHtml || "";
+  normalizeHeads($("mixed"));
+  rankHeads($("mixed"), false);
   markParagraphs($("mixed"));
   seedPageTranslations(payload);
   state.lang = detectLang($("body"));
@@ -806,8 +877,18 @@ function titleFontStack(s, lang) {
 // 跟随网页但没抓到（页面没写或提取时取不到）时用标题兜底字体，别落到正文那套
 function h1FontStack(s, lang) {
   if (!s.h1Font || s.h1Font === "inherit") return "";
-  if (s.h1Font === "page") return pageHeadStack("h1") || FONT_PRESETS.head.stack;
+  if (s.h1Font === "page") return pageHeadStackByRank(1) || FONT_PRESETS.head.stack;
   return (FONT_PRESETS[s.h1Font] || FONT_PRESETS.auto).stack;
+}
+
+// 正文里实际上是哪一级标签在当段落标题：抽取时级别只是数据，
+// 排序后「第一级段落标题」可能对应网页的 h2、h3（h1 常被刊头或文章标题占掉）
+function headBaseLevel() {
+  return Number(state.headBase) >= 1 ? Number(state.headBase) : 1;
+}
+function pageHeadTag(rank) {
+  const lvl = headBaseLevel() + Number(rank || 1) - 1;
+  return "h" + Math.min(6, lvl);
 }
 
 // 原版时正文里各级标题的字体：取网页对应标题节点的字体栈，没有就继承正文
@@ -817,6 +898,15 @@ function pageHeadStack(tag) {
   const pf = (state.payload && state.payload.pageFont) || {};
   const head = pf.heads && pf.heads[tag];
   return headingStack((head && head.stack) || "");
+}
+
+// 原版时正文里各级标题的字体（按序号取：1＝一级段落标题）
+function pageHeadStackByRank(rank) {
+  return pageHeadStack(pageHeadTag(rank));
+}
+
+function pageHeadWeightByRank(rank) {
+  return pageHeadWeight(pageHeadTag(rank));
 }
 
 // 网页里该级标题的实测字重（数值），取不到返回 null
@@ -998,7 +1088,7 @@ function applySettings() {
   // 小标题（h1/h2）：字体、字号、字重、行高、段前段后都来自「小标题」页签
   const h1Stack = h1FontStack(s, state.lang);
   // 跟随网页时 h2 取网页自己的字体，没抓到同样退回标题兜底字体；否则与一级标题同栈
-  const h2Stack = s.h1Font === "page" ? pageHeadStack("h2") || FONT_PRESETS.head.stack : h1Stack;
+  const h2Stack = s.h1Font === "page" ? pageHeadStackByRank(2) || FONT_PRESETS.head.stack : h1Stack;
   root.style.setProperty("--ep-h1-font", h1Stack || "inherit");
   root.style.setProperty("--ep-h2-font", h2Stack || "inherit");
   root.style.setProperty("--ep-h1-size", s.h1Size + "pt");
@@ -1007,7 +1097,7 @@ function applySettings() {
   else root.style.removeProperty("--ep-h2-size");
   root.style.setProperty("--ep-h1-weight", String(BODY_WEIGHTS[s.h1Weight] || 700));
   // h2 的字重：跟随网页时用它自己的，取不到就落回小标题的字重
-  const h2Weight = s.h1Font === "page" ? pageHeadWeight("h2") : null;
+  const h2Weight = s.h1Font === "page" ? pageHeadWeightByRank(2) : null;
   if (h2Weight) root.style.setProperty("--ep-h2-weight", String(h2Weight));
   else root.style.removeProperty("--ep-h2-weight");
   root.style.setProperty(
@@ -1139,7 +1229,6 @@ const MODIFIED_TARGETS = {
   titleMb: () => fieldOf("titleMb"),
   h1Font: () => fieldOf("h1Font"),
   h1Size: () => fieldOf("h1Size"),
-  h2Size: () => fieldOf("h2Size"),
   h1Weight: () => fieldOf("segH1Weight"),
   h1Line: () => fieldOf("h1Line"),
   h1Mt: () => fieldOf("h1Mt"),
@@ -1307,11 +1396,6 @@ function syncControls() {
   $("vFontSize").textContent = ptToPx(s.fontSize) + "px";
   $("vTitleSize").textContent = ptToPx(s.titleSize) + "px";
   $("vH1Size").textContent = ptToPx(s.h1Size) + "px";
-  $("h2Size").value = String(Number(s.h2Size) || 0);
-  // 0 表示跟随一级标题的 0.9 倍
-  $("vH2Size").textContent = Number(s.h2Size) > 0
-    ? ptToPx(Number(s.h2Size)) + "px"
-    : t("h2Follow") || "跟随小标题";
   $("vLineHeight").textContent = bodyLine.fixed
     ? ptToPx(s.lineHeightFixed) + "px"
     : s.lineHeight.toFixed(2) + "×";
@@ -1468,6 +1552,10 @@ function showTypePane(name) {
 
 let fitFrame = 0;
 
+// 手动缩放：Ctrl+滚轮调的纸面比例，null 表示按「适应宽度」自动算
+let manualScale = null;
+let currentScale = 1;
+
 function fit() {
   // 阅读模式下原纸张是隐藏的（offsetWidth 为 0），页面尺寸由 buildReadPages 自己算
   if (readingMode) return;
@@ -1482,12 +1570,37 @@ function fit() {
     const sheetW = sheet.offsetWidth || 794;
     const sheetH = sheet.offsetHeight || 1123;
     const availW = vp.clientWidth - 64;
-    const scale = Math.max(0.4, Math.min(1, availW / sheetW));
+    const autoScale = Math.max(0.4, Math.min(1, availW / sheetW));
+    // 用户手动缩放过就照用户的来（可以超过 100%，左栏出横向滚动条）
+    const scale =
+      manualScale == null
+        ? autoScale
+        : Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, manualScale));
+    currentScale = scale;
 
     document.documentElement.style.setProperty("--ep-scale", scale.toFixed(3));
-    wrap.style.width = Math.round(sheetW * scale) + "px";
+    const w = Math.round(sheetW * scale);
+    wrap.style.width = w + "px";
     wrap.style.height = Math.round(sheetH * scale) + "px";
+    // 纸比视口宽时改成左对齐，横向滚动才找得着边
+    wrap.classList.toggle("is-overflow", w > vp.clientWidth - 24);
   });
+}
+
+const ZOOM_MIN = 0.3;
+const ZOOM_MAX = 2;
+
+// Ctrl+滚轮：只缩放纸面，顶部工具条与右栏保持原样
+function onZoomWheel(e) {
+  if (!e.ctrlKey || readingMode) return;
+  e.preventDefault();
+  const base = manualScale == null ? currentScale : manualScale;
+  const step = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+  const next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, base * step));
+  if (next === manualScale) return;
+  manualScale = next;
+  fit();
+  flashHint(t("zoomLabel") + " " + Math.round(next * 100) + "%");
 }
 
 /* ---------- 编辑 ---------- */
@@ -1887,8 +2000,8 @@ function syncFormatState() {
     }
     if (btn.dataset.cmd === "h2" || btn.dataset.cmd === "h3") {
       const block = blockAtCaret();
-      const want = btn.dataset.cmd.toUpperCase();
-      btn.classList.toggle("is-on", Boolean(block) && block.closest(want) !== null);
+      const want = btn.dataset.cmd === "h3" ? 2 : 1;
+      btn.classList.toggle("is-on", Boolean(block) && isHead(block) && headLevel(block) === want);
       return;
     }
     if (btn.dataset.cmd === "quote") {
@@ -1953,23 +2066,53 @@ function changeFontSize(delta) {
   syncFormatState();
 }
 
-// 块级切换：一级标题（h2）/ 二级标题（h3），已是该块时再点一次退回普通段落
-// 正文里的大标题被提到 #body 之外，h2 才是正文最高一级，也因此由「标题跨栏」管
+// 块级切换：一级段落标题 / 次级段落标题，已是该级时再点一次退回普通段落。
+// 正文里的文章大标题不在 #body 里，所以正文最高一级就是「一级段落标题」，
+// 也因此由「标题跨栏」管；级别只存在 data-lvl 与类名里，不产生任何 h 标签
 function toggleBlock(name) {
   if (!editing) return;
   const block = blockAtCaret();
   if (!block) return;
-  const cur = block.tagName.toLowerCase();
-  const target = cur === name ? "p" : name;
-  try {
-    document.execCommand("formatBlock", false, "<" + target + ">");
-  } catch {
-    return;
+  // 工具栏两个按钮对应第 1、2 级段落标题（内部命令名沿用 h2/h3，只是历史包袱）
+  const want = String(name) === "h3" ? 2 : 1;
+  const same = isHead(block) && headLevel(block) === want;
+  const offset = caretTextOffset(block);
+  const fresh = same ? demoteHead(block) : promoteHead(block, want);
+  if (fresh) {
+    if (offset != null) placeCaretAt(fresh, offset);
+    syncBiClone(fresh);
   }
-  const next = blockAtCaret();
-  if (next) next.classList.remove("ep-no-indent");
-  syncBiClone(next || block);
+  rankHeads($("body"));
   syncFormatState();
+}
+
+// 段落标题 ⇄ 普通段落：换壳时把内容整段搬走，内联格式原样保留
+function promoteHead(block, rank) {
+  // data-lvl 是「回网页取样」用的原始标签级别，按序号换算，别把 h1/h2 的判断带进来
+  const lvl = Math.min(6, headBaseLevel() + rank - 1);
+  const target = isHead(block) ? block : null;
+  const div = target || document.createElement("div");
+  if (!target) {
+    div.className = "ep-hd";
+    while (block.firstChild) div.appendChild(block.firstChild);
+    block.replaceWith(div);
+  }
+  for (let i = 1; i <= 6; i += 1) div.classList.remove("ep-hd--" + i);
+  div.classList.add("ep-hd", "ep-hd--" + rank);
+  div.classList.remove("ep-para", "ep-no-indent");
+  div.setAttribute("data-lvl", String(lvl));
+  div.setAttribute("data-rank", String(rank));
+  return div;
+}
+
+function demoteHead(block) {
+  block.classList.remove("ep-hd");
+  for (let i = 1; i <= 6; i += 1) block.classList.remove("ep-hd--" + i);
+  block.removeAttribute("data-lvl");
+  block.removeAttribute("data-rank");
+  block.classList.add("ep-para");
+  block.classList.remove("ep-no-indent");
+  return block;
 }
 
 // 光标在容器内的纯文本偏移 / 按偏移把光标放回去：
@@ -2096,11 +2239,18 @@ function clearFormatting() {
         /* 忽略 */
       }
     }
-    if (/^(H1|H2|H3|H4|H5|H6|BLOCKQUOTE)$/.test(block.tagName)) {
+    if (isHead(block) || block.tagName === "BLOCKQUOTE") {
       try {
         document.execCommand("formatBlock", false, "<p>");
       } catch {
         /* 忽略 */
+      }
+      // 段落标题是 div 上的角色类，退回普通段落时要把角色摘掉
+      const back = blockAtCaret();
+      if (back && isHead(back)) {
+        back.classList.remove("ep-hd");
+        for (let i = 1; i <= 6; i += 1) back.classList.remove("ep-hd--" + i);
+        back.removeAttribute("data-lvl");
       }
     }
   }
@@ -2248,6 +2398,20 @@ const TRIM_BLOCKS = new Set([
   "SECTION", "ARTICLE", "HEADER", "FOOTER", "ADDRESS", "DL", "DT", "DD", "HR",
 ]);
 
+// 行内元素只有在正文里「裸挂着」（上面没有块级祖先）时才算可删块：
+// 段落里的 <a>/<span> 仍归所在段落，点它等于点那一段
+const BARE_INLINE = new Set(["A", "SPAN"]);
+
+function isBareInline(node, root) {
+  if (!node || !BARE_INLINE.has(node.tagName)) return false;
+  let cur = node;
+  while (cur && cur !== root) {
+    if (TRIM_BLOCKS.has(cur.tagName)) return false;
+    cur = cur.parentElement;
+  }
+  return true;
+}
+
 const HINT_TEXT = t("baseHint");
 let hintTimer = 0;
 
@@ -2323,6 +2487,27 @@ let trimming = false;
 let trimHover = null;
 let trimPinned = false; // 按 ↑ 选过上级后，光标移动不再跟着重新选
 let trimPointerTarget = null; // ↓ 回到指针下的元素用
+let trimAnchor = null; // Shift 选中范围的起点（再 Shift 点结尾就框出整段，等确认）
+let trimPending = null; // 已框好、等 Enter 确认的范围块
+
+// 行内的可删元素：<a> 一律认（不管在哪一层）；<span> 只认正文里裸挂的
+function inlineTrimTarget(node, root) {
+  let cur = node;
+  while (cur && cur !== root) {
+    if (cur.tagName === "A" || (cur.tagName === "SPAN" && isBareInline(cur, root))) {
+      // 取最外那层（<a><a> 这种荒唐嵌套，或 a 里再包 a）
+      let up = cur;
+      while (up.parentElement && up.parentElement !== root && up.parentElement.tagName === cur.tagName) {
+        if (cur.tagName === "SPAN" && !isBareInline(up.parentElement, root)) break;
+        up = up.parentElement;
+      }
+      return up;
+    }
+    if (TRIM_BLOCKS.has(cur.tagName)) return null; // 先撞到块，说明这个行内是段落的一部分
+    cur = cur.parentElement;
+  }
+  return null;
+}
 
 // 从指针下的节点往上找最近的内容块（不算正文容器本身）
 // 双语对照时一块内容对应一整行对照，悬停/删除都作用在那一行
@@ -2334,6 +2519,9 @@ function trimTarget(node) {
     const row = cur && cur.closest ? cur.closest(".ep-bi__row") : null;
     return row && row.parentElement === root ? row : null;
   }
+  // 行内的 <a> / 裸 <span> 优先，点链接就删链接本身，而不是它所在的整段
+  const inline = inlineTrimTarget(cur, root);
+  if (inline) return inline;
   while (cur && cur !== root) {
     if (TRIM_BLOCKS.has(cur.tagName)) return cur;
     cur = cur.parentElement;
@@ -2344,6 +2532,91 @@ function trimTarget(node) {
 function clearTrimHover() {
   if (trimHover) trimHover.classList.remove("ep-trim-hover");
   trimHover = null;
+}
+
+function clearTrimAnchor() {
+  if (trimAnchor) trimAnchor.classList.remove("ep-trim-anchor");
+  trimAnchor = null;
+}
+
+// 已框好、等确认的范围：不删，只画虚线框
+function clearTrimPending() {
+  if (trimPending) trimPending.forEach((n) => n.classList.remove("ep-trim-range"));
+  trimPending = null;
+}
+
+// 展平成可删块列表：含子块的容器继续往下走，只收真正的段落、图、表这类叶子块。
+// 这样「div1 里的 p2 → div2 里的 p1」只会删掉这几段，不会把两个 div 整个端走
+function trimLeafBlocks(root) {
+  const out = [];
+  const hasBlockInside = (el) => {
+    const stack = Array.from(el.children || []);
+    while (stack.length) {
+      const node = stack.pop();
+      if (TRIM_BLOCKS.has(node.tagName)) return true;
+      stack.push(...Array.from(node.children || []));
+    }
+    return false;
+  };
+  // 块自己身上的文字（不含嵌套块里的）：有文字就说明它本身就是一条内容
+  const ownText = (el) => {
+    let text = "";
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3) text += node.nodeValue;
+      else if (node.nodeType === 1 && !TRIM_BLOCKS.has(node.tagName) && !hasBlockInside(node))
+        text += node.textContent || "";
+    }
+    return text.trim();
+  };
+  const walk = (el) => {
+    for (const child of el.children) {
+      if (TRIM_BLOCKS.has(child.tagName)) {
+        const grouped = hasBlockInside(child);
+        // 只包着别的块的容器（ul/ol、包裹用 div、section）往下走，不再算自己一块
+        if (grouped && !ownText(child)) {
+          walk(child);
+          continue;
+        }
+        // 自身带文字又包着块（「列表说明：」+ ol 这种）：自己算一块，
+        // 但里面的块也要收进列表，否则里面的 li 永远取不到
+        out.push(child);
+        if (grouped) walk(child);
+      } else if (isBareInline(child, root)) {
+        // 正文里裸挂的 <a>/<span>：当成一块，它里面的行内标签不再单独算
+        out.push(child);
+      } else {
+        walk(child);
+      }
+    }
+  };
+  walk(root);
+  return out;
+}
+
+// 从节点往上找列表里的那个块
+function trimBlockOf(node, list) {
+  let cur = node;
+  while (cur) {
+    if (list.includes(cur)) return cur;
+    cur = cur.parentElement;
+  }
+  return null;
+}
+
+// Shift 范围：把正文展平成一串叶子块，取起点块到终点块之间的全部（连头带尾）
+function trimRange(start, end) {
+  const root = biActive() ? $("bilingual") : $("body");
+  // 对照模式的行本身就是最外层，删行即可
+  const list = biActive() ? Array.from(root.children) : trimLeafBlocks(root);
+  const a = trimBlockOf(start, list);
+  const b = trimBlockOf(end, list);
+  if (!a || !b) return [end];
+  const ia = list.indexOf(a);
+  const ib = list.indexOf(b);
+  if (ia < 0 || ib < 0) return [end];
+  const lo = Math.min(ia, ib);
+  const hi = Math.max(ia, ib);
+  return list.slice(lo, hi + 1);
 }
 
 // ↑：把当前悬停块上移一级到最近的内容块（对照模式行已是顶层，不再上爬）
@@ -2374,6 +2647,14 @@ function trimDescend() {
   }
 }
 
+// 删减态里按下鼠标就掐掉文字选择：否则 Shift 点第二块会像普通文本那样把中间的文字全刷蓝
+function onTrimDown(e) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  const sel = document.getSelection();
+  if (sel) sel.removeAllRanges();
+}
+
 function onTrimMove(e) {
   trimPointerTarget = e.target;
   if (trimPinned && trimHover) return; // 锁定后光标移动不重选
@@ -2384,6 +2665,17 @@ function onTrimMove(e) {
     trimHover = target;
     target.classList.add("ep-trim-hover");
   }
+}
+
+// 删掉一个可删块；双语对照时连 #body 里对应的原文块一起删，导出才不会留残段
+function removeTrimTarget(target) {
+  if (!target) return;
+  if (biActive()) {
+    const col = target.querySelector(".ep-bi__src");
+    const row = col && col.firstElementChild ? col.firstElementChild.__epRow : null;
+    if (row && row.node && row.node.isConnected) row.node.remove();
+  }
+  target.remove();
 }
 
 function onTrimClick(e) {
@@ -2407,17 +2699,60 @@ function onTrimClick(e) {
   if (!target) return;
   e.preventDefault();
   e.stopPropagation();
+
+  // Shift：第一次点记起点，第二次点把起点到终点之间的块全框出来，等 Enter 确认
+  if (e.shiftKey) {
+    trimPinned = false;
+    clearTrimPending();
+    if (!trimAnchor || !trimAnchor.isConnected) {
+      clearTrimAnchor();
+      trimAnchor = target;
+      target.classList.add("ep-trim-anchor");
+      flashHint(t("trimAnchorHint"));
+      return;
+    }
+    if (trimAnchor === target) {
+      clearTrimAnchor();
+      flashHint(baseHint());
+      return;
+    }
+    const range = trimRange(trimAnchor, target);
+    clearTrimAnchor();
+    clearTrimHover();
+    trimPinned = false;
+    trimPending = range;
+    range.forEach((node) => node.classList.add("ep-trim-range"));
+    flashHint(t("trimRangeHint"));
+    return;
+  }
+
+  // 已经框好范围时，普通点击先撤框，不动内容，方便重新瞄
+  if (trimPending) {
+    clearTrimPending();
+    flashHint(baseHint());
+    return;
+  }
+
+  clearTrimAnchor();
   trimPinned = false;
   clearTrimHover();
-  if (biActive()) {
-    // 删对照行时连 #body 里对应的原文块一起删，导出才不会留残段
-    const col = target.querySelector(".ep-bi__src");
-    const row = col && col.firstElementChild ? col.firstElementChild.__epRow : null;
-    if (row && row.node && row.node.isConnected) row.node.remove();
-  }
-  target.remove();
+  removeTrimTarget(target);
   refreshWordCount();
   fit();
+}
+
+// 确认删除已框好的范围
+function commitTrimPending() {
+  if (!trimPending) return;
+  const range = trimPending;
+  trimPending = null;
+  range.forEach((node) => {
+    node.classList.remove("ep-trim-range");
+    removeTrimTarget(node);
+  });
+  refreshWordCount();
+  fit();
+  flashHint(baseHint());
 }
 
 function setTrimming(on) {
@@ -2432,12 +2767,18 @@ function setTrimming(on) {
   $("trimBtn").setAttribute("aria-label", trimTip);
   setHint(on ? t("trimHint") : baseHint());
   if (on) {
+    const sel = document.getSelection();
+    if (sel) sel.removeAllRanges();
+    root.addEventListener("mousedown", onTrimDown, true);
     root.addEventListener("mousemove", onTrimMove);
     root.addEventListener("click", onTrimClick, true);
   } else {
+    root.removeEventListener("mousedown", onTrimDown, true);
     root.removeEventListener("mousemove", onTrimMove);
     root.removeEventListener("click", onTrimClick, true);
     clearTrimHover();
+    clearTrimAnchor();
+    clearTrimPending();
     trimPinned = false;
     trimPointerTarget = null;
   }
@@ -2528,6 +2869,29 @@ function setImagesHidden(on) {
   $("imgBtn").title = imgTip;
   $("imgBtn").setAttribute("aria-label", imgTip);
   fit();
+}
+
+/* ---------- 恢复到初始状态 ---------- */
+
+// 把正文、混排层按最初提取的内容重建：删掉的块回来、改过的文字还原、图片重新显示。
+// 版式设置（右栏的排版项）不动，那是「版式」不是「内容」
+async function restoreOriginal() {
+  const payload = state.payload;
+  if (!payload) return;
+  if (editing) setEditing(false);
+  if (trimming) setTrimming(false);
+  if (pickingTitle) setPickingTitle(false);
+  render(payload);
+  setImagesHidden(false);
+  biDone = false; // 译文缓存还在，重建对照只是重新取一遍已有结果
+  if (biActive() || serialActive()) await refreshBilingual();
+  else applySettings();
+  if (readingMode) {
+    clearReadPages();
+    scheduleReadPages();
+  }
+  fit();
+  flashHint(t("restoreDone"));
 }
 
 /* ---------- 阅读模式：隐藏右栏设置与顶部工具条，只看版面 ---------- */
@@ -3055,7 +3419,7 @@ function normalizeReadBlocks(root, U, pageH) {
     (el) => {
       // 标题元素的行盒由 CSS 里的 --ep-read-h1-lh / --ep-read-lh 变量决定，
       // 这里不能写死成 U：28.8px 的 h2 塞进 30px 行盒会被裁掉上下一截
-      if (/^H[1-6]$/.test(el.tagName)) return;
+      if (isHead(el)) return;
       el.style.lineHeight = `${U}px`;
     }
   );
@@ -3066,7 +3430,7 @@ function normalizeReadBlocks(root, U, pageH) {
   });
   // 标题：行盒固定一整格 U。字号大到格子里塞不下时（行距会挤在一起）就等比缩小字号，
   // 保证标题也落在同一个网格上，翻页切点永远不会劈开标题行
-  Array.from(root.querySelectorAll("h1, h2, h3, h4, h5, h6")).forEach((el) => {
+  Array.from(root.querySelectorAll(HEAD_SEL)).forEach((el) => {
     const cs = getComputedStyle(el);
     const fs = parseFloat(cs.fontSize) || U;
     const maxFs = Math.max(U * 0.6, U * 0.78);
@@ -4198,7 +4562,7 @@ function takeRowSpacing(line, row, srcCol, carry) {
   return mb;
 }
 
-function targetTag(row) {  if (/^H[1-6]$/.test(row.node.tagName)) return row.node.tagName.toLowerCase();
+function targetTag(row) {
   if (row.quote) return "blockquote";
   return "div";
 }
@@ -4229,7 +4593,7 @@ function buildBilingual(rows) {
       const { key, text, page } = lookupBi(row);
       // 译文格统一是容器 div，内容放在里面的 .ep-bi__text 里：
       // 这样「译文格的对齐规则」和「引文/标题自己的排版规则」不会挤在同一个元素上抢权重
-      const heading = /^H[1-6]$/.test(row.node.tagName);
+      const heading = isHead(row.node);
       const tgt = document.createElement("div");
       tgt.className = "ep-bi__col ep-bi__tgt" + (heading ? " is-head" : "");
       const inner = document.createElement(targetTag(row));
@@ -4280,7 +4644,7 @@ function buildSerial(rows) {
 
     if (!row.wide) {
       const { key, text, page } = lookupBi(row);
-      const heading = /^H[1-6]$/.test(row.node.tagName);
+      const heading = isHead(row.node);
       const tgt = document.createElement(targetTag(row));
       tgt.className = "ep-bi__col ep-bi__tgt" + (heading ? " is-head" : "");
       if (text) {
@@ -4442,6 +4806,16 @@ async function refreshBilingual(opts = {}) {
 function update(patch) {
   // 动过段前段后，标题的段前段后也跟着正文一起变
   if ("paraBefore" in patch || "paraAfter" in patch) patch.headGapMode = "body";
+  // 面板上「小标题」只有一个字号，h1/h2 的层级差按当前比例自动派生：
+  // 网页给过 h2 就叫用网页的 h2/h1 比，没有就 0.9
+  if ("h1Size" in patch) {
+    const cur = state.settings;
+    const ratio =
+      Number(cur.h1Size) > 0 && Number(cur.h2Size) > 0
+        ? Number(cur.h2Size) / Number(cur.h1Size)
+        : 0.9;
+    patch.h2Size = Math.round(Number(patch.h1Size) * ratio * 2) / 2;
+  }
   state.settings = { ...state.settings, ...patch };
   rememberCurrentProfile();
   syncControls();
@@ -4570,20 +4944,21 @@ function pageLayoutValues() {
   if (Number.isFinite(title.paraAfter)) out.titleMb = clamp(title.paraAfter, 0, 24);
   if (Number.isFinite(title.weight)) out.titleWeight = weightKeyOf(title.weight);
 
-  // 一级标题（网页的 h1）
-  const h1 = (pf.heads && pf.heads.h1) || {};
-  if (h1.sizePt) out.h1Size = clamp(h1.sizePt, 8, 48);
-  if (Number.isFinite(h1.lineRatio)) {
+  // 第一级段落标题：正文里最低的那一级标签（h1 常被刊头或文章标题占掉，不能写死取 h1）
+  const base = payloadHeadBase();
+  const head1 = (pf.heads && pf.heads["h" + Math.min(6, base)]) || {};
+  if (head1.sizePt) out.h1Size = clamp(head1.sizePt, 8, 48);
+  if (Number.isFinite(head1.lineRatio)) {
     out.h1LineMode = "ratio";
-    out.h1Line = clamp(h1.lineRatio, 1.2, 2.4);
+    out.h1Line = clamp(head1.lineRatio, 1.2, 2.4);
     out.h1LineFixed = Math.min(60, Math.max(10, Math.round((Number(out.h1Size) || 16) * out.h1Line * 2) / 2));
   }
-  if (Number.isFinite(h1.paraBefore)) out.h1Mt = clamp(h1.paraBefore, 0, 24);
-  if (Number.isFinite(h1.paraAfter)) out.h1Mb = clamp(h1.paraAfter, 0, 24);
-  if (Number.isFinite(h1.weight)) out.h1Weight = weightKeyOf(h1.weight);
-  // 网页 h2 有实测字号就单独记下来；没有就保持 0（跟随 h1 的 0.9 倍）
-  const h2 = (pf.heads && pf.heads.h2) || {};
-  if (h2.sizePt) out.h2Size = clamp(h2.sizePt, 8, 48);
+  if (Number.isFinite(head1.paraBefore)) out.h1Mt = clamp(head1.paraBefore, 0, 24);
+  if (Number.isFinite(head1.paraAfter)) out.h1Mb = clamp(head1.paraAfter, 0, 24);
+  if (Number.isFinite(head1.weight)) out.h1Weight = weightKeyOf(head1.weight);
+  // 第二级（如果有）用网页实测字号；没有就保持 0（跟随第一级的 0.9 倍）
+  const head2 = (pf.heads && pf.heads["h" + Math.min(6, base + 1)]) || {};
+  if (head2.sizePt) out.h2Size = clamp(head2.sizePt, 8, 48);
   return out;
 }
 
@@ -4758,7 +5133,6 @@ function bindControls() {
   });
   $("titleSize").addEventListener("input", (e) => update({ titleSize: Number(e.target.value) }));
   $("h1Size").addEventListener("input", (e) => update({ h1Size: Number(e.target.value) }));
-  $("h2Size").addEventListener("input", (e) => update({ h2Size: Number(e.target.value) }));
   ["titleMt", "titleMb", "h1Mt", "h1Mb"].forEach((key) => {
     $(key).addEventListener("input", (e) => update({ [key]: Number(e.target.value) }));
   });
@@ -4904,10 +5278,13 @@ function bindControls() {
 
   $("printBtn").addEventListener("click", () => {
     clearTrimHover();
+    clearTrimAnchor();
+    clearTrimPending();
     window.print();
   });
 
-  // 打印前重建 @page，确保页眉里改过的文字进到页边距盒
+  // 纸面缩放：Ctrl+滚轮只放大/缩小纸张，工具栏与右栏不动
+  document.addEventListener("wheel", onZoomWheel, { passive: false });
   window.addEventListener("beforeprint", () => {
     if (state.settings) $("pageRule").textContent = buildPageRule(state.settings);
   });
@@ -4989,6 +5366,10 @@ function bindControls() {
     setPickingTitle(!pickingTitle);
   });
   $("imgBtn").addEventListener("click", () => setImagesHidden(!hideImages));
+  $("restoreBtn").addEventListener("click", () => {
+    if (!window.confirm(t("restoreConfirm"))) return;
+    restoreOriginal();
+  });
   $("readBtn").addEventListener("click", () => setReadingMode(!readingMode));
   $("readExit").addEventListener("click", () => setReadingMode(false));
   $("readFsBtn").addEventListener("click", () => {
@@ -5026,6 +5407,14 @@ function bindControls() {
       openReadabilityDebug();
       return;
     }
+    // Ctrl+0：纸面回到「适应宽度」
+    if ((e.ctrlKey || e.metaKey) && (e.key === "0" || e.code === "Digit0")) {
+      e.preventDefault();
+      manualScale = null;
+      fit();
+      flashHint(t("zoomFit"));
+      return;
+    }
     if (readingMode) {
       if (e.key === "PageDown" || e.key === "ArrowDown" || (e.key === " " && !e.shiftKey)) {
         e.preventDefault();
@@ -5035,6 +5424,14 @@ function bindControls() {
       if (e.key === "PageUp" || e.key === "ArrowUp" || (e.key === " " && e.shiftKey)) {
         e.preventDefault();
         stepReadPage(-1);
+        return;
+      }
+    }
+    if (trimming && (e.key === "Enter" || e.key === " ")) {
+      // 框好范围后 Enter/空格确认删除
+      if (trimPending) {
+        e.preventDefault();
+        commitTrimPending();
         return;
       }
     }
@@ -5054,6 +5451,14 @@ function bindControls() {
       return;
     }
     if (e.key !== "Escape") return;
+    if (trimming && trimPending) {
+      // 有框好的范围时，Esc 先撤框并留在删减模式
+      e.preventDefault();
+      clearTrimPending();
+      clearTrimAnchor();
+      flashHint(t("trimHint"));
+      return;
+    }
     if (readingMode) {
       e.preventDefault();
       setReadingMode(false);
@@ -5151,12 +5556,12 @@ async function buildExportHtml() {
     `--ep-title-mb:${s.titleMb}px`,
     ...(pageTitleAlign() ? [`--ep-title-align:${pageTitleAlign()}`] : []),
     `--ep-h1-font:${h1FontStack(s, state.lang) || "inherit"}`,
-    `--ep-h2-font:${s.h1Font === "page" ? pageHeadStack("h2") || "inherit" : h1FontStack(s, state.lang) || "inherit"}`,
+    `--ep-h2-font:${s.h1Font === "page" ? pageHeadStackByRank(2) || "inherit" : h1FontStack(s, state.lang) || "inherit"}`,
     `--ep-h1-size:${s.h1Size}pt`,
     ...(Number(s.h2Size) > 0 ? [`--ep-h2-size:${Number(s.h2Size)}pt`] : []),
     `--ep-h1-weight:${BODY_WEIGHTS[s.h1Weight] || 700}`,
-    ...(s.h1Font === "page" && pageHeadWeight("h2")
-      ? [`--ep-h2-weight:${pageHeadWeight("h2")}`]
+    ...(s.h1Font === "page" && pageHeadWeightByRank(2)
+      ? [`--ep-h2-weight:${pageHeadWeightByRank(2)}`]
       : []),
     `--ep-h1-line:${s.h1LineMode === "fixed" ? s.h1LineFixed + "pt" : s.h1Line}`,
     `--ep-h1-mt:${s.h1Mt}px`,
@@ -5188,8 +5593,10 @@ async function buildExportHtml() {
   sheetCopy.classList.remove("is-editing");
   // 「缓存」小标签只是编辑时的提示，不进导出的文档
   sheetCopy.querySelectorAll(".ep-bi__badge, .ep-bi-resizer").forEach((node) => node.remove());
-  sheetCopy.querySelectorAll(".ep-trim-hover, .is-trimming").forEach((node) => {
+  sheetCopy.querySelectorAll(".ep-trim-hover, .ep-trim-anchor, .ep-trim-range, .is-trimming").forEach((node) => {
     node.classList.remove("ep-trim-hover");
+    node.classList.remove("ep-trim-anchor");
+    node.classList.remove("ep-trim-range");
     node.classList.remove("is-trimming");
   });
   sheetCopy.querySelectorAll("[contenteditable]").forEach((node) => {
@@ -5391,7 +5798,8 @@ function pageFontName(kind) {
     return stackFamilyName((pf.title && pf.title.stack) || (pf.body && pf.body.stack));
   }
   if (kind === "h1") {
-    return stackFamilyName((pf.heads && pf.heads.h1 && pf.heads.h1.stack) || (pf.body && pf.body.stack));
+    const head = pf.heads && pf.heads[pageHeadTag(1)];
+    return stackFamilyName((head && head.stack) || (pf.body && pf.body.stack));
   }
   return stackFamilyName(pf.body && pf.body.stack);
 }
@@ -5513,3 +5921,4 @@ async function init() {
 }
 
 init();
+

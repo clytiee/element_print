@@ -129,9 +129,12 @@
   "viewTranslation": { "message": "Trans" },
 
   "editTitle": { "message": "Edit: change the title, body, header and footer directly. Esc exits and confirms changes." },
-  "trimTitle": { "message": "Trim: click a block containing a paragraph, image or table to remove it. Esc exits." },
+  "trimTitle": { "message": "Trim: click a block to remove it, or Shift-click start and end to remove the whole range. Esc exits." },
   "titleTitle": { "message": "Set title: choose a block from the body to replace the current title. Esc exits." },
-  "imgOnTitle": { "message": "Toggle image visibility; hidden images are excluded from layout and printing" },
+    "restoreTitle": { "message": "Restore the article to its extracted state: undo trims and text edits. Layout settings are kept." }, 
+  "restoreConfirm": { "message": "Restore discards the trims and text edits from this session. Continue?" }, 
+  "restoreDone": { "message": "Article restored" }, 
+"imgOnTitle": { "message": "Toggle image visibility; hidden images are excluded from layout and printing" },
   "imgOffTitle": { "message": "Images are hidden; click again to restore them" },
   "sourceViewTitle": { "message": "Return to the source view" },
   "readModeTitle": { "message": "Reading mode: hide the settings panel and the top toolbar to see the page only (Esc to exit)" },
@@ -247,10 +250,14 @@
   "confirmDiscard": { "message": "The article has unsaved edits. Discard them?" },
   "missingPayloadId": { "message": "Missing payload id" },
 
+  "zoomLabel": { "message": "Page" }, 
+  "zoomFit": { "message": "Page fitted to width (Ctrl+0 to reset)" }, 
   "baseHint": { "message": "Settings on the right apply immediately" },
   "excerptNoTrans": { "message": " (no translation)" },
   "editHint": { "message": "Edit text directly; use the format icons below · Esc to cancel" },
-  "trimHint": { "message": "Click a block to remove it · ↑ parent / ↓ pointer · Esc to exit" },
+  "trimAnchorHint": { "message": "Start marked. Shift-click the end block to outline the range." },
+  "trimRangeHint": { "message": "Range outlined: Enter to delete · Esc to cancel" }, 
+  "trimHint": { "message": "Click to remove a block · Shift-click start and end, then Enter to delete the range · ↑ parent / ↓ pointer · Esc to exit" },
   "titleHint": { "message": "Click a block to use as the title · Esc to exit" },
   "imagesOffTitle": { "message": "Images are hidden; click again to restore them" },
   "imagesOnTitle": { "message": "Toggle image visibility; hidden images are excluded from layout and printing" },
@@ -294,7 +301,8 @@
   "tabTitle": { "message": "Title" },
   "tabHead": { "message": "Subheads" },
   "tabBody": { "message": "Body" },
-  "h2Size": { "message": "H2 size" },
+  "h2Size": { "message": "Subhead size" },
   "h2Follow": { "message": "Follow subhead" },
-  "h1Note": { "message": "Subheads are H1/H2; H3 and below are only bolded. Spans both columns when two-column." }
+  "h1Note": { "message": "Subheads span both columns when two-column; deeper levels are only bolded." }
 }
+

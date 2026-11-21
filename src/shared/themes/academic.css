@@ -38,10 +38,10 @@
 }
 
 /* 一级、二级标题的字体、字号、边距由右栏「小标题」页签统管，这里只管三级以内的小标题 */
-.ep-sheet[data-theme="academic"] .ep-body h3,
-.ep-sheet[data-theme="academic"] .ep-body h4,
-.ep-sheet[data-theme="academic"] .ep-body h5,
-.ep-sheet[data-theme="academic"] .ep-body h6 {
+.ep-sheet[data-theme="academic"] .ep-body :is(.ep-hd--3, .ep-hd--4, .ep-hd--5, .ep-hd--6, h3),
+.ep-sheet[data-theme="academic"] .ep-body :is(.ep-hd--4, .ep-hd--5, .ep-hd--6, h4),
+.ep-sheet[data-theme="academic"] .ep-body :is(.ep-hd--5, .ep-hd--6, h5),
+.ep-sheet[data-theme="academic"] .ep-body :is(.ep-hd--6, h6) {
   font-family: var(--ep-title-font);
   font-size: 1.06em;
   margin: 0.7em 0 0.15em;
@@ -60,3 +60,5 @@
   font-size: 0.84em;
   text-align: center;
 }
+
+

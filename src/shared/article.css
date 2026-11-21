@@ -319,12 +319,11 @@
   text-indent: 0;
 }
 
-.ep-body h1,
-.ep-body h2,
-.ep-body h3,
-.ep-body h4,
-.ep-body h5,
-.ep-body h6 {
+/* 段落标题：抽取时 h1–h6 已统一成 .ep-hd + 级别类名，样式只认块角色，不认标签。
+   旧载荷里还没转换的 h1–h6 用 :is() 一并兜住 */
+.ep-body .ep-hd,
+.ep-body :is(h1, h2, h3, h4, h5, h6) {
+  display: block;
   margin: calc(var(--ep-para-before) + 0.5em) 0 0.45em;
   font-weight: 700;
   line-height: 1.35;
@@ -333,56 +332,50 @@
   page-break-after: avoid;
 }
 
-.ep-body h1 { font-size: var(--ep-h1-size, 1.45em); }
-.ep-body h2 { font-size: var(--ep-h2-size, calc(var(--ep-h1-size, 1.45em) * 0.9)); }
-/* h3 及以下不管样式，只加粗、跟正文字号 */
-.ep-body h3,
-.ep-body h4,
-.ep-body h5,
-.ep-body h6 { font-size: 1em; }
+/* 一级段落标题 */
+.ep-body :is(.ep-hd--1, h1) {
+  font-size: var(--ep-h1-size, 1.45em);
+  font-family: var(--ep-h1-font, inherit);
+}
 
-/* 小标题的排印由右栏「小标题」页签统管；h2 的字重可来自网页自己的 */
-.ep-body h1,
-.ep-body h2 {
+/* 二级段落标题 */
+.ep-body :is(.ep-hd--2, h2) {
+  font-size: var(--ep-h2-size, calc(var(--ep-h1-size, 1.45em) * 0.9));
+}
+
+/* 三级及以下不管样式，只加粗、跟正文字号 */
+.ep-body :is(.ep-hd--3, .ep-hd--4, .ep-hd--5, .ep-hd--6, h3, h4, h5, h6) {
+  font-size: 1em;
+}
+
+/* 段落标题的排印由右栏「小标题」页签统管；二级的字重可来自网页自己的 */
+.ep-body :is(.ep-hd--1, .ep-hd--2, h1, h2) {
   font-weight: var(--ep-h1-weight, 700);
   line-height: var(--ep-h1-line, 1.35);
   margin: var(--ep-h1-mt, calc(var(--ep-para-before) + 0.5em)) 0 var(--ep-h1-mb, 0.45em);
 }
-.ep-body h2 { font-weight: var(--ep-h2-weight, var(--ep-h1-weight, 700)); }
+.ep-body :is(.ep-hd--2, h2) {
+  font-weight: var(--ep-h2-weight, var(--ep-h1-weight, 700));
+  font-family: var(--ep-h2-font, inherit);
+}
 
 /* UA 给 strong/b 的是 font-weight: bolder（相对父级跳一档），标题里再套一层粗体就会
    从 700 跳到 900。标题里的粗体元素统一继承标题自己的字重，不再往上翻 */
-.ep-body :is(h1, h2, h3, h4, h5, h6) :is(b, strong) { font-weight: inherit; }
-
-/* 原版：正文里的 h1/h2 跟随网页自己的标题字体；h3 及以下继承正文 */
-.ep-body h1 { font-family: var(--ep-h1-font, inherit); }
-.ep-body h2 { font-family: var(--ep-h2-font, inherit); }
+.ep-body :is(.ep-hd, h1, h2, h3, h4, h5, h6) :is(b, strong) { font-weight: inherit; }
 
 /* 正文用半粗/粗体时，原来的加粗文字靠下划线和正文拉开层级 */
 .ep-sheet[data-body-weight="semibold"] .ep-body b,
 .ep-sheet[data-body-weight="semibold"] .ep-body strong,
-.ep-sheet[data-body-weight="semibold"] .ep-body h1,
-.ep-sheet[data-body-weight="semibold"] .ep-body h2,
-.ep-sheet[data-body-weight="semibold"] .ep-body h3,
-.ep-sheet[data-body-weight="semibold"] .ep-body h4,
-.ep-sheet[data-body-weight="semibold"] .ep-body h5,
-.ep-sheet[data-body-weight="semibold"] .ep-body h6,
+.ep-sheet[data-body-weight="semibold"] .ep-body :is(.ep-hd, h1, h2, h3, h4, h5, h6),
 .ep-sheet[data-body-weight="bold"] .ep-body b,
 .ep-sheet[data-body-weight="bold"] .ep-body strong,
-.ep-sheet[data-body-weight="bold"] .ep-body h1,
-.ep-sheet[data-body-weight="bold"] .ep-body h2,
-.ep-sheet[data-body-weight="bold"] .ep-body h3,
-.ep-sheet[data-body-weight="bold"] .ep-body h4,
-.ep-sheet[data-body-weight="bold"] .ep-body h5,
-.ep-sheet[data-body-weight="bold"] .ep-body h6 {
+.ep-sheet[data-body-weight="bold"] .ep-body :is(.ep-hd, h1, h2, h3, h4, h5, h6) {
   text-decoration: underline;
   text-decoration-thickness: 0.5pt;
   text-underline-offset: 3px;
 }
 
-.ep-body h1:first-child,
-.ep-body h2:first-child,
-.ep-body h3:first-child {
+.ep-body :is(.ep-hd--1, .ep-hd--2, .ep-hd--3, h1, h2, h3):first-child {
   margin-top: 0;
 }
 
@@ -561,10 +554,9 @@
   border-top: 1px solid #cfd3d8;
 }
 
-/* 一级标题跨栏：双栏时让 h1/h2 横跨两栏（学术刊常见）。
+/* 一级段落标题跨栏：双栏时让它横跨两栏（学术刊常见）。
    跨栏后下方直接接两栏正文，上下留白要比普通小标题更大才不显拥挤 */
-.ep-sheet.is-span-head .ep-body h1,
-.ep-sheet.is-span-head .ep-body h2 {
+.ep-sheet.is-span-head .ep-body :is(.ep-hd--1, .ep-hd--2, h1, h2) {
   column-span: all;
   margin: var(--ep-h1-mt, calc(var(--ep-para-before) + 0.7em)) 0 var(--ep-h1-mb, 0.85em);
 }
@@ -617,12 +609,8 @@
 .ep-body.is-breakable .ep-para,
 .ep-body.is-breakable li,
 .ep-body.is-breakable blockquote,
-.ep-body.is-breakable h1,
-.ep-body.is-breakable h2,
-.ep-body.is-breakable h3,
-.ep-body.is-breakable h4,
-.ep-body.is-breakable h5,
-.ep-body.is-breakable h6,
+.ep-body.is-breakable .ep-hd,
+.ep-body.is-breakable :is(h1, h2, h3, h4, h5, h6),
 .ep-body.is-breakable .ep-bi__row,
 .ep-body.is-breakable .ep-bi__tgt {
   break-inside: auto;
@@ -668,7 +656,7 @@
   margin: 0;
   text-indent: 0;
 }
-.ep-sheet .ep-body .ep-bi__row.is-serial .ep-bi__tgt:not(:is(h1, h2, h3, h4, h5, h6)) {
+.ep-sheet .ep-body .ep-bi__row.is-serial .ep-bi__tgt:not(.ep-hd):not(:is(h1, h2, h3, h4, h5, h6)) {
   margin-top: 0.35em;
 }
 

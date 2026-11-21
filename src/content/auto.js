@@ -404,7 +404,9 @@
       if (titleNode && (titleNode.contains(n) || n.contains(titleNode))) return true;
       return Boolean(wanted) && normText(n.textContent) === wanted;
     };
-    ["h1", "h2"].forEach((tag) => {
+    // 正文里当段落标题的标签不一定就是 h1/h2（很多站把 h3 当章节标题），
+    // 所以 h1–h4 全采一遍，预览页再按「正文里实际的第几级」去取
+    ["h1", "h2", "h3", "h4"].forEach((tag) => {
       const texts = ((headTexts && headTexts[tag]) || [])
         .map((t) => normText(t).slice(0, 40))
         .filter(Boolean);

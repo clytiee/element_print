@@ -478,6 +478,20 @@ body {
   background: rgba(47, 111, 235, 0.07);
 }
 
+/* Shift 选区的起点：虚线框 + 更实一点的底色，和悬停区分开 */
+.ep-trim-anchor {
+  outline: 2px dashed var(--ep-accent);
+  outline-offset: 2px;
+  background: rgba(47, 111, 235, 0.16);
+}
+
+/* 框好、等确认删除的范围：每块都虚线框，比起点淡一点 */
+.ep-trim-range {
+  outline: 2px dashed var(--ep-accent);
+  outline-offset: 2px;
+  background: rgba(47, 111, 235, 0.09);
+}
+
 .ep-viewport {
   flex: 1 1 auto;
   min-height: 0;
@@ -488,6 +502,12 @@ body {
 
 .ep-sheetWrap {
   margin: 0 auto;
+}
+
+/* 纸被放大到比视口宽：改左对齐，横向滚动才找得着边 */
+.ep-sheetWrap.is-overflow {
+  margin-left: 0;
+  margin-right: 0;
 }
 
 /* ---------- 阅读模式：只留纸张 ---------- */
@@ -566,8 +586,7 @@ body {
   margin-bottom: var(--ep-read-para-gap, var(--ep-para-after));
 }
 
-.ep-app.is-reading .ep-read-sheet .ep-body h1,
-.ep-app.is-reading .ep-read-sheet .ep-body h2 {
+.ep-app.is-reading .ep-read-sheet .ep-body :is(.ep-hd--1, .ep-hd--2, h1, h2) {
   line-height: var(--ep-read-h1-lh, var(--ep-h1-line, 1.35));
   margin-top: var(--ep-read-h1-mt, 0px);
   margin-bottom: var(--ep-read-h1-mb, 0px);
@@ -668,11 +687,8 @@ body {
   page-break-inside: avoid;
 }
 
-/* 三到六级标题字号接近正文，行盒取一整格就够，段前段后同样取整数格 */
-.ep-app.is-reading .ep-read-sheet .ep-body h3,
-.ep-app.is-reading .ep-read-sheet .ep-body h4,
-.ep-app.is-reading .ep-read-sheet .ep-body h5,
-.ep-app.is-reading .ep-read-sheet .ep-body h6 {
+/* 三级及以下的段落标题字号接近正文，行盒取一整格就够，段前段后同样取整数格 */
+.ep-app.is-reading .ep-read-sheet .ep-body :is(.ep-hd--3, .ep-hd--4, .ep-hd--5, .ep-hd--6, h3, h4, h5, h6) {
   line-height: var(--ep-read-lh);
   margin-top: var(--ep-read-sub-head-mt, 0px);
   margin-bottom: var(--ep-read-sub-head-mb, 0px);

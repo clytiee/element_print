@@ -388,7 +388,7 @@ async function openPreview(id) {
     const win = await chrome.windows.create({
       url,
       type: "popup",
-      width: 1040,
+      width: 1180,
       height: 1000,
     });
     if (win) return win;

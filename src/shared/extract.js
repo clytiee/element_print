@@ -109,6 +109,23 @@
     pruneEmpty(root);
   }
 
+  // 正文里的 h1–h6 统一成带级别类名的普通块：
+  // 各网站对这些标签的含义并不一致（有的把 h1 留给刊头、有的用它当章节），
+  // 所以预览页的样式不再认标签，只认「段落标题」这一个概念；级别仅作为数据留着，
+  // 供「原版」时按网页原本的各级字号还原
+  function flattenHeadings(root) {
+    if (!root) return;
+    root.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach((node) => {
+      const level = Number(node.tagName.slice(1)) || 1;
+      const block = node.ownerDocument.createElement("div");
+      const extra = (node.getAttribute("class") || "").trim();
+      block.className = ("ep-hd ep-hd--" + level + (extra ? " " + extra : "")).trim();
+      block.setAttribute("data-lvl", String(level));
+      while (node.firstChild) block.appendChild(node.firstChild);
+      node.replaceWith(block);
+    });
+  }
+
   function cleanAttributes(root) {
     const nodes = root.querySelectorAll("*");
     nodes.forEach((node) => {
@@ -1741,6 +1758,10 @@
       }
     }
 
+    // 正文里的 h1–h6 一律换成普通块 + 级别类名：各站对 h1/h2 的含义完全不同，
+    // 预览页只认「段落标题」这一概念，级别只留在类名里，供原文模式按网页各档字号还原
+    flattenHeadings(clone);
+    flattenHeadings(mixedClone);
     const html = clone.outerHTML;
     const mixedHtml = pageTranslations.length ? mixedClone.outerHTML : "";
     return {

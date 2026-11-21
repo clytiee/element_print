@@ -129,9 +129,12 @@
   "viewTranslation": { "message": "翻译" },
 
   "editTitle": { "message": "进入编辑：直接修改标题、正文与页眉页脚（Esc 退出，有改动会确认）" },
-  "trimTitle": { "message": "进入删减：点击要删掉的段落、图片或表格所在块（Esc 退出）" },
+  "trimTitle": { "message": "进入删减：点击要删掉的块，按住Shift可范围删减（Esc 退出）" },
   "titleTitle": { "message": "设置标题：从正文选择并替换当前标题（Esc 退出）" },
-  "imgOnTitle": { "message": "切换图片显示：无图时图片不参与排版与打印" },
+    "restoreTitle": { "message": "恢复到初始状态：撤销删减与编辑，正文变回刚提取时的样子（版式设置保留）" }, 
+  "restoreConfirm": { "message": "恢复会丢掉本次的删减和文字修改，继续吗？" }, 
+  "restoreDone": { "message": "已恢复到初始正文" }, 
+"imgOnTitle": { "message": "切换图片显示：无图时图片不参与排版与打印" },
   "imgOffTitle": { "message": "当前隐藏图片：再点恢复显示图片" },
   "sourceViewTitle": { "message": "回到原文视图" },
   "readModeTitle": { "message": "阅读模式：隐藏右栏设置与顶部工具条，只看版面（Esc 退出）" },
@@ -247,10 +250,14 @@
   "confirmDiscard": { "message": "文章有改动，确认取消（不保存）吗？" },
   "missingPayloadId": { "message": "缺少 payload id" },
 
+  "zoomLabel": { "message": "纸面" }, 
+  "zoomFit": { "message": "纸面已适应宽度（Ctrl+0 复位）" }, 
   "baseHint": { "message": "右侧设置即时生效" },
   "excerptNoTrans": { "message": "（无译文）" },
   "editHint": { "message": "可直接改字，格式用下方图标 · Esc 取消（不保存）" },
-  "trimHint": { "message": "点击要删除的块 · ↑ 选上级 / ↓ 回到指针 · Esc 退出删减" },
+  "trimAnchorHint": { "message": "已记起点，按住 Shift 再点结尾就框出整段" },
+  "trimRangeHint": { "message": "范围已框好：Enter 删除 · Esc 取消" }, 
+  "trimHint": { "message": "点击删一块 · Shift 点起点和终点框出整段后按 Enter 删除 · ↑ 选上级 / ↓ 回指针 · Esc 退出" },
   "titleHint": { "message": "点击要用作标题的块 · Esc 退出" },
   "imagesOffTitle": { "message": "当前隐藏图片：再点恢复显示图片" },
   "imagesOnTitle": { "message": "切换图片显示：无图时图片不参与排版与打印" },
@@ -294,7 +301,8 @@
   "tabTitle": { "message": "标题" },
   "tabHead": { "message": "小标题" },
   "tabBody": { "message": "正文" },
-  "h2Size": { "message": "h2 字号" },
+  "h2Size": { "message": "段落标题字号" },
   "h2Follow": { "message": "跟随小标题" },
-  "h1Note": { "message": "正文里的小标题（h1/h2），双栏时可跨栏；h3 及以下只加粗。" }
+  "h1Note": { "message": "正文里的段落标题，双栏时可跨栏；更低的级别只加粗。" }
 }
+

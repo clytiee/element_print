@@ -28,10 +28,10 @@
 }
 
 /* 层次序数：一级「一、」黑体加粗，二级「（一）」楷体加粗；字体与间距由「小标题」页签统管 */
-.ep-sheet[data-theme="gov"] .ep-body h3,
-.ep-sheet[data-theme="gov"] .ep-body h4,
-.ep-sheet[data-theme="gov"] .ep-body h5,
-.ep-sheet[data-theme="gov"] .ep-body h6 {
+.ep-sheet[data-theme="gov"] .ep-body :is(.ep-hd--3, .ep-hd--4, .ep-hd--5, .ep-hd--6, h3),
+.ep-sheet[data-theme="gov"] .ep-body :is(.ep-hd--4, .ep-hd--5, .ep-hd--6, h4),
+.ep-sheet[data-theme="gov"] .ep-body :is(.ep-hd--5, .ep-hd--6, h5),
+.ep-sheet[data-theme="gov"] .ep-body :is(.ep-hd--6, h6) {
   font-family: "Segoe UI", Arial, "Noto Sans SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", "SimHei", sans-serif;
   font-weight: 400;
   font-size: 1em;
@@ -39,8 +39,8 @@
   text-indent: 2em;
 }
 
-.ep-sheet[data-theme="gov"] .ep-body h3,
-.ep-sheet[data-theme="gov"] .ep-body h4 {
+.ep-sheet[data-theme="gov"] .ep-body :is(.ep-hd--3, .ep-hd--4, .ep-hd--5, .ep-hd--6, h3),
+.ep-sheet[data-theme="gov"] .ep-body :is(.ep-hd--4, .ep-hd--5, .ep-hd--6, h4) {
   font-family: "Times New Roman", Georgia, KaiTi, "Kaiti SC", STKaiti, "楷体", serif;
   font-weight: 400;
   font-size: 1em;
@@ -48,8 +48,8 @@
   text-indent: 2em;
 }
 
-.ep-sheet[data-theme="gov"] .ep-body h5,
-.ep-sheet[data-theme="gov"] .ep-body h6 {
+.ep-sheet[data-theme="gov"] .ep-body :is(.ep-hd--5, .ep-hd--6, h5),
+.ep-sheet[data-theme="gov"] .ep-body :is(.ep-hd--6, h6) {
   font-family: var(--ep-body-font);
   font-weight: 700;
   font-size: 1em;
@@ -66,3 +66,5 @@
   font-size: 0.875em;
   text-align: center;
 }
+
+
