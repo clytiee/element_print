@@ -577,14 +577,25 @@ function syncTitleTrans() {
 function syncExcerptTrans() {
   const el = $("excerptTrans");
   const src = $("excerpt");
+  const pair = $("excerptPair");
   const text = (state.payload && state.payload.excerptTrans) || "";
   const srcText = (state.payload && state.payload.excerpt) || "";
   const show = state.settings ? state.settings.showExcerpt !== false : true;
   const paired = biActive() || serialActive();
   el.textContent = text;
-  el.hidden = !text || !paired || !show;
+  const showTrans = Boolean(text) && paired && show;
+  el.hidden = !showTrans;
   if (!src) return;
   src.hidden = !srcText || !show;
+  pair.hidden = src.hidden && el.hidden;
+  // 对照模式下摘要较长时，译文挪到右栏并排；短摘要仍贴在原文下面，避免两栏都挤成一窄条
+  pair.classList.remove("is-bi");
+  let sideBySide = false;
+  if (!pair.hidden && showTrans && srcText && biActive()) {
+    const lh = parseFloat(getComputedStyle(src).lineHeight) || 0;
+    sideBySide = lh > 0 && src.clientHeight / lh >= 3;
+  }
+  pair.classList.toggle("is-bi", sideBySide);
   let note = src.querySelector(".ep-excerpt-note");
   if (paired && !text) {
     if (!note) {
@@ -1709,9 +1720,8 @@ function restoreEditSnapshot() {
     state.payload.excerptTrans = $("excerptTrans").textContent.replace(/\s+/g, " ").trim();
     $("metaAuthor").hidden = !state.payload.author;
     $("metaPubDate").hidden = !state.payload.publishedTime;
-    $("excerpt").hidden = !state.payload.excerpt;
     $("titleTrans").hidden = !state.payload.titleTrans;
-    $("excerptTrans").hidden = !state.payload.excerptTrans;
+    syncExcerptTrans();
   }
   editSnapshot = null;
   refreshWordCount();

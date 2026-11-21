@@ -427,23 +427,52 @@
    */
   // 导语/摘要可能来自 meta 或 JSON-LD，和正文段落的空白、截断略有差异；
   // 精确匹配失败时，再按包含关系或前缀重合度找一次对应译文。
+  // 长摘要常常跨两三个段落，所以取「重合最长」的那对，再把后面接得上的译文一起拼上。
   function findExcerptPair(excerptText, pairs) {
     if (!excerptText) return null;
     const list = pairs || [];
+    const squash = (text) => String(text || "").replace(/\s+/g, "");
+    const want = squash(excerptText);
     const exact = list.find((pair) => pair.src === excerptText);
     if (exact) return exact;
     if (excerptText.length < 12) return null;
-    return (
-      list.find((pair) => {
-        const src = pair.src;
-        if (!src) return false;
-        if (src.includes(excerptText) || excerptText.includes(src)) return true;
+    let best = null;
+    let bestScore = 0;
+    list.forEach((pair) => {
+      const src = pair.src;
+      if (!src) return;
+      let score = 0;
+      if (src.includes(excerptText) || excerptText.includes(src)) {
+        score = Math.min(src.length, excerptText.length);
+      } else {
         const min = Math.min(src.length, excerptText.length);
         let i = 0;
         while (i < min && src[i] === excerptText[i]) i += 1;
-        return min >= 12 && i / min >= 0.8;
-      }) || null
-    );
+        if (min < 12 || i / min < 0.8) return;
+        score = i;
+      }
+      if (score > bestScore) {
+        best = pair;
+        bestScore = score;
+      }
+    });
+    if (!best) return null;
+    // 命中段之后，紧跟的几段若原文仍在摘要里延续，就把译文接上，别只给半句
+    let srcAll = best.src;
+    let dstAll = best.dst;
+    let idx = list.indexOf(best);
+    let guard = 0;
+    while (idx + 1 < list.length && guard < 6 && squash(srcAll).length < want.length) {
+      const next = list[idx + 1];
+      if (!next.src || !next.dst) break;
+      const merged = srcAll + next.src;
+      if (!want.startsWith(squash(merged))) break;
+      dstAll = normText(dstAll + " " + next.dst);
+      srcAll = merged;
+      idx += 1;
+      guard += 1;
+    }
+    return { ...best, src: srcAll, dst: dstAll };
   }
 
   function findParagraphCuts(block, marks) {
@@ -1703,11 +1732,13 @@
     }
     const excerptTruncated = EXCERPT_TRUNC_RE.test(excerptText);
     const matchedExcerptPair = findExcerptPair(excerptText, pageTranslations);
-    const excerptTrans = normText(
-      (excerptText &&
-        ((matchedExcerptPair ? matchedExcerptPair.dst : "") || mixedAbstractTrans || opts.excerptTrans)) ||
-        ""
-    );
+    // 三个候选（配对段落、混排摘要、内容脚本匹配到的摘要译文）里取最长的那份：
+    // 长摘要跨段时配对段落常只覆盖开头，别让它顶掉更完整的译文
+    const excerptTrans = excerptText
+      ? [matchedExcerptPair ? matchedExcerptPair.dst : "", mixedAbstractTrans, opts.excerptTrans]
+          .map((text) => normText(text || ""))
+          .reduce((a, b) => (b.length > a.length ? b : a), "")
+      : "";
 
     // 作者、日期已放在标题区；正文里整块重复的作者行/日期行一并删掉
     const metaRemoved = new Set();

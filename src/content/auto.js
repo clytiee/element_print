@@ -91,16 +91,6 @@
     return normText(article.excerpt || "");
   }
 
-  function sameText(src, wanted) {
-    if (!src || !wanted) return false;
-    if (src === wanted || src.includes(wanted) || wanted.includes(src)) return true;
-    const min = Math.min(src.length, wanted.length);
-    if (min < 12) return false;
-    let i = 0;
-    while (i < min && src[i] === wanted[i]) i += 1;
-    return i / min >= 0.8;
-  }
-
   // 摘要译文：优先直接定位页面 Abstract 容器/标题，不依赖导语文本是否匹配
   function readAbstractTranslation() {
     const scopes = Array.from(
@@ -128,23 +118,67 @@
     return "";
   }
 
-  // 摘要/导语译文：回原页面摘要节点里按原文模糊匹配
+  // 摘要/导语译文：回原页面摘要节点里按原文模糊匹配。
+  // 长摘要常被页面截断（末尾带 …）或跨好几个段落，正文那套「长度比 ≤ 2」的判据太严，
+  // 这里只要求前缀/包含关系对得上，再把后面接得上的几段译文一起拼上
   function readExcerptTranslation(excerpt) {
     const wanted = normText(excerpt);
     if (!wanted) return "";
+    const squash = (text) => String(text || "").replace(/\s+/g, "");
+    const want = squash(wanted);
+    const headScore = (a, b) => {
+      if (!a || !b) return 0;
+      if (a === b || a.includes(b) || b.includes(a)) return Math.min(a.length, b.length);
+      const min = Math.min(a.length, b.length);
+      let i = 0;
+      while (i < min && a[i] === b[i]) i += 1;
+      return i;
+    };
     const candidates = document.querySelectorAll(
       "p,div,section,blockquote,[class*=abstract],[class*=excerpt],[class*=summary],[class*=lead]"
     );
-    for (const el of candidates) {
+    let bestEl = null;
+    let bestSrc = "";
+    let bestDst = "";
+    let bestScore = 0;
+    Array.from(candidates).forEach((el) => {
       const marks = transMarks(el);
-      if (!marks.length) continue;
+      if (!marks.length) return;
       const dst = normText(marks.map((m) => m.textContent).join(" "));
       const src = normText(normText(el.textContent).replace(dst, ""));
-      if (!src.length) continue;
-      const lenRatio = Math.max(src.length, wanted.length) / Math.min(src.length, wanted.length);
-      if (lenRatio <= 2 && sameText(src, wanted)) return dst;
+      if (!dst || !src) return;
+      const min = Math.min(squash(src).length, want.length);
+      if (min < 12) return;
+      const score = headScore(squash(src), want);
+      if (score / min < 0.7) return;
+      if (score >= bestScore) {
+        bestEl = el;
+        bestSrc = src;
+        bestDst = dst;
+        bestScore = score;
+      }
+    });
+    if (!bestEl) return "";
+    // 摘要跨段时，命中节点后面同级节点的译文若接着摘要往下走，就一并拼上
+    let joinedSrc = squash(bestSrc);
+    let joinedDst = bestDst;
+    let node = bestEl;
+    let guard = 0;
+    while (joinedSrc.length < want.length && node.nextElementSibling && guard < 6) {
+      guard += 1;
+      const next = node.nextElementSibling;
+      const nextMarks = transMarks(next);
+      if (!nextMarks.length) break;
+      const nextDst = normText(nextMarks.map((m) => m.textContent).join(" "));
+      const nextSrc = normText(normText(next.textContent).replace(nextDst, ""));
+      if (!nextSrc) break;
+      const merged = joinedSrc + squash(nextSrc);
+      if (!want.startsWith(merged)) break;
+      joinedDst = normText(joinedDst + " " + nextDst);
+      joinedSrc = merged;
+      node = next;
     }
-    return "";
+    return joinedDst;
   }
 
   const BLOCK_TAG_SET = new Set([

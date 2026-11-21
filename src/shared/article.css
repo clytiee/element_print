@@ -213,13 +213,27 @@
   word-break: break-word;
 }
 
-/* 摘要译文：贴在摘要原文下面，略小一号 */
+/* 摘要原文与译文成组，对照模式下摘要较长时译文并到右栏 */
+.ep-excerptPair.is-bi {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 5mm;
+  align-items: start;
+}
+
+.ep-excerptPair.is-bi .ep-excerpt-trans {
+  margin-top: 1.6mm;
+}
+
+/* 摘要译文：贴在摘要原文下面，略小一号。
+   行距与原文摘要取同一个绝对值（原文 0.95em × 1.55，译文字号 0.85em，故比值 1.733），
+   两栏并排时上下两行才对得齐 */
 .ep-excerpt-trans {
   margin: 0.8mm 0 0;
   font-family: var(--ep-body-font);
   font-size: 0.85em;
   font-style: italic;
-  line-height: 1.5;
+  line-height: 1.733;
   color: var(--ep-sub);
   word-break: break-word;
 }
